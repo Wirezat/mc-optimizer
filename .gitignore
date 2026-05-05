@@ -1,0 +1,22 @@
+# Binaries
+/server
+/cmd/server/server
+
+# Env (enthält Secrets)
+.env
+
+# Go
+*.test
+*.out
+vendor/
+
+# DB-Daten
+pg_data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Sonstiges
+markdown/*

@@ -10,15 +10,15 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U pl_user -d pl_optimizer" ]
+      test: ["CMD-SHELL", "pg_isready -U pl_user -d pl_optimizer"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   app:
-    build: .
+    image: golang:1.24-alpine
     ports:
-      - "8080:8080"
+      - "8090:8080"
     env_file: .env
     depends_on:
       db:

@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/Wirezat/GoLog"
+	"github.com/Wirezat/production-optimizer/internal/api"
+	"github.com/Wirezat/production-optimizer/internal/db"
 )
 
 func main() {
@@ -24,9 +26,9 @@ func main() {
 }
 
 func run() error {
-	port := os.Getenv("PORT")
+	port := os.Getenv("SERVER_PORT")
 	if port == "" {
-		GoLog.Warn("PORT is not set, defaulting to 8080")
+		GoLog.Warn("SERVER_PORT is not set, defaulting to 8080")
 		port = "8080"
 	}
 
@@ -34,15 +36,52 @@ func run() error {
 	if dbURL == "" {
 		return errors.New("DATABASE_URL is not set")
 	}
+
+	ctx := context.Background()
+	database, err := db.New(ctx, dbURL)
+	if err != nil {
+		return err
+	}
+	defer database.Close()
 	GoLog.Infof("Database: %s", maskPassword(dbURL))
 
-	// dbURL will be wired into the DB layer later on
-	_ = dbURL
+	// ── Background cleanup ticker ─────────────────────────────────────────
+	// Purges expired tokens (and solver_drafts once that table is in use).
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			n, err := database.DeleteExpiredTokens(context.Background())
+			if err != nil {
+				GoLog.Errorf("cleanup: delete expired tokens: %v", err)
+			} else if n > 0 {
+				GoLog.Infof("cleanup: deleted expired tokens: count=%d", n)
+			}
+		}
+	}()
 
 	mux := http.NewServeMux()
 
 	// Health check — used by load balancers and monitoring
 	mux.HandleFunc("GET /api/health", healthHandler)
+
+	// Auth (no auth middleware)
+	mux.HandleFunc("POST /api/auth/register", api.RegisterHandler(database))
+	mux.HandleFunc("POST /api/auth/login", api.LoginHandler(database))
+	mux.HandleFunc("POST /api/auth/refresh", api.RefreshHandler(database))
+	mux.HandleFunc("POST /api/auth/logout", api.LogoutHandler(database))
+
+	// Protected routes — wrap with RequireAuth middleware
+	protected := api.RequireAuth(database)
+
+	mux.Handle("GET /api/saves", protected(api.ListSavesHandler(database)))
+	mux.Handle("POST /api/saves", protected(api.CreateSaveHandler(database)))
+	mux.Handle("DELETE /api/saves/{id}", protected(api.DeleteSaveHandler(database)))
+
+	mux.Handle("GET /api/saves/{id}/factories", protected(api.ListFactoriesHandler(database)))
+	mux.Handle("POST /api/saves/{id}/factories", protected(api.CreateFactoryHandler(database)))
+	mux.Handle("GET /api/factories/{id}", protected(api.GetFactoryHandler(database)))
+	mux.Handle("DELETE /api/factories/{id}", protected(api.DeleteFactoryHandler(database)))
 
 	// Static frontend files
 	mux.Handle("/", http.FileServer(http.Dir("web/pages")))
@@ -54,7 +93,7 @@ func run() error {
 		ReadTimeout:    15 * time.Second,
 		WriteTimeout:   30 * time.Second,
 		IdleTimeout:    60 * time.Second,
-		MaxHeaderBytes: 1 << 20, // 1 MiB — Protect against header abuse
+		MaxHeaderBytes: 1 << 20, // 1 MiB — protect against header abuse
 	}
 
 	// Capture SIGINT / SIGTERM for graceful shutdown
@@ -96,7 +135,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response{
 		Status: "ok",
-		Time:   time.Now().Format(time.RFC3339),
+		Time:   time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
 		GoLog.Warnf("health encode error: %v", err)
 	}

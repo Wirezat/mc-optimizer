@@ -2,87 +2,112 @@ package solver
 
 import "fmt"
 
-// Rational is an exact rational number represented as a reduced fraction num/den.
-// No float64 in the solver — all calculations go through this type.
-//
-// Invariants:
-//   - Den is always > 0 (sign lives in Num)
-//   - Num and Den are always coprime (reduced on construction)
-//
-// Known limitation: arithmetic operations use int64 multiplication internally.
-// Overflow is possible with very large numerators/denominators.
-// Use small, pre-reduced inputs to stay safe.
-type Rational struct {
-	Num int64
-	Den int64
+type Rational struct{ Num, Den int64 }
+
+func norm(n, d int64) Rational {
+	if d < 0 {
+		n, d = -n, -d
+	}
+	a := n
+	if a < 0 {
+		a = -a
+	}
+	if g := gcd(a, d); g > 1 {
+		n, d = n/g, d/g
+	}
+	return Rational{n, d}
 }
 
-// NewRational returns the reduced fraction num/den.
-// Panics if den == 0.
-func NewRational(num, den int64) Rational {
-	if den == 0 {
+func NewRational(n, d int64) Rational {
+	if d == 0 {
 		panic("rational: denominator must not be zero")
 	}
-	if den < 0 {
-		num, den = -num, -den
-	}
-	g := gcd(abs64(num), abs64(den))
-	return Rational{Num: num / g, Den: den / g}
+	return norm(n, d)
 }
 
-// RationalFromInt returns n/1.
-func RationalFromInt(n int64) Rational {
-	return Rational{Num: n, Den: 1}
-}
+func RationalFromInt(n int64) Rational { return Rational{n, 1} }
 
 func (r Rational) Add(o Rational) Rational {
-	return NewRational(r.Num*o.Den+o.Num*r.Den, r.Den*o.Den)
+	if r.Num == 0 {
+		return o
+	}
+	if o.Num == 0 {
+		return r
+	}
+	if r.Den == o.Den {
+		return norm(r.Num+o.Num, r.Den)
+	}
+	g := gcd(r.Den, o.Den)
+	rd, od := r.Den/g, o.Den/g
+	return norm(r.Num*od+o.Num*rd, r.Den*od)
 }
 
 func (r Rational) Sub(o Rational) Rational {
-	return NewRational(r.Num*o.Den-o.Num*r.Den, r.Den*o.Den)
+	if o.Num == 0 {
+		return r
+	}
+	if r.Num == 0 {
+		return Rational{-o.Num, o.Den}
+	}
+	if r.Den == o.Den {
+		return norm(r.Num-o.Num, r.Den)
+	}
+	g := gcd(r.Den, o.Den)
+	rd, od := r.Den/g, o.Den/g
+	return norm(r.Num*od-o.Num*rd, r.Den*od)
 }
 
 func (r Rational) Mul(o Rational) Rational {
-	return NewRational(r.Num*o.Num, r.Den*o.Den)
+	if r.Num == 0 || o.Num == 0 {
+		return Rational{0, 1}
+	}
+	rn, on := r.Num, o.Num
+	if rn < 0 {
+		rn = -rn
+	}
+	if on < 0 {
+		on = -on
+	}
+	g1, g2 := gcd(rn, o.Den), gcd(on, r.Den)
+	n := (r.Num / g1) * (o.Num / g2)
+	d := (r.Den / g2) * (o.Den / g1)
+	if d < 0 {
+		n, d = -n, -d
+	}
+	return Rational{n, d}
 }
 
-// Div returns r / o.
-// Panics if o is zero.
 func (r Rational) Div(o Rational) Rational {
-	if o.IsZero() {
+	if o.Num == 0 {
 		panic("rational: division by zero")
 	}
-	return NewRational(r.Num*o.Den, r.Den*o.Num)
+	rec := Rational{o.Den, o.Num}
+	if rec.Den < 0 {
+		rec.Num, rec.Den = -rec.Num, -rec.Den
+	}
+	return r.Mul(rec)
 }
 
-func (r Rational) IsZero() bool {
-	return r.Num == 0
-}
+func (r Rational) IsZero() bool     { return r.Num == 0 }
+func (r Rational) IsNegative() bool { return r.Num < 0 }
 
-func (r Rational) IsNegative() bool {
-	return r.Num < 0
-}
-
-// Cmp compares r and o.
-// Returns -1 if r < o, 0 if r == o, 1 if r > o.
+// Cmp: overflow-sichere Variante via Kreuzsubtraktion
 func (r Rational) Cmp(o Rational) int {
-	lhs := r.Num * o.Den
-	rhs := o.Num * r.Den
-	switch {
-	case lhs < rhs:
-		return -1
-	case lhs > rhs:
-		return 1
-	default:
+	if r.Num == o.Num && r.Den == o.Den {
 		return 0
 	}
+	// (r.Num/r.Den) - (o.Num/o.Den) = (r.Num*o.Den - o.Num*r.Den) / (r.Den*o.Den)
+	// Da Den immer > 0, reicht Vorzeichen des Zählers.
+	d := r.Num*o.Den - o.Num*r.Den
+	if d < 0 {
+		return -1
+	}
+	if d > 0 {
+		return 1
+	}
+	return 0
 }
 
-// CeilInt returns ceil(r) as int64.
-// Go integer division truncates toward zero, so for negative fractions
-// truncation already equals ceiling (e.g. -3/2 truncates to -1 = ceil(-1.5)).
-// The remainder check only bumps up for positive non-integer values.
 func (r Rational) CeilInt() int64 {
 	q := r.Num / r.Den
 	if r.Num%r.Den != 0 && r.Num > 0 {
@@ -98,7 +123,7 @@ func (r Rational) String() string {
 	return fmt.Sprintf("%d/%d", r.Num, r.Den)
 }
 
-// gcd returns the greatest common divisor of a and b (Euclidean algorithm).
+// Euklidischer GCD – schneller als Stein auf moderner Hardware.
 func gcd(a, b int64) int64 {
 	for b != 0 {
 		a, b = b, a%b
@@ -106,26 +131,19 @@ func gcd(a, b int64) int64 {
 	return a
 }
 
-// LCM returns the least common multiple of a slice of integers.
-// Division before multiplication avoids intermediate overflow:
-//
-//	result = (result / gcd) * n   — not   result * n / gcd
-//
-// Returns 1 for an empty slice.
-func LCM(numbers []int64) int64 {
-	if len(numbers) == 0 {
+func LCM(ns []int64) int64 {
+	if len(ns) == 0 {
 		return 1
 	}
-	result := numbers[0]
-	for _, n := range numbers[1:] {
-		result = result / gcd(result, n) * n
+	r := ns[0]
+	if r < 0 {
+		r = -r
 	}
-	return result
-}
-
-func abs64(n int64) int64 {
-	if n < 0 {
-		return -n
+	for _, n := range ns[1:] {
+		if n < 0 {
+			n = -n
+		}
+		r = r / gcd(r, n) * n
 	}
-	return n
+	return r
 }

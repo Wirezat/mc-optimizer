@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -15,18 +16,9 @@ const (
 	TokenTypeRefresh = "refresh"
 )
 
-// Token represents a row in the tokens table.
-type Token struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	TokenHash string
-	Type      string
-	ExpiresAt time.Time
-}
-
 // CreateToken inserts a new token record.
-func (d *DB) CreateToken(ctx context.Context, userID uuid.UUID, tokenHash, tokenType string, expiresAt time.Time) (*Token, error) {
-	t := &Token{ID: uuid.New(), UserID: userID, TokenHash: tokenHash, Type: tokenType, ExpiresAt: expiresAt}
+func (d *DB) CreateToken(ctx context.Context, userID uuid.UUID, tokenHash, tokenType string, expiresAt time.Time) (*model.Token, error) {
+	t := &model.Token{ID: uuid.New(), UserID: userID, TokenHash: tokenHash, Type: tokenType, ExpiresAt: expiresAt}
 	_, err := d.Pool.Exec(ctx,
 		`INSERT INTO tokens (id, user_id, token_hash, type, expires_at) VALUES ($1, $2, $3, $4, $5)`,
 		t.ID, t.UserID, t.TokenHash, t.Type, t.ExpiresAt,
@@ -38,8 +30,8 @@ func (d *DB) CreateToken(ctx context.Context, userID uuid.UUID, tokenHash, token
 }
 
 // GetTokenByHash looks up a non-expired token by hash; returns ErrNotFound if missing or expired.
-func (d *DB) GetTokenByHash(ctx context.Context, tokenHash string) (*Token, error) {
-	t := &Token{}
+func (d *DB) GetTokenByHash(ctx context.Context, tokenHash string) (*model.Token, error) {
+	t := &model.Token{}
 	err := d.Pool.QueryRow(ctx,
 		`SELECT id, user_id, token_hash, type, expires_at FROM tokens WHERE token_hash = $1 AND expires_at > now()`,
 		tokenHash,

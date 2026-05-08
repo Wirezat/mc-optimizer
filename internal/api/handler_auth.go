@@ -10,6 +10,7 @@ import (
 
 	auth "github.com/Wirezat/production-optimizer/internal/crypto"
 	"github.com/Wirezat/production-optimizer/internal/db"
+	"github.com/Wirezat/production-optimizer/internal/model"
 )
 
 func ttl(env string, def time.Duration) time.Duration {
@@ -31,7 +32,7 @@ type tokenPair struct {
 }
 
 // issueTokensForUser generates, persists, and returns an access+refresh token pair for the given user.
-func issueTokensForUser(r *http.Request, database *db.DB, u *db.User) (*tokenPair, error) {
+func issueTokensForUser(r *http.Request, database *db.DB, u *model.User) (*tokenPair, error) {
 	now := time.Now().UTC()
 	rawAccess, hashedAccess, err := auth.GenerateToken()
 	if err != nil {

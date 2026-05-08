@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Wirezat/production-optimizer/internal/db"
+	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/google/uuid"
 )
 
@@ -19,7 +20,7 @@ func ListSavesHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		if saves == nil {
-			saves = []*db.Save{}
+			saves = []*model.Save{}
 		}
 		writeJSON(w, http.StatusOK, saves)
 	}

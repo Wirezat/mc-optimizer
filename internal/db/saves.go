@@ -6,21 +6,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
-// Save represents a row in the saves table.
-type Save struct {
-	ID        uuid.UUID `json:"id"`
-	UserID    uuid.UUID `json:"user_id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 // CreateSave inserts a new save for the given user.
-func (d *DB) CreateSave(ctx context.Context, userID uuid.UUID, name string) (*Save, error) {
-	s := &Save{ID: uuid.New(), UserID: userID, Name: name, CreatedAt: time.Now().UTC()}
+func (d *DB) CreateSave(ctx context.Context, userID uuid.UUID, name string) (*model.Save, error) {
+	s := &model.Save{ID: uuid.New(), UserID: userID, Name: name, CreatedAt: time.Now().UTC()}
 	_, err := d.Pool.Exec(ctx,
 		`INSERT INTO saves (id, user_id, name, created_at) VALUES ($1, $2, $3, $4)`,
 		s.ID, s.UserID, s.Name, s.CreatedAt,
@@ -32,7 +25,7 @@ func (d *DB) CreateSave(ctx context.Context, userID uuid.UUID, name string) (*Sa
 }
 
 // ListSavesByUser returns all saves owned by userID, newest first.
-func (d *DB) ListSavesByUser(ctx context.Context, userID uuid.UUID) ([]*Save, error) {
+func (d *DB) ListSavesByUser(ctx context.Context, userID uuid.UUID) ([]*model.Save, error) {
 	rows, err := d.Pool.Query(ctx,
 		`SELECT id, user_id, name, created_at FROM saves WHERE user_id = $1 ORDER BY created_at DESC`,
 		userID,
@@ -42,9 +35,9 @@ func (d *DB) ListSavesByUser(ctx context.Context, userID uuid.UUID) ([]*Save, er
 	}
 	defer rows.Close()
 
-	var saves []*Save
+	var saves []*model.Save
 	for rows.Next() {
-		s := &Save{}
+		s := &model.Save{}
 		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.CreatedAt); err != nil {
 			return nil, fmt.Errorf("db: scan save: %w", err)
 		}
@@ -54,8 +47,8 @@ func (d *DB) ListSavesByUser(ctx context.Context, userID uuid.UUID) ([]*Save, er
 }
 
 // GetSave fetches a save by ID, validates ownership; returns ErrNotFound if missing or unauthorized.
-func (d *DB) GetSave(ctx context.Context, id, userID uuid.UUID) (*Save, error) {
-	s := &Save{}
+func (d *DB) GetSave(ctx context.Context, id, userID uuid.UUID) (*model.Save, error) {
+	s := &model.Save{}
 	err := d.Pool.QueryRow(ctx,
 		`SELECT id, user_id, name, created_at FROM saves WHERE id = $1 AND user_id = $2`,
 		id, userID,

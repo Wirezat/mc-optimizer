@@ -20,29 +20,28 @@ func ugcd(a, b uint64) uint64 {
 	}
 	return a
 }
+
 func gcd(a, b int64) int64 { return int64(ugcd(abs64u(a), abs64u(b))) }
 
+// mulHiLo computes the full 128-bit product of two uint64s.
 func mulHiLo(a, b uint64) (hi, lo uint64) {
 	a0, a1 := a&0xFFFFFFFF, a>>32
 	b0, b1 := b&0xFFFFFFFF, b>>32
 	w0 := a0 * b0
 	t := a1*b0 + (w0 >> 32)
 	w1 := (t & 0xFFFFFFFF) + a0*b1
-	hi = a1*b1 + (t >> 32) + (w1 >> 32)
-	lo = a * b
-	return
+	return a1*b1 + (t >> 32) + (w1 >> 32), a * b
 }
 
 func smul(a, b int64) int64 {
 	hi, lo := mulHiLo(abs64u(a), abs64u(b))
-	if hi != 0 || lo > uint64(math.MaxInt64) {
+	if hi != 0 || lo > math.MaxInt64 {
 		panic("rational: int64 overflow")
 	}
-	r := int64(lo)
 	if (a < 0) != (b < 0) {
-		return -r
+		return -int64(lo)
 	}
-	return r
+	return int64(lo)
 }
 
 func sadd(a, b int64) int64 {
@@ -53,9 +52,9 @@ func sadd(a, b int64) int64 {
 	return s
 }
 
+// cmpCross compares a/b vs c/d via cross-multiplication, avoiding overflow.
 func cmpCross(a, b, c, d int64) int {
-	sa, sc := a >= 0, c >= 0
-	if sa != sc {
+	if sa, sc := a >= 0, c >= 0; sa != sc {
 		if sa {
 			return 1
 		}
@@ -64,14 +63,15 @@ func cmpCross(a, b, c, d int64) int {
 	lhi, llo := mulHiLo(abs64u(a), uint64(b))
 	rhi, rlo := mulHiLo(abs64u(c), uint64(d))
 	var lgt bool
-	if lhi != rhi {
+	switch {
+	case lhi != rhi:
 		lgt = lhi > rhi
-	} else if llo != rlo {
+	case llo != rlo:
 		lgt = llo > rlo
-	} else {
+	default:
 		return 0
 	}
-	if sa {
+	if a >= 0 {
 		if lgt {
 			return 1
 		}
@@ -93,6 +93,7 @@ func norm(n, d int64) Rational {
 	return Rational{n, d}
 }
 
+// normPos assumes d > 0 (avoids redundant sign check).
 func normPos(n, d int64) Rational {
 	if g := gcd(n, d); g > 1 {
 		n, d = n/g, d/g
@@ -127,13 +128,12 @@ func (r Rational) Abs() Rational {
 }
 
 func (r Rational) Add(o Rational) Rational {
-	if r.Num == 0 {
+	switch {
+	case r.Num == 0:
 		return o
-	}
-	if o.Num == 0 {
+	case o.Num == 0:
 		return r
-	}
-	if r.Den == o.Den {
+	case r.Den == o.Den:
 		return normPos(sadd(r.Num, o.Num), r.Den)
 	}
 	g := gcd(r.Den, o.Den)
@@ -142,13 +142,12 @@ func (r Rational) Add(o Rational) Rational {
 }
 
 func (r Rational) Sub(o Rational) Rational {
-	if o.Num == 0 {
+	switch {
+	case o.Num == 0:
 		return r
-	}
-	if r.Num == 0 {
+	case r.Num == 0:
 		return o.Neg()
-	}
-	if r.Den == o.Den {
+	case r.Den == o.Den:
 		return normPos(sadd(r.Num, -o.Num), r.Den)
 	}
 	g := gcd(r.Den, o.Den)
@@ -171,10 +170,9 @@ func (r Rational) Div(o Rational) Rational {
 	return r.Mul(norm(o.Den, o.Num))
 }
 
-func (r Rational) IsZero() bool     { return r.Num == 0 }
-func (r Rational) IsNegative() bool { return r.Num < 0 }
-func (r Rational) IsPositive() bool { return r.Num > 0 }
-
+func (r Rational) IsZero() bool       { return r.Num == 0 }
+func (r Rational) IsNegative() bool   { return r.Num < 0 }
+func (r Rational) IsPositive() bool   { return r.Num > 0 }
 func (r Rational) Eq(o Rational) bool { return r.Num == o.Num && r.Den == o.Den }
 
 func (r Rational) Cmp(o Rational) int {

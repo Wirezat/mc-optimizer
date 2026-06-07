@@ -20,3 +20,5 @@ pg_data/
 
 # Sonstiges
 markdown/*
+logs/
+graphify-out/

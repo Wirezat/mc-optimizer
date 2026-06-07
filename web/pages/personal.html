@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MC Optimizer — Personal</title>
+  <link rel="stylesheet" href="/static/css/base.css" />
+  <link rel="stylesheet" href="/static/css/accent.css" />
+  <link rel="stylesheet" href="/static/css/components.css" />
+  <link rel="stylesheet" href="/static/css/layout.css" />
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/header.js"></script>
+  <script>
+    (function(){
+      const s = localStorage.getItem('theme');
+      if (s === 'dark' || (!s && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    .welcome-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px 36px;
+      max-width: 520px;
+    }
+    .welcome-avatar {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: var(--accent-muted);
+      border: 2px solid rgba(180,83,9,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+    .welcome-name {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .welcome-sub {
+      font-size: 13px;
+      color: var(--text-faint);
+      line-height: 1.6;
+    }
+    .welcome-meta {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .meta-row {
+      display: flex;
+      gap: 12px;
+      font-size: 13px;
+    }
+    .meta-label { color: var(--text-faint); width: 100px; flex-shrink: 0; }
+    .meta-value { color: var(--text); font-weight: 500; }
+
+    .userdata-section {
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+    .userdata-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    .userdata-card-title {
+      padding: 14px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-page);
+    }
+    .userdata-card-body { padding: 20px; }
+    .form-msg {
+      font-size: 13px;
+      margin-top: 10px;
+      min-height: 18px;
+    }
+    .form-msg.err { color: var(--danger, #dc2626); }
+    .form-msg.ok  { color: #16a34a; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <a class="header-brand" href="/saves">
+      <div class="header-logo">⚙️</div>
+      <span>MC Optimizer</span>
+    </a>
+    <div class="header-right">
+      <button class="btn btn-ghost btn-sm" onclick="toggleTheme()" id="theme-btn">🌙</button>
+      <div class="user-menu" id="user-menu">
+        <button class="user-menu-trigger" id="user-menu-trigger">
+          <div class="avatar">?</div>
+          <span class="username">…</span>
+          <span class="chevron">▾</span>
+        </button>
+        <div class="user-dropdown" id="user-dropdown"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <!-- ── Sidebar ── -->
+    <nav class="sidebar"></nav>
+
+    <!-- ── Main ── -->
+    <main class="main">
+      <div class="page">
+
+        <div class="page-header">
+          <div>
+            <div class="page-title">Personal</div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <nav class="tabs-bar" id="tabs">
+          <button class="tab-btn active" data-tab="main">Main</button>
+          <button class="tab-btn" data-tab="userdata">Account</button>
+        </nav>
+
+        <!-- Tab: Main -->
+        <div class="tab-panel active" id="panel-main">
+          <div class="welcome-card">
+            <div class="welcome-avatar" id="welcome-avatar">?</div>
+            <div class="welcome-name" id="welcome-name">…</div>
+            <div class="welcome-sub">Welcome back! Here you can manage your account settings.</div>
+            <div class="welcome-meta">
+              <div class="meta-row">
+                <span class="meta-label">Username</span>
+                <span class="meta-value" id="welcome-username">…</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Role</span>
+                <span class="meta-value" id="welcome-role">…</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Member since</span>
+                <span class="meta-value" id="welcome-since">…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Userdata -->
+        <div class="tab-panel" id="panel-userdata">
+          <div class="userdata-section">
+
+            <!-- Change username -->
+            <div class="userdata-card">
+              <div class="userdata-card-title">Change Username</div>
+              <div class="userdata-card-body">
+                <form id="form-username">
+                  <div class="form-group">
+                    <label class="form-label">New Username</label>
+                    <input class="form-input" type="text" name="new_username"
+                      minlength="3" required autocomplete="username" placeholder="min. 3 characters" />
+                  </div>
+                  <div class="form-actions" style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+                    <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                    <span class="form-msg" id="msg-username"></span>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <!-- Change password -->
+            <div class="userdata-card">
+              <div class="userdata-card-title">Change Password</div>
+              <div class="userdata-card-body">
+                <form id="form-password">
+                  <div class="form-group">
+                    <label class="form-label">Current Password</label>
+                    <input class="form-input" type="password" name="current_password"
+                      required autocomplete="current-password" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">New Password</label>
+                    <input class="form-input" type="password" name="new_password"
+                      required minlength="8" autocomplete="new-password" placeholder="min. 8 characters"
+                      oninput="checkPwMatch()" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Confirm New Password</label>
+                    <div class="input-wrap" id="pw-confirm-wrap">
+                      <input class="form-input" type="password" name="confirm_password"
+                        required autocomplete="new-password" placeholder="repeat new password"
+                        oninput="checkPwMatch()" />
+                      <span class="input-indicator" id="pw-match-icon"></span>
+                    </div>
+                  </div>
+                  <div class="form-actions" style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+                    <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                    <span class="form-msg" id="msg-password"></span>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  Auth.guard();
+
+  let _user = null;
+
+  // ── Load user data ──────────────────────────────────────
+  async function loadMe() {
+    const res = await Auth.apiFetch('/api/me');
+    if (!res || !res.ok) return;
+    _user = await res.json();
+
+    const initial = (_user.username || '?').charAt(0).toUpperCase();
+    document.getElementById('welcome-avatar').textContent  = initial;
+    document.getElementById('welcome-name').textContent    = 'Hey, ' + _user.username + '!';
+    document.getElementById('welcome-username').textContent = _user.username;
+    document.getElementById('welcome-role').textContent    = _user.is_admin ? 'Administrator' : 'User';
+    document.getElementById('welcome-since').textContent   = fmtDate(_user.created_at);
+  }
+
+  // ── Tab switching ───────────────────────────────────────
+  document.getElementById('tabs').addEventListener('click', e => {
+    const tab = e.target.closest('.tab-btn');
+    if (!tab) return;
+    document.querySelectorAll('#tabs .tab-btn').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+
+  // ── Change username ─────────────────────────────────────
+  document.getElementById('form-username').addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const msg = document.getElementById('msg-username');
+    msg.className = 'form-msg';
+    msg.textContent = '';
+
+    const res = await Auth.apiFetch('/api/me/username', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_username: fd.get('new_username') }),
+    });
+
+    if (res.status === 204) {
+      msg.className = 'form-msg ok';
+      msg.textContent = 'Username updated.';
+      e.target.reset();
+      loadMe();
+      Header.init(); // refresh header display
+    } else {
+      const data = await res.json().catch(() => ({}));
+      msg.className = 'form-msg err';
+      msg.textContent = data.message || 'Error saving.';
+    }
+  });
+
+  // ── Change password ─────────────────────────────────────
+  document.getElementById('form-password').addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const msg = document.getElementById('msg-password');
+    msg.className = 'form-msg';
+    msg.textContent = '';
+
+    if (fd.get('new_password') !== fd.get('confirm_password')) {
+      msg.className = 'form-msg err';
+      msg.textContent = 'Passwords do not match.';
+      return;
+    }
+
+    const res = await Auth.apiFetch('/api/me/password', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: fd.get('current_password'),
+        new_password:     fd.get('new_password'),
+      }),
+    });
+
+    if (res.status === 204) {
+      msg.className = 'form-msg ok';
+      msg.textContent = 'Password changed.';
+      e.target.reset();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      msg.className = 'form-msg err';
+      msg.textContent = data.message || 'Error saving.';
+    }
+  });
+
+  // ── Password match indicator ────────────────────────────
+  function checkPwMatch() {
+    const pw1  = document.querySelector('#form-password [name="new_password"]').value;
+    const pw2  = document.querySelector('#form-password [name="confirm_password"]').value;
+    const icon = document.getElementById('pw-match-icon');
+    const wrap = document.getElementById('pw-confirm-wrap');
+    if (!pw2) { icon.textContent = ''; wrap.className = 'input-wrap'; return; }
+    const ok = pw1 === pw2;
+    icon.textContent = ok ? '✓' : '✗';
+    wrap.className = 'input-wrap ' + (ok ? 'input-wrap-ok' : 'input-wrap-err');
+  }
+
+  // Reset indicator on form reset
+  document.getElementById('form-password').addEventListener('reset', () => {
+    const icon = document.getElementById('pw-match-icon');
+    const wrap = document.getElementById('pw-confirm-wrap');
+    if (icon) icon.textContent = '';
+    if (wrap) wrap.className = 'input-wrap';
+  });
+
+  // ── Theme ───────────────────────────────────────────────
+  function toggleTheme() {
+    const dark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+    document.getElementById('theme-btn').textContent = dark ? '☀️' : '🌙';
+  }
+  document.getElementById('theme-btn').textContent =
+    document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
+
+  // ── Helpers ─────────────────────────────────────────────
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString(undefined, { year:'numeric', month:'long', day:'numeric' });
+  }
+
+  Header.init();
+  loadMe();
+</script>
+</body>
+</html>

@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MC Optimizer — Factory</title>
+  <link rel="stylesheet" href="/static/css/base.css" />
+  <link rel="stylesheet" href="/static/css/accent.css" />
+  <link rel="stylesheet" href="/static/css/components.css" />
+  <link rel="stylesheet" href="/static/css/layout.css" />
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/header.js"></script>
+  <script>
+    (function(){
+      const s = localStorage.getItem('theme');
+      if (s === 'dark' || (!s && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--text-sm);
+      color: var(--text-faint);
+      margin-bottom: 4px;
+    }
+    .breadcrumb a { color: var(--text-muted); }
+    .breadcrumb a:hover { color: var(--accent); text-decoration: none; }
+    .breadcrumb-sep { font-size: 10px; }
+
+    /* ── Balance grid ── */
+    .balance-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .balance-section-title {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-faint);
+      margin-bottom: 10px;
+    }
+    .balance-empty {
+      font-size: var(--text-sm);
+      color: var(--text-faint);
+      padding: 12px 0;
+    }
+    .balance-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: var(--text-base);
+      gap: 12px;
+    }
+    .balance-row:last-child { border-bottom: none; }
+    .balance-item { color: var(--text); font-family: var(--mono); font-size: var(--text-sm); }
+    .balance-rate { color: var(--text-muted); white-space: nowrap; }
+    .balance-bottleneck .balance-rate { color: var(--danger); font-weight: 600; }
+
+    /* ── PL table actions ── */
+    .row-actions { display: flex; gap: 6px; }
+    .pl-name-link { color: var(--text); font-weight: 500; text-decoration: none; }
+    .pl-name-link:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <a class="header-brand" href="/saves">
+      <div class="header-logo">⚙️</div>
+      <span>MC Optimizer</span>
+    </a>
+    <div class="header-right">
+      <button class="btn btn-ghost btn-sm" onclick="toggleTheme()" id="theme-btn">🌙</button>
+      <div class="user-menu" id="user-menu">
+        <button class="user-menu-trigger" id="user-menu-trigger">
+          <div class="avatar">?</div>
+          <span class="username">…</span>
+          <span class="chevron">▾</span>
+        </button>
+        <div class="user-dropdown" id="user-dropdown"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <!-- ── Sidebar ── -->
+    <nav class="sidebar"></nav>
+
+    <!-- ── Main ── -->
+    <main class="main">
+      <div class="page">
+
+        <div class="page-header">
+          <div>
+            <div class="breadcrumb">
+              <a href="/saves">Saves</a>
+              <span class="breadcrumb-sep">▸</span>
+              <a id="breadcrumb-save" href="#">…</a>
+              <span class="breadcrumb-sep">▸</span>
+              <span id="breadcrumb-factory">…</span>
+            </div>
+            <div class="page-title" id="page-title">…</div>
+          </div>
+          <a class="btn btn-primary" id="solve-btn" href="#">Run Solver ▸</a>
+        </div>
+
+        <!-- Tabs -->
+        <nav class="tabs-bar" id="tabs">
+          <button class="tab-btn active" data-tab="lines">Production Lines</button>
+          <button class="tab-btn" data-tab="balance">Balance</button>
+        </nav>
+
+        <!-- Tab: Production Lines -->
+        <div class="tab-panel active" id="panel-lines">
+          <div class="card" style="overflow:hidden;">
+            <table id="pl-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Target</th>
+                  <th>Rate</th>
+                  <th>Mode</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="pl-tbody">
+                <tr><td colspan="6" class="table-info">
+                  <span class="table-info-icon">⏳</span>Loading…
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="empty-state" id="pl-empty" style="display:none;">
+            <div class="empty-state-icon">📋</div>
+            <div class="empty-state-text">No production lines yet — run the solver to create one</div>
+            <a class="btn btn-primary" id="solve-btn-empty" href="#">Run Solver ▸</a>
+          </div>
+        </div>
+
+        <!-- Tab: Balance -->
+        <div class="tab-panel" id="panel-balance">
+          <div class="balance-grid" id="balance-grid">
+            <div class="card card-body">
+              <div class="balance-section-title">External Inputs</div>
+              <div id="balance-inputs"><span class="balance-empty">—</span></div>
+            </div>
+            <div class="card card-body">
+              <div class="balance-section-title">Outputs</div>
+              <div id="balance-outputs"><span class="balance-empty">—</span></div>
+            </div>
+            <div class="card card-body">
+              <div class="balance-section-title">Surplus / Bottlenecks</div>
+              <div id="balance-surplus"><span class="balance-empty">—</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  Auth.guard();
+  Header.init();
+
+  const _factoryID = window.location.pathname.split('/')[2];
+
+  // ── Bootstrap ─────────────────────────────────────────
+  async function init() {
+    const [factoryRes, plRes] = await Promise.all([
+      Auth.apiFetch('/api/factories/' + _factoryID),
+      Auth.apiFetch('/api/factories/' + _factoryID + '/production-lines'),
+    ]);
+
+    if (!factoryRes || !factoryRes.ok) { window.location.href = '/saves'; return; }
+    const { factory, balance } = await factoryRes.json();
+
+    // Set page identity
+    document.title = 'MC Optimizer — ' + factory.name;
+    document.getElementById('page-title').textContent         = factory.name;
+    document.getElementById('breadcrumb-factory').textContent = factory.name;
+    document.getElementById('solve-btn').href       = '/factories/' + _factoryID + '/solve';
+    document.getElementById('solve-btn-empty').href = '/factories/' + _factoryID + '/solve';
+
+    // Breadcrumb: load save name
+    loadSaveName(factory.save_id);
+
+    // Balance
+    renderBalance(balance);
+
+    // Production lines
+    if (!plRes || !plRes.ok) return;
+    const pls = await plRes.json();
+    renderPLs(pls);
+  }
+
+  async function loadSaveName(saveID) {
+    const res = await Auth.apiFetch('/api/saves/' + saveID);
+    if (!res || !res.ok) return;
+    const save = await res.json();
+    const link = document.getElementById('breadcrumb-save');
+    link.textContent = save.name;
+    link.href = '/saves/' + saveID;
+  }
+
+  // ── Production Lines ──────────────────────────────────
+  function renderPLs(pls) {
+    const tbody = document.getElementById('pl-tbody');
+    const empty = document.getElementById('pl-empty');
+    const table = document.getElementById('pl-table');
+
+    if (!pls || pls.length === 0) {
+      table.style.display = 'none';
+      empty.style.display = '';
+      return;
+    }
+    table.style.display = '';
+    empty.style.display = 'none';
+
+    tbody.innerHTML = pls.map(pl => `
+      <tr>
+        <td>
+          <a class="pl-name-link" href="/production-lines/${pl.id}">${esc(pl.name)}</a>
+        </td>
+        <td style="font-family:var(--mono);font-size:var(--text-sm);">${esc(pl.target_mod_id)}:${esc(pl.target_item_id)}</td>
+        <td>${fmtRate(pl.rate_num, pl.rate_den, pl.time_unit)}</td>
+        <td><span style="font-size:var(--text-xs);color:var(--text-faint);">${esc(pl.optimize_mode)}</span></td>
+        <td>${statusPill(pl.status)}</td>
+        <td>
+          <div class="row-actions">
+            ${pl.status === 'active' ? `
+              <button class="btn btn-ghost btn-sm" title="Mark all built"
+                onclick="markBuilt('${pl.id}')">✓ Built</button>
+              <button class="btn btn-ghost btn-sm" title="Archive"
+                onclick="archivePL('${pl.id}')">Archive</button>
+            ` : ''}
+            <button class="btn btn-danger-ghost btn-sm" title="Delete"
+              onclick="deletePL('${pl.id}', this)">🗑</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  async function markBuilt(plID) {
+    await Auth.apiFetch('/api/production-lines/' + plID + '/mark-built', { method: 'PATCH', body: '{}' });
+    reload();
+  }
+
+  async function archivePL(plID) {
+    await Auth.apiFetch('/api/production-lines/' + plID + '/status', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'archived' }),
+    });
+    reload();
+  }
+
+  async function deletePL(plID, btn) {
+    if (!confirm('Delete this production line? This cannot be undone.')) return;
+    btn.disabled = true;
+    const res = await Auth.apiFetch('/api/production-lines/' + plID, { method: 'DELETE' });
+    if (res && (res.ok || res.status === 204)) { reload(); }
+    else btn.disabled = false;
+  }
+
+  async function reload() {
+    const [factoryRes, plRes] = await Promise.all([
+      Auth.apiFetch('/api/factories/' + _factoryID),
+      Auth.apiFetch('/api/factories/' + _factoryID + '/production-lines'),
+    ]);
+    if (factoryRes && factoryRes.ok) {
+      const { balance } = await factoryRes.json();
+      renderBalance(balance);
+    }
+    if (plRes && plRes.ok) {
+      renderPLs(await plRes.json());
+    }
+  }
+
+  // ── Balance ───────────────────────────────────────────
+  function renderBalance(balance) {
+    renderBalanceSection('balance-inputs',  balance?.external_inputs ?? [], false);
+    renderBalanceSection('balance-outputs', balance?.outputs ?? [], false);
+    renderBalanceSection('balance-surplus', balance?.surplus ?? [], true);
+  }
+
+  function renderBalanceSection(elID, entries, isSurplus) {
+    const el = document.getElementById(elID);
+    if (!entries || entries.length === 0) {
+      el.innerHTML = '<span class="balance-empty">—</span>';
+      return;
+    }
+    entries.sort((a, b) => (a.mod_id + ':' + a.item_fluid_id).localeCompare(b.mod_id + ':' + b.item_fluid_id));
+    el.innerHTML = entries.map(e => {
+      const isBottleneck = isSurplus && e.is_bottleneck;
+      return `<div class="balance-row${isBottleneck ? ' balance-bottleneck' : ''}">
+        <span class="balance-item">${esc(e.mod_id)}:${esc(e.item_fluid_id)}</span>
+        <span class="balance-rate">${fmtRateFrac(e.rate_num, e.rate_den)} /min</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Tabs ──────────────────────────────────────────────
+  document.getElementById('tabs').addEventListener('click', e => {
+    const tab = e.target.closest('.tab-btn');
+    if (!tab) return;
+    document.querySelectorAll('#tabs .tab-btn').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+
+  // ── Helpers ───────────────────────────────────────────
+  function fmtRate(num, den, unit) {
+    return fmtRateFrac(num, den) + ' /' + unit;
+  }
+
+  function fmtRateFrac(num, den) {
+    if (!den || den === 1) return String(num);
+    // Show as decimal if clean, otherwise fraction
+    const dec = num / den;
+    return Number.isInteger(dec) ? String(dec) : (num + '/' + den);
+  }
+
+  function statusPill(status) {
+    const map = { active: 'pill-active', draft: 'pill-draft', archived: 'pill-archived' };
+    return `<span class="pill ${map[status] || ''}">${esc(status)}</span>`;
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Theme ─────────────────────────────────────────────
+  function toggleTheme() {
+    const dark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+    document.getElementById('theme-btn').textContent = dark ? '☀️' : '🌙';
+  }
+  document.getElementById('theme-btn').textContent =
+    document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
+
+  init();
+</script>
+</body>
+</html>

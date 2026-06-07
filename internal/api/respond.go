@@ -2,52 +2,79 @@ package api
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
+
+	"github.com/Wirezat/GoLog"
+	"github.com/google/uuid"
 )
+
+// Error codes — machine-readable keys sent in every error response.
+// The frontend can display Message directly or key off Code for custom UI.
+const (
+	CodeBadRequest          = "BAD_REQUEST"
+	CodeUnauthorized        = "UNAUTHORIZED"
+	CodeForbidden           = "FORBIDDEN"
+	CodeNotFound            = "NOT_FOUND"
+	CodeConflict            = "CONFLICT"
+	CodeInternal            = "INTERNAL_SERVER_ERROR"
+	CodeMachineTypeNotFound = "MACHINE_TYPE_NOT_FOUND"
+	CodeUnknownRecipeType   = "UNKNOWN_RECIPE_TYPE"
+	CodeInvalidRecipeFormat = "INVALID_RECIPE_FORMAT"
+	CodeInvalidFormat       = "INVALID_FORMAT"
+)
+
+// apiError is the standard error envelope for all API responses.
+type apiError struct {
+	Code    string `json:"error"`   // machine-readable constant
+	Message string `json:"message"` // human-readable text
+}
 
 // writeJSON encodes v as JSON and writes it with the given HTTP status code.
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		// Headers already sent — only option is to log.
-		slog.Error("writeJSON encode", "err", err)
+		GoLog.Warnf("writeJSON encode: %v", err)
 	}
 }
 
-// writeError writes a JSON error envelope: {"error": "<message>"}.
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+// writeAPIError writes a structured JSON error response.
+func writeAPIError(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, apiError{Code: code, Message: message})
 }
 
-// errBadRequest writes 400 with a message.
 func errBadRequest(w http.ResponseWriter, msg string) {
-	writeError(w, http.StatusBadRequest, msg)
+	writeAPIError(w, http.StatusBadRequest, CodeBadRequest, msg)
 }
 
-// errUnauthorized writes 401.
 func errUnauthorized(w http.ResponseWriter) {
-	writeError(w, http.StatusUnauthorized, "unauthorized")
+	writeAPIError(w, http.StatusUnauthorized, CodeUnauthorized, "unauthorized")
 }
 
-// errForbidden writes 403.
 func errForbidden(w http.ResponseWriter) {
-	writeError(w, http.StatusForbidden, "forbidden")
+	writeAPIError(w, http.StatusForbidden, CodeForbidden, "forbidden")
 }
 
-// errNotFound writes 404.
 func errNotFound(w http.ResponseWriter) {
-	writeError(w, http.StatusNotFound, "not found")
+	writeAPIError(w, http.StatusNotFound, CodeNotFound, "not found")
 }
 
-// errConflict writes 409.
 func errConflict(w http.ResponseWriter, msg string) {
-	writeError(w, http.StatusConflict, msg)
+	writeAPIError(w, http.StatusConflict, CodeConflict, msg)
 }
 
-// errInternal logs err and writes 500.
 func errInternal(w http.ResponseWriter, err error) {
-	slog.Error("internal server error", "err", err)
-	writeError(w, http.StatusInternalServerError, "internal server error")
+	GoLog.Errorf("internal server error: %v", err)
+	writeAPIError(w, http.StatusInternalServerError, CodeInternal, "internal server error")
+}
+
+// parseUUIDParam parses a named path parameter as a UUID.
+// Writes 400 and returns false on failure.
+func parseUUIDParam(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(r.PathValue(name))
+	if err != nil {
+		errBadRequest(w, name+" must be a valid UUID")
+		return uuid.Nil, false
+	}
+	return id, true
 }

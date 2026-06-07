@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MC Optimizer — Save</title>
+  <link rel="stylesheet" href="/static/css/base.css" />
+  <link rel="stylesheet" href="/static/css/accent.css" />
+  <link rel="stylesheet" href="/static/css/components.css" />
+  <link rel="stylesheet" href="/static/css/layout.css" />
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/header.js"></script>
+  <script>
+    (function(){
+      const s = localStorage.getItem('theme');
+      if (s === 'dark' || (!s && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    .factories-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .factory-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      position: relative;
+    }
+    .factory-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      text-decoration: none;
+    }
+
+    .factory-card-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .factory-card-delete {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .factory-card:hover .factory-card-delete { opacity: 1; }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--text-sm);
+      color: var(--text-faint);
+      margin-bottom: 4px;
+    }
+    .breadcrumb a { color: var(--text-muted); }
+    .breadcrumb a:hover { color: var(--accent); text-decoration: none; }
+    .breadcrumb-sep { font-size: 10px; }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <a class="header-brand" href="/saves">
+      <div class="header-logo">⚙️</div>
+      <span>MC Optimizer</span>
+    </a>
+    <div class="header-right">
+      <button class="btn btn-ghost btn-sm" onclick="toggleTheme()" id="theme-btn">🌙</button>
+      <div class="user-menu" id="user-menu">
+        <button class="user-menu-trigger" id="user-menu-trigger">
+          <div class="avatar">?</div>
+          <span class="username">…</span>
+          <span class="chevron">▾</span>
+        </button>
+        <div class="user-dropdown" id="user-dropdown"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <!-- ── Sidebar ── -->
+    <nav class="sidebar"></nav>
+
+    <!-- ── Main ── -->
+    <main class="main">
+      <div class="page">
+
+        <div class="page-header">
+          <div>
+            <div class="breadcrumb">
+              <a href="/saves">Saves</a>
+              <span class="breadcrumb-sep">▸</span>
+              <span id="breadcrumb-name">…</span>
+            </div>
+            <div class="page-title" id="page-title">…</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal()">+ New Factory</button>
+        </div>
+
+        <!-- Factory cards -->
+        <div class="factories-grid" id="factories-grid"></div>
+
+        <!-- Empty state -->
+        <div class="empty-state" id="empty-state" style="display:none;">
+          <div class="empty-state-icon">🏭</div>
+          <div class="empty-state-text">No factories yet — create your first one</div>
+          <button class="btn btn-primary" onclick="openModal()">+ New Factory</button>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ── New Factory Modal ── -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeModal()"></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true">
+  <div class="modal-header">
+    <span class="modal-title">New Factory</span>
+    <button class="modal-close" onclick="closeModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <div class="field">
+      <label>Factory name</label>
+      <input type="text" id="factory-name" placeholder="e.g. Iron Processing" autocomplete="off"
+        onkeydown="if(event.key==='Enter') doCreate()" />
+    </div>
+    <span class="status-msg" id="status-create"></span>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="doCreate()">Create</button>
+  </div>
+</div>
+
+<script>
+  Auth.guard();
+  Header.init();
+
+  const _saveID = window.location.pathname.split('/')[2];
+
+  // ── Load save metadata ────────────────────────────────
+  async function loadSave() {
+    const res = await Auth.apiFetch('/api/saves/' + _saveID);
+    if (!res || !res.ok) { window.location.href = '/saves'; return; }
+    const save = await res.json();
+    document.title = 'MC Optimizer — ' + save.name;
+    document.getElementById('page-title').textContent      = save.name;
+    document.getElementById('breadcrumb-name').textContent = save.name;
+  }
+
+  // ── Load factories ────────────────────────────────────
+  async function loadFactories() {
+    const res = await Auth.apiFetch('/api/saves/' + _saveID + '/factories');
+    if (!res) return;
+    const factories = await res.json();
+    renderFactories(factories);
+  }
+
+  function renderFactories(factories) {
+    const grid  = document.getElementById('factories-grid');
+    const empty = document.getElementById('empty-state');
+    if (!factories || factories.length === 0) {
+      grid.innerHTML = '';
+      empty.style.display = '';
+      return;
+    }
+    empty.style.display = 'none';
+    grid.innerHTML = factories.map(f => `
+      <a class="factory-card" href="/factories/${f.id}">
+        <button class="btn btn-ghost btn-sm factory-card-delete"
+          onclick="event.preventDefault();deleteFactory('${f.id}',this)">🗑</button>
+        <div class="factory-card-name">${esc(f.name)}</div>
+      </a>
+    `).join('');
+  }
+
+  // ── Create factory ────────────────────────────────────
+  function openModal() {
+    document.getElementById('factory-name').value = '';
+    document.getElementById('status-create').className = 'status-msg';
+    document.getElementById('modal-backdrop').classList.add('open');
+    document.getElementById('modal').classList.add('open');
+    setTimeout(() => document.getElementById('factory-name').focus(), 80);
+  }
+
+  function closeModal() {
+    document.getElementById('modal-backdrop').classList.remove('open');
+    document.getElementById('modal').classList.remove('open');
+  }
+
+  async function doCreate() {
+    const name = document.getElementById('factory-name').value.trim();
+    if (!name) { showStatus('err', 'Name is required'); return; }
+    const res = await Auth.apiFetch('/api/saves/' + _saveID + '/factories', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) { showStatus('err', data.message || 'Error'); return; }
+    closeModal();
+    loadFactories();
+  }
+
+  // ── Delete factory ────────────────────────────────────
+  async function deleteFactory(id, btn) {
+    if (!confirm('Delete this factory? This cannot be undone.')) return;
+    btn.disabled = true;
+    const res = await Auth.apiFetch('/api/factories/' + id, { method: 'DELETE' });
+    if (res && (res.ok || res.status === 204)) { loadFactories(); }
+    else btn.disabled = false;
+  }
+
+  // ── Helpers ───────────────────────────────────────────
+  function showStatus(cls, text) {
+    const el = document.getElementById('status-create');
+    el.className = 'status-msg ' + cls;
+    el.textContent = text;
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Theme ─────────────────────────────────────────────
+  function toggleTheme() {
+    const dark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+    document.getElementById('theme-btn').textContent = dark ? '☀️' : '🌙';
+  }
+  document.getElementById('theme-btn').textContent =
+    document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
+
+  loadSave();
+  loadFactories();
+</script>
+</body>
+</html>

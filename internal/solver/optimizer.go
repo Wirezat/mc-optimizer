@@ -4,28 +4,28 @@ import (
 	"context"
 	"fmt"
 	"math"
-
-	"github.com/Wirezat/production-optimizer/internal/db"
 )
 
-func CalculateMachineGroups(ctx context.Context, database *db.DB, g *RecipeGraph, rv RateVector) ([]MachineGroupDraft, error) {
+// CalculateMachineGroups converts recipe rates into machine group drafts.
+// Returns a slice of MachineGroupDraft; caller must authorize ownership if needed.
+func (s *Solver) CalculateMachineGroups(ctx context.Context, g *RecipeGraph, rv RateVector) ([]MachineGroupDraft, error) {
 	var groups []MachineGroupDraft
 
 	for recipeID, recipeRate := range rv.RecipeRates {
 		if recipeRate.IsZero() {
 			continue
 		}
-		recipe, err := database.GetRecipe(ctx, recipeID)
+		recipe, err := s.DB.GetRecipe(ctx, recipeID)
 		if err != nil {
-			return nil, fmt.Errorf("get recipe %s: %w", recipeID, err)
+			return nil, fmt.Errorf("solver: get recipe %s: %w", recipeID, err)
 		}
-		machine, err := database.GetMachineType(ctx, recipe.MachineMod, recipe.MachineID)
+		machine, err := s.DB.GetMachineType(ctx, recipe.MachineMod, recipe.MachineID)
 		if err != nil {
-			return nil, fmt.Errorf("get machine %s:%s: %w", recipe.MachineMod, recipe.MachineID, err)
+			return nil, fmt.Errorf("solver: get machine %s:%s: %w", recipe.MachineMod, recipe.MachineID, err)
 		}
 
 		effEU := max(machine.BaseEUPerTick, 1)
-		ticksPerRecipe := max(ceildiv(recipe.TotalEU, effEU), 1)
+		ticksPerRecipe := max(ceilDiv(recipe.TotalEU, effEU), 1)
 
 		exact := recipeRate.Mul(NewRational(ticksPerRecipe, 1))
 		count := max(exact.CeilInt(), 1)
@@ -43,43 +43,46 @@ func CalculateMachineGroups(ctx context.Context, database *db.DB, g *RecipeGraph
 	return groups, nil
 }
 
-func OptimizeUpgrades(ctx context.Context, database *db.DB, groups []MachineGroupDraft, rv RateVector) ([]MachineGroupDraft, []string, error) {
+// OptimizeUpgrades selects the cheapest upgrade tier for each machine group.
+// Returns updated groups and a slice of warnings; caller must authorize ownership if needed.
+func (s *Solver) OptimizeUpgrades(ctx context.Context, groups []MachineGroupDraft, rv RateVector) ([]MachineGroupDraft, []string, error) {
 	var warnings []string
 	result := make([]MachineGroupDraft, len(groups))
 	copy(result, groups)
 
 	for i, group := range result {
-		machine, err := database.GetMachineType(ctx, group.MachineMod, group.MachineID)
+		machine, err := s.DB.GetMachineType(ctx, group.MachineMod, group.MachineID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("get machine %s:%s: %w", group.MachineMod, group.MachineID, err)
+			return nil, nil, fmt.Errorf("solver: get machine %s:%s: %w", group.MachineMod, group.MachineID, err)
 		}
 		if machine.EnergyType != "EU" {
 			continue
 		}
-		recipe, err := database.GetRecipe(ctx, group.RecipeID)
+		recipe, err := s.DB.GetRecipe(ctx, group.RecipeID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("get recipe %s: %w", group.RecipeID, err)
+			return nil, nil, fmt.Errorf("solver: get recipe %s: %w", group.RecipeID, err)
 		}
 		recipeRate, ok := rv.RecipeRates[group.RecipeID]
 		if !ok || recipeRate.IsZero() {
 			continue
 		}
 
-		// ticks available per machine per recipe cycle
+		// 1. Compute required EU/t to meet the rate with current machine count.
 		ticksNeeded := max(NewRational(group.Count, 1).Div(recipeRate).CeilInt(), 1)
-		requiredEffEU := ceildiv(recipe.TotalEU, ticksNeeded)
+		requiredEffEU := ceilDiv(recipe.TotalEU, ticksNeeded)
 		if requiredEffEU <= machine.BaseEUPerTick {
 			continue
 		}
 
-		tiers, err := database.GetUpgradeTiers(ctx, machine.ModID)
+		// 2. Fetch available upgrade tiers for this mod.
+		tiers, err := s.DB.GetUpgradeTiers(ctx, machine.ModID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("get upgrade tiers for %s: %w", machine.ModID, err)
+			return nil, nil, fmt.Errorf("solver: get upgrade tiers for %s: %w", machine.ModID, err)
 		}
 
 		found := false
 		for _, tier := range tiers {
-			upgradeCount := ceildiv(requiredEffEU-machine.BaseEUPerTick, tier.EUBonusPerSlot)
+			upgradeCount := ceilDiv(requiredEffEU-machine.BaseEUPerTick, tier.EUBonusPerSlot)
 			if upgradeCount > int64(machine.MaxSlots) {
 				continue
 			}
@@ -101,7 +104,10 @@ func OptimizeUpgrades(ctx context.Context, database *db.DB, groups []MachineGrou
 	return result, warnings, nil
 }
 
-func ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootItem ItemRef, maxScale int64) ([]MachineGroupDraft, Rational, []string) {
+// ScaleToInteger scales all machine counts and the target rate by the LCM of recipe rate denominators.
+// If the LCM exceeds maxScale, uses continued fraction approximation to keep denominators bounded.
+// Returns scaled groups, scaled actual rate, and warnings.
+func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootItem ItemRef, maxScale int64) ([]MachineGroupDraft, Rational, []string) {
 	var warnings []string
 
 	if len(rv.RecipeRates) == 0 {
@@ -118,7 +124,7 @@ func ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootItem ItemRef,
 		const maxDen = int64(20)
 		maxErrPct := 0.0
 		for i, f := range fractions {
-			approx := ApproximateByContinuedFractions(f, maxDen)
+			approx := approximateByContinuedFractions(f, maxDen)
 			fractions[i] = approx
 			if orig := float64(f.Num) / float64(f.Den); orig > 0 {
 				if e := math.Abs(orig-float64(approx.Num)/float64(approx.Den)) / orig * 100; e > maxErrPct {
@@ -142,7 +148,27 @@ func ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootItem ItemRef,
 	return result, rv.ItemRates[rootItem.Key()].Mul(NewRational(k, 1)), warnings
 }
 
-func ApproximateByContinuedFractions(r Rational, maxDen int64) Rational {
+// ComputeIOProfile aggregates inputs and outputs from the rate vector and recipe graph.
+func ComputeIOProfile(rv RateVector, g *RecipeGraph, factory FactoryState, timeUnit string) IOProfile {
+	var inputs, outputs []IOEntry
+
+	for key, node := range g.Nodes {
+		rate := rv.ItemRates[key]
+		if rate.IsZero() {
+			continue
+		}
+		if key == g.Root.Key() {
+			outputs = append(outputs, IOEntry{Item: node.Item, Rate: rate, TimeUnit: timeUnit})
+		} else if node.IsRawMaterial || node.IsStopPoint || node.IsFactoryProvided {
+			inputs = append(inputs, IOEntry{Item: node.Item, Rate: rate, TimeUnit: timeUnit, IsStopPoint: node.IsStopPoint})
+		}
+	}
+
+	return IOProfile{Inputs: inputs, Outputs: outputs}
+}
+
+// approximateByContinuedFractions finds the best rational approximation of r with denominator <= maxDen.
+func approximateByContinuedFractions(r Rational, maxDen int64) Rational {
 	intPart := r.Num / r.Den
 	frac := NewRational(r.Num-intPart*r.Den, r.Den)
 	if frac.IsZero() {
@@ -176,24 +202,7 @@ done:
 	return NewRational(best.Num+intPart*best.Den, best.Den)
 }
 
-func ComputeIOProfile(rv RateVector, g *RecipeGraph, factory FactoryState, timeUnit string) IOProfile {
-	var inputs, outputs []IOEntry
-
-	for key, node := range g.Nodes {
-		rate := rv.ItemRates[key]
-		if rate.IsZero() {
-			continue
-		}
-		if key == g.Root.Key() {
-			outputs = append(outputs, IOEntry{Item: node.Item, Rate: rate, TimeUnit: timeUnit})
-		} else if node.IsRawMaterial || node.IsStopPoint || node.IsFactoryProvided {
-			inputs = append(inputs, IOEntry{Item: node.Item, Rate: rate, TimeUnit: timeUnit})
-		}
-	}
-
-	return IOProfile{Inputs: inputs, Outputs: outputs}
-}
-
+// lcmOfFractions returns the least common multiple of the denominators of the given fractions.
 func lcmOfFractions(fs []Rational) int64 {
 	dens := make([]int64, len(fs))
 	for i, f := range fs {
@@ -202,13 +211,15 @@ func lcmOfFractions(fs []Rational) int64 {
 	return LCM(dens)
 }
 
-func ceildiv(a, b int64) int64 {
+// ceilDiv returns the ceiling of a/b for positive b.
+func ceilDiv(a, b int64) int64 {
 	if b == 0 {
 		return 0
 	}
 	return (a + b - 1) / b
 }
 
+// absRat returns the absolute value of r.
 func absRat(r Rational) Rational {
 	return r.Abs()
 }

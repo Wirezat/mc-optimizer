@@ -5,8 +5,10 @@ import (
 	"math"
 )
 
+// Rational represents a fraction n/d in reduced form with d > 0.
 type Rational struct{ Num, Den int64 }
 
+// abs64u returns the absolute value of n as uint64.
 func abs64u(n int64) uint64 {
 	if n >= 0 {
 		return uint64(n)
@@ -14,6 +16,7 @@ func abs64u(n int64) uint64 {
 	return ^uint64(n) + 1
 }
 
+// ugcd computes the greatest common divisor of two uint64s.
 func ugcd(a, b uint64) uint64 {
 	for b != 0 {
 		a, b = b, a%b
@@ -21,6 +24,7 @@ func ugcd(a, b uint64) uint64 {
 	return a
 }
 
+// gcd returns the GCD of two int64s.
 func gcd(a, b int64) int64 { return int64(ugcd(abs64u(a), abs64u(b))) }
 
 // mulHiLo computes the full 128-bit product of two uint64s.
@@ -33,6 +37,7 @@ func mulHiLo(a, b uint64) (hi, lo uint64) {
 	return a1*b1 + (t >> 32) + (w1 >> 32), a * b
 }
 
+// smul multiplies two int64s with overflow panic.
 func smul(a, b int64) int64 {
 	hi, lo := mulHiLo(abs64u(a), abs64u(b))
 	if hi != 0 || lo > math.MaxInt64 {
@@ -44,6 +49,7 @@ func smul(a, b int64) int64 {
 	return int64(lo)
 }
 
+// sadd adds two int64s with overflow panic.
 func sadd(a, b int64) int64 {
 	s := a + b
 	if (a^b) >= 0 && (s^a) < 0 {
@@ -83,6 +89,7 @@ func cmpCross(a, b, c, d int64) int {
 	return 1
 }
 
+// norm reduces n/d to lowest terms and ensures d > 0.
 func norm(n, d int64) Rational {
 	if d < 0 {
 		n, d = -n, -d
@@ -101,6 +108,7 @@ func normPos(n, d int64) Rational {
 	return Rational{n, d}
 }
 
+// NewRational creates a reduced fraction, panicking on zero denominator or MinInt64.
 func NewRational(n, d int64) Rational {
 	if d == 0 {
 		panic("rational: zero denominator")
@@ -111,6 +119,7 @@ func NewRational(n, d int64) Rational {
 	return norm(n, d)
 }
 
+// RationalFromInt creates a rational n/1.
 func RationalFromInt(n int64) Rational {
 	if n == math.MinInt64 {
 		panic("rational: MinInt64 unsupported")
@@ -118,8 +127,10 @@ func RationalFromInt(n int64) Rational {
 	return Rational{n, 1}
 }
 
+// Neg returns -r.
 func (r Rational) Neg() Rational { return Rational{-r.Num, r.Den} }
 
+// Abs returns |r|.
 func (r Rational) Abs() Rational {
 	if r.Num < 0 {
 		return Rational{-r.Num, r.Den}
@@ -127,6 +138,7 @@ func (r Rational) Abs() Rational {
 	return r
 }
 
+// Add returns r + o.
 func (r Rational) Add(o Rational) Rational {
 	switch {
 	case r.Num == 0:
@@ -141,6 +153,7 @@ func (r Rational) Add(o Rational) Rational {
 	return normPos(sadd(smul(r.Num, od), smul(o.Num, rd)), smul(r.Den, od))
 }
 
+// Sub returns r - o.
 func (r Rational) Sub(o Rational) Rational {
 	switch {
 	case o.Num == 0:
@@ -155,6 +168,7 @@ func (r Rational) Sub(o Rational) Rational {
 	return normPos(sadd(smul(r.Num, od), smul(-o.Num, rd)), smul(r.Den, od))
 }
 
+// Mul returns r * o.
 func (r Rational) Mul(o Rational) Rational {
 	if r.Num == 0 || o.Num == 0 {
 		return Rational{0, 1}
@@ -163,6 +177,7 @@ func (r Rational) Mul(o Rational) Rational {
 	return Rational{smul(r.Num/g1, o.Num/g2), smul(r.Den/g2, o.Den/g1)}
 }
 
+// Div returns r / o, panics on division by zero.
 func (r Rational) Div(o Rational) Rational {
 	if o.Num == 0 {
 		panic("rational: division by zero")
@@ -170,15 +185,24 @@ func (r Rational) Div(o Rational) Rational {
 	return r.Mul(norm(o.Den, o.Num))
 }
 
-func (r Rational) IsZero() bool       { return r.Num == 0 }
-func (r Rational) IsNegative() bool   { return r.Num < 0 }
-func (r Rational) IsPositive() bool   { return r.Num > 0 }
+// IsZero reports whether r == 0.
+func (r Rational) IsZero() bool { return r.Num == 0 }
+
+// IsNegative reports whether r < 0.
+func (r Rational) IsNegative() bool { return r.Num < 0 }
+
+// IsPositive reports whether r > 0.
+func (r Rational) IsPositive() bool { return r.Num > 0 }
+
+// Eq reports whether r == o.
 func (r Rational) Eq(o Rational) bool { return r.Num == o.Num && r.Den == o.Den }
 
+// Cmp compares r and o, returning -1, 0, or 1.
 func (r Rational) Cmp(o Rational) int {
 	return cmpCross(r.Num, o.Den, o.Num, r.Den)
 }
 
+// CeilInt returns the smallest integer ≥ r.
 func (r Rational) CeilInt() int64 {
 	q := r.Num / r.Den
 	if r.Num%r.Den != 0 && r.Num > 0 {
@@ -187,6 +211,7 @@ func (r Rational) CeilInt() int64 {
 	return q
 }
 
+// FloorInt returns the largest integer ≤ r.
 func (r Rational) FloorInt() int64 {
 	q := r.Num / r.Den
 	if r.Num%r.Den != 0 && r.Num < 0 {
@@ -195,6 +220,7 @@ func (r Rational) FloorInt() int64 {
 	return q
 }
 
+// String returns "n" if denom=1, else "n/d".
 func (r Rational) String() string {
 	if r.Den == 1 {
 		return fmt.Sprintf("%d", r.Num)
@@ -202,6 +228,7 @@ func (r Rational) String() string {
 	return fmt.Sprintf("%d/%d", r.Num, r.Den)
 }
 
+// LCM returns the least common multiple of the given integers.
 func LCM(ns []int64) int64 {
 	if len(ns) == 0 {
 		return 1

@@ -8,7 +8,6 @@ import (
 
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
-	"github.com/google/uuid"
 )
 
 // ListSavesHandler returns all saves for the authenticated user.
@@ -23,6 +22,26 @@ func ListSavesHandler(database *db.DB) http.HandlerFunc {
 			saves = []*model.Save{}
 		}
 		writeJSON(w, http.StatusOK, saves)
+	}
+}
+
+// GetSaveHandler fetches a single save by ID, enforcing ownership.
+func GetSaveHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := parseUUIDParam(w, r, "save_id")
+		if !ok {
+			return
+		}
+		s, err := database.GetSave(r.Context(), id, userIDFromContext(r.Context()))
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				errNotFound(w)
+				return
+			}
+			errInternal(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, s)
 	}
 }
 
@@ -53,7 +72,7 @@ func CreateSaveHandler(database *db.DB) http.HandlerFunc {
 // DeleteSaveHandler deletes a save by ID, enforcing ownership.
 func DeleteSaveHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := parseUUIDParam(w, r, "id")
+		id, ok := parseUUIDParam(w, r, "save_id")
 		if !ok {
 			return
 		}
@@ -67,14 +86,4 @@ func DeleteSaveHandler(database *db.DB) http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
-}
-
-// parseUUIDParam parses a named path param as UUID; writes 400 and returns false on failure.
-func parseUUIDParam(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(r.PathValue(name))
-	if err != nil {
-		errBadRequest(w, name+" must be a valid UUID")
-		return uuid.Nil, false
-	}
-	return id, true
 }

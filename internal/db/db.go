@@ -3,10 +3,14 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrNotFound = errors.New("db: record not found")
+var ErrConflict = errors.New("db: unique constraint violation")
 
 // DB wraps pgxpool.Pool.
 type DB struct{ Pool *pgxpool.Pool }

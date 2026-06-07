@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MC Optimizer — Saves</title>
+  <link rel="stylesheet" href="/static/css/base.css" />
+  <link rel="stylesheet" href="/static/css/accent.css" />
+  <link rel="stylesheet" href="/static/css/components.css" />
+  <link rel="stylesheet" href="/static/css/layout.css" />
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/header.js"></script>
+  <script>
+    (function(){
+      const s = localStorage.getItem('theme');
+      if (s === 'dark' || (!s && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    /* ── Save cards grid ── */
+    .saves-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+
+    .save-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      position: relative;
+    }
+
+    .save-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      text-decoration: none;
+    }
+
+    .save-card-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .save-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 12px;
+      color: var(--text-faint);
+    }
+
+    .save-card-delete {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .save-card:hover .save-card-delete {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <a class="header-brand" href="/saves">
+      <div class="header-logo">⚙️</div>
+      <span>MC Optimizer</span>
+    </a>
+    <div class="header-right">
+      <button class="btn btn-ghost btn-sm" onclick="toggleTheme()" id="theme-btn">🌙</button>
+      <!-- User dropdown -->
+      <div class="user-menu" id="user-menu">
+        <button class="user-menu-trigger" id="user-menu-trigger">
+          <div class="avatar" id="user-avatar">?</div>
+          <span class="username" id="user-username">…</span>
+          <span class="chevron">▾</span>
+        </button>
+        <div class="user-dropdown" id="user-dropdown"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <!-- ── Sidebar ── -->
+    <nav class="sidebar"></nav>
+
+    <!-- ── Main ── -->
+    <main class="main">
+      <div class="page">
+
+        <div class="page-header">
+          <div>
+            <div class="page-title">Saves</div>
+            <div class="page-subtitle">Each save represents one Minecraft world</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal()">+ New Save</button>
+        </div>
+
+        <!-- Save cards -->
+        <div class="saves-grid" id="saves-grid">
+          <!-- populated by JS -->
+        </div>
+
+        <!-- Empty state (hidden when saves exist) -->
+        <div class="empty-state" id="empty-state" style="display:none;">
+          <div class="empty-state-icon">💾</div>
+          <div class="empty-state-text">No saves yet — create your first one</div>
+          <button class="btn btn-primary" onclick="openModal()">+ New Save</button>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ── New Save Modal ── -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeModal()"></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true">
+  <div class="modal-header">
+    <span class="modal-title">New Save</span>
+    <button class="modal-close" onclick="closeModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <div class="field">
+      <label>Save name</label>
+      <input type="text" id="save-name" placeholder="e.g. Survival World" autocomplete="off"
+        onkeydown="if(event.key==='Enter') doCreate()" />
+    </div>
+    <span class="status-msg" id="status-create"></span>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="doCreate()">Create</button>
+  </div>
+</div>
+
+<script>
+  // ── Auth guard ────────────────────────────────────────
+  Auth.guard();
+  Header.init();
+
+  // ── Load saves ────────────────────────────────────────
+  async function loadSaves() {
+    const res = await Auth.apiFetch('/api/saves');
+    if (!res) return;
+    const saves = await res.json();
+    renderSaves(saves);
+  }
+
+  function renderSaves(saves) {
+    const grid  = document.getElementById('saves-grid');
+    const empty = document.getElementById('empty-state');
+    if (!saves || saves.length === 0) {
+      grid.innerHTML = '';
+      empty.style.display = '';
+      return;
+    }
+    empty.style.display = 'none';
+    grid.innerHTML = saves.map(s => `
+      <a class="save-card" href="/saves/${s.id}">
+        <button class="btn btn-ghost btn-sm save-card-delete"
+          onclick="event.preventDefault();deleteSave('${s.id}',this)">🗑</button>
+        <div class="save-card-name">${esc(s.name)}</div>
+        <div class="save-card-meta">
+          <span>Created ${fmtDate(s.created_at)}</span>
+        </div>
+      </a>
+    `).join('');
+  }
+
+  // ── Create save ───────────────────────────────────────
+  function openModal() {
+    document.getElementById('save-name').value = '';
+    document.getElementById('status-create').className = 'status-msg';
+    document.getElementById('modal-backdrop').classList.add('open');
+    document.getElementById('modal').classList.add('open');
+    setTimeout(() => document.getElementById('save-name').focus(), 80);
+  }
+
+  function closeModal() {
+    document.getElementById('modal-backdrop').classList.remove('open');
+    document.getElementById('modal').classList.remove('open');
+  }
+
+  async function doCreate() {
+    const name = document.getElementById('save-name').value.trim();
+    if (!name) { showStatus('status-create', 'err', 'Name is required'); return; }
+    const res = await Auth.apiFetch('/api/saves', { method: 'POST', body: JSON.stringify({ name }) });
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok) { showStatus('status-create', 'err', data.message || 'Error'); return; }
+    closeModal();
+    loadSaves();
+  }
+
+  // ── Delete save ───────────────────────────────────────
+  async function deleteSave(id, btn) {
+    if (!confirm('Delete this save? This cannot be undone.')) return;
+    btn.disabled = true;
+    const res = await Auth.apiFetch('/api/saves/' + id, { method: 'DELETE' });
+    if (res && (res.ok || res.status === 204)) { loadSaves(); }
+    else btn.disabled = false;
+  }
+
+  // ── Helpers ───────────────────────────────────────────
+  function showStatus(id, cls, text) {
+    const el = document.getElementById(id);
+    el.className = 'status-msg ' + cls;
+    el.textContent = text;
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+  }
+
+  // ── Theme ─────────────────────────────────────────────
+  function toggleTheme() {
+    const dark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+    document.getElementById('theme-btn').textContent = dark ? '☀️' : '🌙';
+  }
+  document.getElementById('theme-btn').textContent =
+    document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
+
+  loadSaves();
+</script>
+</body>
+</html>

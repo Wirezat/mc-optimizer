@@ -10,6 +10,8 @@ var (
 	ErrUnderDetermined = errors.New("underdetermined system: infinite solutions")
 )
 
+// BuildStoichiometryMatrix creates the stoichiometry matrix S (items × recipes) from the recipe graph.
+// Returns S, the list of items, and the list of recipe IDs.
 func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ItemRef, []string) {
 	itemIdx, recipeIdx := map[string]int{}, map[string]int{}
 	var items []ItemRef
@@ -59,6 +61,8 @@ func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ItemRef, []string
 	return S, items, recipeIDs
 }
 
+// GaussJordanRational performs Gauss‑Jordan elimination on the augmented matrix [S|b] over rationals.
+// Returns a solution vector x or an error (ErrNoSolution, ErrUnderDetermined).
 func GaussJordanRational(S [][]Rational, b []Rational) ([]Rational, error) {
 	m := len(S)
 	if m == 0 {
@@ -93,7 +97,8 @@ func GaussJordanRational(S [][]Rational, b []Rational) ([]Rational, error) {
 		for j := col; j <= n; j++ {
 			aug[pivotRow][j] = aug[pivotRow][j].Div(pv)
 		}
-		for row := range m {
+		// Korrigierte Schleife: for row := 0; row < m; row++
+		for row := 0; row < m; row++ {
 			if row == pivotRow || aug[row][col].IsZero() {
 				continue
 			}
@@ -122,10 +127,12 @@ func GaussJordanRational(S [][]Rational, b []Rational) ([]Rational, error) {
 	return r, nil
 }
 
+// SolveLinearSystem solves the stoichiometry matrix for the recipe graph given a target rate per tick.
+// Returns a RateVector mapping recipe IDs and item keys to rational rates.
 func SolveLinearSystem(g *RecipeGraph, targetRatePerTick Rational) (RateVector, error) {
 	S, items, recipeIDs := BuildStoichiometryMatrix(g)
 	if len(recipeIDs) == 0 {
-		return RateVector{}, fmt.Errorf("no recipes in graph")
+		return RateVector{}, fmt.Errorf("solver: no recipes in graph")
 	}
 	m, n := len(items), len(recipeIDs)
 	rootKey := g.Root.Key()
@@ -147,11 +154,11 @@ func SolveLinearSystem(g *RecipeGraph, targetRatePerTick Rational) (RateVector, 
 
 	r, err := GaussJordanRational(Sred, b)
 	if err != nil {
-		return RateVector{}, fmt.Errorf("linear system: %w", err)
+		return RateVector{}, fmt.Errorf("solver: linear system: %w", err)
 	}
 	for j, rate := range r {
 		if rate.IsNegative() {
-			return RateVector{}, fmt.Errorf("recipe %s has negative rate — check recipe chain", recipeIDs[j])
+			return RateVector{}, fmt.Errorf("solver: recipe %s has negative rate — check recipe chain", recipeIDs[j])
 		}
 	}
 

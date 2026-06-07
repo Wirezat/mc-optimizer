@@ -1,0 +1,126 @@
+/* ── Solver Wizard ───────────────────────────────────────────────────────── */
+/* Requires base.css + components.css */
+
+/* ── Stepper header ──────────────────────────────────────────────────────── */
+.wizard-steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 8px;
+}
+
+.wizard-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    position: relative;
+}
+
+.wizard-step:not(:last-child)::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border-strong);
+    margin: 0 8px;
+}
+
+.wizard-step.done::after {
+    background: var(--accent);
+}
+
+.wizard-step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    border: 2px solid var(--border-strong);
+    background: var(--bg);
+    color: var(--text-faint);
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.wizard-step.active .wizard-step-num {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+}
+
+.wizard-step.done .wizard-step-num {
+    background: var(--accent-muted);
+    border-color: var(--accent);
+    color: var(--accent-dark);
+}
+
+html.dark .wizard-step.done .wizard-step-num {
+    color: var(--accent);
+}
+
+.wizard-step-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-faint);
+    white-space: nowrap;
+}
+
+.wizard-step.active .wizard-step-label { color: var(--text); font-weight: 600; }
+.wizard-step.done   .wizard-step-label { color: var(--text-muted); }
+
+/* ── Wizard panels ───────────────────────────────────────────────────────── */
+.wizard-panel {
+    display: none;
+}
+
+.wizard-panel.active {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ── Wizard navigation ───────────────────────────────────────────────────── */
+.wizard-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+}
+
+/* ── Result preview (step 2) ─────────────────────────────────────────────── */
+.result-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+}
+
+.result-line:last-child {
+    border-bottom: none;
+}
+
+.result-machine {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.result-count {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    white-space: nowrap;
+}
+
+.result-recipe {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 1px;
+}

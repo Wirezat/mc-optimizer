@@ -1,4 +1,6 @@
--- 004_factory.down.sql
+-- 003_user_data.down.sql
+-- Drop in reverse FK order.
+
 DROP TABLE IF EXISTS solver_drafts;
 DROP TABLE IF EXISTS machine_groups;
 DROP TABLE IF EXISTS pl_io;

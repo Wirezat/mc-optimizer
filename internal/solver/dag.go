@@ -2,11 +2,13 @@ package solver
 
 import "fmt"
 
+// RateVector holds the computed rates for recipes and items.
 type RateVector struct {
 	RecipeRates map[string]Rational // recipe_uuid → Executions/Tick
 	ItemRates   map[string]Rational // ItemRef.Key() → Net-Flow/Tick
 }
 
+// newRateVector creates an empty RateVector with initialized maps.
 func newRateVector() RateVector {
 	return RateVector{
 		RecipeRates: make(map[string]Rational),
@@ -14,13 +16,13 @@ func newRateVector() RateVector {
 	}
 }
 
-// DetectCycles returns true if g contains a cycle.
+// DetectCycles returns true if the recipe graph contains a cycle.
 func DetectCycles(g *RecipeGraph) bool {
 	_, err := TopologicalSort(g)
 	return err != nil
 }
 
-// TopologicalSort via Kahn's. Returns sorted nodes or error on cycle.
+// TopologicalSort orders the recipe graph nodes via Kahn's algorithm, returning an error if a cycle is detected.
 func TopologicalSort(g *RecipeGraph) ([]*RecipeNode, error) {
 	n := len(g.Nodes)
 	inDegree := make(map[string]int, n)
@@ -57,13 +59,12 @@ func TopologicalSort(g *RecipeGraph) ([]*RecipeNode, error) {
 	}
 
 	if len(order) != n {
-		return nil, fmt.Errorf("cycle detected")
+		return nil, fmt.Errorf("solver: cycle detected")
 	}
 	return order, nil
 }
 
-// SolveDAG computes recipe- and item-rates for a target output rate.
-// Walks topo-order in reverse (root → raw materials), propagating rates downward.
+// SolveDAG computes recipe and item rates for a target output rate by walking the topological order in reverse.
 func SolveDAG(g *RecipeGraph, targetRatePerTick Rational) (RateVector, error) {
 	topoOrder, err := TopologicalSort(g)
 	if err != nil {
@@ -83,7 +84,7 @@ func SolveDAG(g *RecipeGraph, targetRatePerTick Rational) (RateVector, error) {
 			continue
 		}
 		if node.OutputAmount.IsZero() {
-			return RateVector{}, fmt.Errorf("recipe %s: zero output for %s", node.RecipeID, key)
+			return RateVector{}, fmt.Errorf("solver: recipe %s: zero output for %s", node.RecipeID, key)
 		}
 
 		recipeRate := itemRate.Div(node.OutputAmount)

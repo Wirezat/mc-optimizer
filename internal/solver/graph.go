@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Wirezat/production-optimizer/internal/db"
+	"github.com/Wirezat/production-optimizer/internal/model"
 )
 
+// Edge represents a directed connection between a recipe node and an item or fluid.
 type Edge struct {
 	Item        ItemRef  // empty if IsFluid
 	ModID       string   // fluid mod (IsFluid only)
@@ -17,6 +18,7 @@ type Edge struct {
 	IsFluid     bool
 }
 
+// RecipeNode represents a single item in the recipe graph, optionally bound to a specific recipe.
 type RecipeNode struct {
 	Item              ItemRef
 	RecipeID          string
@@ -30,14 +32,16 @@ type RecipeNode struct {
 	IsFactoryProvided bool
 }
 
+// RecipeGraph maps item keys to RecipeNode and stores the root item.
 type RecipeGraph struct {
 	Nodes map[string]*RecipeNode
 	Root  ItemRef
 }
 
-func BuildRecipeGraph(
+// BuildRecipeGraph constructs a directed recipe graph starting from the root item.
+// It stops at stop points, factory-provided items, or raw materials (no recipe).
+func (s *Solver) BuildRecipeGraph(
 	ctx context.Context,
-	database *db.DB,
 	root ItemRef,
 	stopPoints map[string]bool,
 	factory FactoryState,
@@ -72,9 +76,9 @@ func BuildRecipeGraph(
 			continue
 		}
 
-		recipes, err := database.GetRecipesForItem(ctx, item.ModID, item.ItemID)
+		recipes, err := s.DB.GetRecipesForItem(ctx, item.ModID, item.ItemID)
 		if err != nil {
-			return nil, fmt.Errorf("get recipes for %s: %w", key, err)
+			return nil, fmt.Errorf("solver: get recipes for %s: %w", key, err)
 		}
 		if len(recipes) == 0 {
 			node.IsRawMaterial = true
@@ -94,7 +98,7 @@ func BuildRecipeGraph(
 
 		outputAmount, ok := outputAmountForItem(selected, item)
 		if !ok {
-			return nil, fmt.Errorf("recipe %s has no output for item %s", selected.ID, key)
+			return nil, fmt.Errorf("solver: recipe %s has no output for item %s", selected.ID, key)
 		}
 
 		node.RecipeID = selected.ID
@@ -141,7 +145,8 @@ func BuildRecipeGraph(
 	return g, nil
 }
 
-func outputAmountForItem(r *db.RecipeWithIO, item ItemRef) (Rational, bool) {
+// outputAmountForItem returns the expected net output amount (amount * probability) for the given item.
+func outputAmountForItem(r *model.RecipeRow, item ItemRef) (Rational, bool) {
 	for _, out := range r.ItemOutputs {
 		if out.ItemModID == item.ModID && out.ItemID == item.ItemID {
 			base := NewRational(out.AmountNum, out.AmountDen)
@@ -152,6 +157,7 @@ func outputAmountForItem(r *db.RecipeWithIO, item ItemRef) (Rational, bool) {
 	return Rational{}, false
 }
 
+// AllNodes returns all nodes in the graph as a slice.
 func (g *RecipeGraph) AllNodes() []*RecipeNode {
 	nodes := make([]*RecipeNode, 0, len(g.Nodes))
 	for _, n := range g.Nodes {
@@ -160,6 +166,7 @@ func (g *RecipeGraph) AllNodes() []*RecipeNode {
 	return nodes
 }
 
+// ActiveRecipeNodes returns only the nodes that have a non-empty RecipeID.
 func (g *RecipeGraph) ActiveRecipeNodes() []*RecipeNode {
 	var nodes []*RecipeNode
 	for _, n := range g.Nodes {

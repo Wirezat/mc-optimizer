@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wirezat/GoLog"
 	auth "github.com/Wirezat/production-optimizer/internal/crypto"
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
@@ -56,7 +57,6 @@ func RegisterHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Username string `json:"username"`
-			Email    string `json:"email"`
 			Password string `json:"password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -64,9 +64,8 @@ func RegisterHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		req.Username = strings.TrimSpace(req.Username)
-		req.Email = strings.TrimSpace(strings.ToLower(req.Email))
-		if req.Username == "" || req.Email == "" || req.Password == "" {
-			errBadRequest(w, "username, email and password are required")
+		if req.Username == "" || req.Password == "" {
+			errBadRequest(w, "username and password are required")
 			return
 		}
 		if len(req.Password) < 8 {
@@ -78,7 +77,7 @@ func RegisterHandler(database *db.DB) http.HandlerFunc {
 			errInternal(w, err)
 			return
 		}
-		u, err := database.CreateUser(r.Context(), req.Username, req.Email, hash)
+		u, err := database.CreateUser(r.Context(), req.Username, hash)
 		if err != nil {
 			if errors.Is(err, db.ErrConflict) {
 				errConflict(w, "username or email already taken")
@@ -100,20 +99,22 @@ func RegisterHandler(database *db.DB) http.HandlerFunc {
 func LoginHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			Email    string `json:"email"`
+			Username string `json:"username"`
 			Password string `json:"password"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			errBadRequest(w, "invalid JSON")
 			return
 		}
-		req.Email = strings.TrimSpace(strings.ToLower(req.Email))
-		u, err := database.GetUserByEmail(r.Context(), req.Email)
+		req.Username = strings.TrimSpace(req.Username)
+		u, err := database.GetUserByUsername(r.Context(), req.Username)
 		if err != nil {
+			GoLog.Warnf("login: user not found: %q err=%v", req.Username, err)
 			errUnauthorized(w)
 			return
 		}
 		if err := auth.VerifyPassword(u.PasswordHash, req.Password); err != nil {
+			GoLog.Warnf("login: wrong password for user %q", req.Username)
 			errUnauthorized(w)
 			return
 		}

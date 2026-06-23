@@ -196,7 +196,9 @@ func LogoutHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			RefreshToken string `json:"refresh_token"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.RefreshToken != "" {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			GoLog.Warnf("logout: failed to decode body: %v", err)
+		} else if body.RefreshToken != "" {
 			_ = database.DeleteToken(r.Context(), auth.HashToken(body.RefreshToken))
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "logged out"})

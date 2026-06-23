@@ -11,12 +11,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const userSelect = `SELECT id, username, is_admin, password_hash, created_at FROM users`
+const userSelect = `SELECT id, username, is_admin, is_owner, password_hash, created_at FROM users`
 
 // scanUser scans a user row from pgx.Row and returns a model.User.
 func scanUser(row pgx.Row) (*model.User, error) {
 	u := &model.User{}
-	if err := row.Scan(&u.ID, &u.Username, &u.IsAdmin, &u.PasswordHash, &u.CreatedAt); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.IsAdmin, &u.IsOwner, &u.PasswordHash, &u.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -86,4 +86,92 @@ func (d *DB) GetUserByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 		return nil, fmt.Errorf("db: get user by id: %w", err)
 	}
 	return u, nil
+}
+
+// ListUsers returns all users ordered by created_at ascending.
+func (d *DB) ListUsers(ctx context.Context) ([]*model.User, error) {
+	rows, err := d.Pool.Query(ctx, userSelect+` ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("db: list users: %w", err)
+	}
+	defer rows.Close()
+	var users []*model.User
+	for rows.Next() {
+		u := &model.User{}
+		if err := rows.Scan(&u.ID, &u.Username, &u.IsAdmin, &u.IsOwner, &u.PasswordHash, &u.CreatedAt); err != nil {
+			return nil, fmt.Errorf("db: list users scan: %w", err)
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// SetUserAdmin updates the is_admin flag for a user by ID.
+func (d *DB) SetUserAdmin(ctx context.Context, userID uuid.UUID, isAdmin bool) error {
+	tag, err := d.Pool.Exec(ctx, `UPDATE users SET is_admin = $1 WHERE id = $2`, isAdmin, userID)
+	if err != nil {
+		return fmt.Errorf("db: set user admin: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// TransferOwnership atomically moves is_owner from fromID to toID.
+// Returns ErrNotFound if either user does not exist.
+func (d *DB) TransferOwnership(ctx context.Context, fromID, toID uuid.UUID) error {
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("db: transfer ownership begin: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if tag, err := tx.Exec(ctx, `UPDATE users SET is_owner = FALSE WHERE id = $1`, fromID); err != nil {
+		return fmt.Errorf("db: transfer ownership revoke: %w", err)
+	} else if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if tag, err := tx.Exec(ctx, `UPDATE users SET is_owner = TRUE, is_admin = TRUE WHERE id = $1`, toID); err != nil {
+		return fmt.Errorf("db: transfer ownership grant: %w", err)
+	} else if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	// Invalidate old owner's sessions so their cached isOwner flag expires immediately.
+	_ = d.DeleteAllTokensForUser(ctx, fromID)
+	return nil
+}
+
+// DeleteUser removes a user by ID. All owned data cascades automatically.
+// Returns ErrNotFound if the user does not exist.
+func (d *DB) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+	tag, err := d.Pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
+	if err != nil {
+		return fmt.Errorf("db: delete user: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// BootstrapOwner sets is_owner = TRUE for the user with the given username if no owner exists yet.
+// Idempotent: does nothing if an owner already exists or the username is not found.
+func (d *DB) BootstrapOwner(ctx context.Context, username string) error {
+	if username == "" {
+		return nil
+	}
+	_, err := d.Pool.Exec(ctx, `
+		UPDATE users SET is_owner = TRUE, is_admin = TRUE
+		WHERE username = $1
+		  AND NOT EXISTS (SELECT 1 FROM users WHERE is_owner = TRUE)`,
+		username,
+	)
+	if err != nil {
+		return fmt.Errorf("db: bootstrap owner: %w", err)
+	}
+	return nil
 }

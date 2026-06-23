@@ -9,13 +9,8 @@ FROM alpine:3.19
 WORKDIR /app
 COPY --from=builder /app/server .
 COPY web/ web/
-# Replace broken symlinks (wirezat-ui package, outside build context) with real files.
-# Pass --build-context wirezat-ui=/path/to/wirezat-ui when building.
-RUN rm web/static/css/base.css web/static/css/components.css web/static/css/layout.css \
-       web/pages/login.html
-COPY --from=wirezat-ui css/base.css       web/static/css/base.css
-COPY --from=wirezat-ui css/components.css web/static/css/components.css
-COPY --from=wirezat-ui css/layout.css     web/static/css/layout.css
-COPY --from=wirezat-ui pages/auth.html    web/pages/login.html
+# web/static/ui is a symlink to the wirezatUI package (outside build context).
+# Pass --build-context wirezat_ui=/path/to/wirezatUI when building.
+COPY --from=wirezat_ui . web/static/ui/
 EXPOSE 8081
 CMD ["./server"]

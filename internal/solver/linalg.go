@@ -57,6 +57,15 @@ func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ItemRef, []string
 				S[i][j] = S[i][j].Sub(e.Amount.Mul(e.Probability))
 			}
 		}
+		// Byproduct outputs: add positive supply contributions for active items.
+		for _, e := range node.Outputs {
+			if e.Item.Key() == node.Item.Key() {
+				continue // primary output already counted via OutputAmount
+			}
+			if i, ok := itemIdx[e.Item.Key()]; ok {
+				S[i][j] = S[i][j].Add(e.Amount)
+			}
+		}
 	}
 	return S, items, recipeIDs
 }

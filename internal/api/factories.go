@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"maps"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
 )
 
@@ -16,6 +18,7 @@ import (
 type balanceEntry struct {
 	ModID       string `json:"mod_id"`
 	ItemFluidID string `json:"item_fluid_id"`
+	Name        string `json:"name"`
 	IOType      string `json:"io_type"`
 	RateNum     int64  `json:"rate_num"`
 	RateDen     int64  `json:"rate_den"`
@@ -144,6 +147,50 @@ func absInt64(n int64) int64 {
 	return n
 }
 
+// enrichBalanceNames looks up display names for all entries in a factoryBalance and sets Name.
+func enrichBalanceNames(ctx context.Context, database *db.DB, balance *factoryBalance) error {
+	collect := func(entries []balanceEntry) []solver.ItemRef {
+		refs := make([]solver.ItemRef, len(entries))
+		for i, e := range entries {
+			refs[i] = solver.ItemRef{ModID: e.ModID, ItemID: e.ItemFluidID, IsFluid: e.IOType == "fluid"}
+		}
+		return refs
+	}
+	var refs []solver.ItemRef
+	refs = append(refs, collect(balance.ExternalInputs)...)
+	refs = append(refs, collect(balance.Outputs)...)
+	surplusRefs := make([]solver.ItemRef, len(balance.Surplus))
+	for i, e := range balance.Surplus {
+		surplusRefs[i] = solver.ItemRef{ModID: e.ModID, ItemID: e.ItemFluidID, IsFluid: e.IOType == "fluid"}
+	}
+	refs = append(refs, surplusRefs...)
+
+	names, err := database.LookupItemNames(ctx, refs)
+	if err != nil {
+		return err
+	}
+	apply := func(entries []balanceEntry) {
+		for i, e := range entries {
+			key := e.ModID + ":" + e.ItemFluidID
+			if e.IOType == "fluid" {
+				key = "fluid:" + e.ModID + ":" + e.ItemFluidID
+			}
+			entries[i].Name = names[key]
+		}
+	}
+	apply(balance.ExternalInputs)
+	apply(balance.Outputs)
+	for i, e := range balance.Surplus {
+		key := e.ModID + ":" + e.ItemFluidID
+		if e.IOType == "fluid" {
+			key = "fluid:" + e.ModID + ":" + e.ItemFluidID
+		}
+		balance.Surplus[i].Name = names[key]
+		balance.Surplus[i].balanceEntry.Name = names[key]
+	}
+	return nil
+}
+
 // ListFactoriesHandler returns all factories belonging to a save.
 func ListFactoriesHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -180,6 +227,7 @@ func CreateFactoryHandler(database *db.DB) http.HandlerFunc {
 		}
 		var body struct {
 			Name string `json:"name"`
+			Src  bool   `json:"src"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			errBadRequest(w, "invalid JSON")
@@ -190,7 +238,7 @@ func CreateFactoryHandler(database *db.DB) http.HandlerFunc {
 			errBadRequest(w, "name is required")
 			return
 		}
-		f, err := database.CreateFactory(r.Context(), saveID, body.Name)
+		f, err := database.CreateFactory(r.Context(), saveID, body.Name, body.Src)
 		if err != nil {
 			errInternal(w, err)
 			return
@@ -224,10 +272,61 @@ func GetFactoryHandler(database *db.DB) http.HandlerFunc {
 			errInternal(w, err)
 			return
 		}
+		balance := computeBalance(ios)
+		if err := enrichBalanceNames(r.Context(), database, &balance); err != nil {
+			errInternal(w, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"factory": f,
-			"balance": computeBalance(ios),
+			"balance": balance,
 		})
+	}
+}
+
+// UpdateFactoryHandler handles PATCH /api/factories/{factory_id}.
+// Accepts optional fields: name (string), src (bool).
+func UpdateFactoryHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := userIDFromContext(r.Context())
+		factoryID, ok := parseUUIDParam(w, r, "factory_id")
+		if !ok {
+			return
+		}
+		if err := requireFactoryOwner(r, w, database, factoryID, userID); err != nil {
+			return
+		}
+		var body struct {
+			Name *string `json:"name"`
+			Src  *bool   `json:"src"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			errBadRequest(w, "invalid JSON")
+			return
+		}
+		if body.Name != nil {
+			name := strings.TrimSpace(*body.Name)
+			if name == "" {
+				errBadRequest(w, "name must not be empty")
+				return
+			}
+			if err := database.RenameFactory(r.Context(), factoryID, name); err != nil {
+				errInternal(w, err)
+				return
+			}
+		}
+		if body.Src != nil {
+			if err := database.SetFactorySrc(r.Context(), factoryID, *body.Src); err != nil {
+				errInternal(w, err)
+				return
+			}
+		}
+		f, err := database.GetFactory(r.Context(), factoryID)
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, f)
 	}
 }
 

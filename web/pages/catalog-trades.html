@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MC Optimizer — Villager Trades</title>
+  <link rel="stylesheet" href="/static/ui/index.css" />
+  <link rel="stylesheet" href="/static/css/theme.css" />
+  <script>
+    (function(){
+      const s = localStorage.getItem('theme');
+      if (s === 'dark' || (!s && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    .catalog-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
+    .catalog-link:hover { color: var(--accent); border-color: var(--accent); }
+    .group-toggle { cursor: pointer; user-select: none; font-size: .7em; opacity: .5; padding-right: 4px; }
+    .group-toggle::before { content: '▾'; }
+    .table-group-hd.collapsed .group-toggle::before { content: '▸'; }
+  </style>
+</head>
+<body class="app-shell">
+  <header class="header">
+    <a class="header-brand" href="/saves"><div class="header-logo">⚙️</div><span>MC Optimizer</span></a>
+    <div class="header-right">
+      <button data-wui-theme data-i18n-title="common.toggle_theme"></button>
+      <div class="dropdown-wrap" data-wui-lang><button data-dropdown-trigger></button><div class="dropdown-panel"><button class="dropdown-item" data-lang="en">🇬🇧 English</button><button class="dropdown-item" data-lang="de">🇩🇪 Deutsch</button></div></div>
+      <div class="dropdown-wrap" data-wui-user-menu><button class="user-menu-trigger" data-wui-user-trigger data-dropdown-trigger><div class="avatar">?</div><span class="username">…</span><span class="chevron">▾</span></button><div class="dropdown-panel" data-wui-user-dropdown></div></div>
+    </div>
+  </header>
+  <div class="app-body">
+    <nav class="sidebar"></nav>
+    <main class="main"><div class="page">
+
+      <div class="page-header" data-page-header-area>
+        <div class="page-title-row">
+          <h1 class="page-title" data-i18n="catalog.trades.title"></h1>
+        </div>
+      </div>
+
+      <div class="container">
+        <div class="container-header">
+          <span class="container-title" id="trade-count"></span>
+        </div>
+        <div class="container-filter">
+          <div class="wui-ac-wrap" style="width:220px;">
+            <input class="input" id="trade-search" data-i18n-placeholder="catalog.search_placeholder"
+              style="width:100%;height:var(--h-btn-sm);" autocomplete="off" />
+            <div class="wui-ac-drop" id="trade-search-ac"></div>
+          </div>
+        </div>
+        <div class="container-body-flush">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:60px;" data-i18n="catalog.trades.col.tier"></th>
+                <th data-i18n="catalog.trades.col.cost"></th>
+                <th style="width:24px;"></th>
+                <th data-i18n="catalog.trades.col.result"></th>
+                <th style="width:80px;" data-i18n="catalog.trades.col.max_uses"></th>
+                <th style="width:50px;" data-i18n="catalog.trades.col.xp"></th>
+              </tr>
+            </thead>
+            <tbody id="trade-tbody">
+              <tr><td colspan="6" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div></main>
+  </div>
+</div>
+
+<script type="module">
+  import { guard, apiFetch } from '/static/ui/js/auth.js';
+  import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
+  import { init as initHeader } from '/static/js/header.js';
+  import { initInfocards } from '/static/ui/js/infocard.js';
+  import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
+  import { wuiFilter } from '/static/ui/js/filter.js';
+
+  await load(getLang());
+  applyI18n();
+  guard();
+  initHeader();
+
+  const tbody = document.getElementById('trade-tbody');
+  const countEl = document.getElementById('trade-count');
+  const searchEl = document.getElementById('trade-search');
+
+  let allTrades = [];
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function itemCell(modID, itemID, name, count) {
+    const label = esc(name || itemID);
+    const countPrefix = count > 1 ? `<span class="td-mono td-muted" style="font-size:var(--text-sm);margin-right:4px;">${count}×</span>` : '';
+    return `${countPrefix}<span class="infocard-trigger" data-infocard-inline>${label}</span>
+      <div class="infocard-def" hidden>
+        <div class="infocard-header"><div class="infocard-heading">
+          <span class="infocard-title">${label}</span>
+          <span class="infocard-subtitle">${esc(modID)}:${esc(itemID)}</span>
+        </div></div>
+        <div class="infocard-section">
+          <a href="/catalog/items" class="catalog-link" data-i18n="catalog.trades.detail.catalog_link"></a>
+        </div>
+      </div>`;
+  }
+
+  function renderTrades() {
+    const q = searchEl.value.trim().toLowerCase();
+    let trades = allTrades;
+    if (q) trades = trades.filter(tr => wuiFilter(tr, q, ['profession', 'cost_name', 'cost_item_id', 'result_name', 'result_item_id', 'tier']));
+
+    countEl.textContent = trades.length + ' trade' + (trades.length !== 1 ? 's' : '');
+
+    if (!trades.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_trades')}</td></tr>`;
+      return;
+    }
+
+    let html = '';
+    let lastProf = null;
+    for (const tr of trades) {
+      if (tr.profession !== lastProf) {
+        lastProf = tr.profession;
+        html += `<tr class="table-group-hd"><td colspan="6"><span class="group-toggle"></span>${esc(tr.profession)}</td></tr>`;
+      }
+      const enchanted = tr.result_modified ? ' ✨' : '';
+      html += `<tr>
+        <td>${tr.tier}</td>
+        <td>${itemCell(tr.cost_mod_id, tr.cost_item_id, tr.cost_name, tr.cost_count)}</td>
+        <td class="td-muted" style="text-align:center;">→</td>
+        <td>${itemCell(tr.result_mod_id, tr.result_item_id, tr.result_name, tr.result_count)}${enchanted}</td>
+        <td class="td-muted" style="text-align:right;">${tr.max_uses ?? '—'}</td>
+        <td class="td-muted" style="text-align:right;">${tr.xp ?? '—'}</td>
+      </tr>`;
+    }
+    tbody.innerHTML = html;
+    applyI18n(tbody);
+    initInfocards();
+  }
+
+  function applyCollapseState() {
+    let collapsed = false;
+    for (const row of tbody.querySelectorAll('tr')) {
+      if (row.classList.contains('table-group-hd')) {
+        collapsed = row.classList.contains('collapsed');
+      } else {
+        row.hidden = collapsed;
+      }
+    }
+  }
+
+  tbody.addEventListener('click', e => {
+    const hd = e.target.closest('.table-group-hd');
+    if (hd) { hd.classList.toggle('collapsed'); applyCollapseState(); }
+  });
+
+  searchEl.addEventListener('input', renderTrades);
+
+  const res = await apiFetch('/api/trades');
+  if (res?.ok) {
+    allTrades = await res.json();
+    renderTrades();
+    new WuiAutocomplete({
+      inputEl:   searchEl,
+      dropEl:    document.getElementById('trade-search-ac'),
+      primary:   r => r.result_name || r.result_item_id,
+      secondary: r => r.profession,
+      fetch(q, offset) {
+        let rows = allTrades;
+        rows = wuiFilter(allTrades, q, ['profession', 'cost_name', 'cost_item_id', 'result_name', 'result_item_id', 'tier']);
+        return Promise.resolve({ rows: rows.slice(offset, offset + 50), hasMore: offset + 50 < rows.length });
+      },
+      onSelect(r) { searchEl.value = r.result_name || r.result_item_id; searchEl.dispatchEvent(new Event('input')); },
+    });
+  }
+</script>
+</body>
+</html>

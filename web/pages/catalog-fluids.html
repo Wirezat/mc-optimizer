@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MC Optimizer — Fluids</title>
+  <link rel="stylesheet" href="/static/ui/index.css" />
+  <link rel="stylesheet" href="/static/css/theme.css" />
+  <script>
+    (function(){
+      const s = localStorage.getItem('theme');
+      if (s === 'dark' || (!s && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    .row-name-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
+    .row-name-link:hover { color: var(--accent); border-color: var(--accent); }
+    .group-toggle { cursor: pointer; user-select: none; font-size: .7em; opacity: .5; padding-right: 4px; }
+    .catalog-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
+    .catalog-link:hover { color: var(--accent); border-color: var(--accent); }
+    .table-group-hd.collapsed .group-toggle::before { content: '▸'; }
+    .group-toggle::before { content: '▾'; }
+  </style>
+</head>
+<body class="app-shell">
+  <header class="header">
+    <a class="header-brand" href="/saves"><div class="header-logo">⚙️</div><span>MC Optimizer</span></a>
+    <div class="header-right">
+      <button data-wui-theme data-i18n-title="common.toggle_theme"></button>
+      <div class="dropdown-wrap" data-wui-lang><button data-dropdown-trigger></button><div class="dropdown-panel"><button class="dropdown-item" data-lang="en">🇬🇧 English</button><button class="dropdown-item" data-lang="de">🇩🇪 Deutsch</button></div></div>
+      <div class="dropdown-wrap" data-wui-user-menu><button class="user-menu-trigger" data-wui-user-trigger data-dropdown-trigger><div class="avatar">?</div><span class="username">…</span><span class="chevron">▾</span></button><div class="dropdown-panel" data-wui-user-dropdown></div></div>
+    </div>
+  </header>
+  <div class="app-body">
+    <nav class="sidebar"></nav>
+    <main class="main"><div class="page">
+
+      <div class="page-header" data-page-header-area>
+        <div class="page-title-row">
+          <h1 class="page-title" data-i18n="catalog.fluids.title"></h1>
+        </div>
+      </div>
+
+      <div class="container">
+        <div class="container-header">
+          <span class="container-title" id="fluid-count"></span>
+        </div>
+        <div class="container-filter">
+          <div class="wui-ac-wrap" style="width:220px;">
+            <input class="input" id="fluid-search" data-i18n-placeholder="catalog.search_placeholder"
+              style="width:100%;height:var(--h-btn-sm);" autocomplete="off" />
+            <div class="wui-ac-drop" id="fluid-search-ac"></div>
+          </div>
+        </div>
+        <div class="container-body-flush">
+          <table class="table">
+            <thead>
+              <tr>
+                <th data-i18n="catalog.fluids.col.fluid_id"></th>
+                <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
+              </tr>
+            </thead>
+            <tbody id="fluid-tbody">
+              <tr><td colspan="2" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
+            </tbody>
+          </table>
+          <div id="fluid-sentinel" style="height:1px;"></div>
+        </div>
+      </div>
+
+    </div></main>
+  </div>
+</div>
+
+<script type="module">
+  import { guard, apiFetch } from '/static/ui/js/auth.js';
+  import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
+  import { init as initHeader } from '/static/js/header.js';
+  import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
+  import { wuiFilter } from '/static/ui/js/filter.js';
+
+  await load(getLang());
+  applyI18n();
+  guard();
+  initHeader();
+
+  const tbody    = document.getElementById('fluid-tbody');
+  const countEl  = document.getElementById('fluid-count');
+  const searchEl = document.getElementById('fluid-search');
+  const sentinel = document.getElementById('fluid-sentinel');
+  const urlMod   = new URLSearchParams(location.search).get('mod') || '';
+
+  const PAGE_SIZE = 100;
+  let allFluids = [];
+  let modNames  = {};
+  let filtered  = [];
+  let rendered  = 0;
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderChunk() {
+    const chunk = filtered.slice(rendered, rendered + PAGE_SIZE);
+    if (!chunk.length) return;
+    let html = '';
+    let lastMod = rendered === 0 ? null : filtered[rendered - 1].mod_id;
+    for (const fluid of chunk) {
+      if (fluid.mod_id !== lastMod) {
+        lastMod = fluid.mod_id;
+        const modName = modNames[fluid.mod_id] || fluid.mod_id;
+        html += `<tr class="table-group-hd"><td colspan="2"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a></td></tr>`;
+      }
+      html += `<tr>
+        <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>
+        <td>
+          <a href="/catalog/recipes?fluid=${encodeURIComponent(fluid.mod_id + ':' + fluid.fluid_id)}"
+             class="row-name-link">${esc(fluid.name || fluid.fluid_id)}</a>
+        </td>
+      </tr>`;
+    }
+    tbody.insertAdjacentHTML('beforeend', html);
+    rendered += chunk.length;
+    applyCollapseState();
+  }
+
+  function resetAndRender() {
+    const q = searchEl.value.trim().toLowerCase();
+    filtered = urlMod ? allFluids.filter(f => f.mod_id === urlMod) : allFluids;
+    if (q) filtered = filtered.filter(f => wuiFilter(f, q, ['name', 'fluid_id', 'mod_name']));
+    countEl.textContent = filtered.length + ' fluid' + (filtered.length !== 1 ? 's' : '');
+    rendered = 0;
+    tbody.innerHTML = '';
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="2" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_fluids')}</td></tr>`;
+      return;
+    }
+    renderChunk();
+  }
+
+  new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting && rendered < filtered.length) renderChunk();
+  }, { rootMargin: '300px' }).observe(sentinel);
+
+  function applyCollapseState() {
+    let collapsed = false;
+    for (const row of tbody.rows) {
+      if (row.classList.contains('table-group-hd')) {
+        collapsed = row.classList.contains('collapsed');
+      } else {
+        row.hidden = collapsed;
+      }
+    }
+  }
+
+  tbody.addEventListener('click', e => {
+    if (e.target.closest('a')) return;
+    const hd = e.target.closest('.table-group-hd');
+    if (!hd) return;
+    hd.classList.toggle('collapsed');
+    applyCollapseState();
+  });
+
+  searchEl.addEventListener('input', resetAndRender);
+
+  const [fluidsRes, modsRes] = await Promise.all([
+    apiFetch('/api/fluids?all=true'),
+    apiFetch('/api/mods'),
+  ]);
+  if (modsRes?.ok) {
+    const mods = await modsRes.json();
+    mods.forEach(m => { modNames[m.mod_id] = m.name; });
+  }
+  if (fluidsRes?.ok) {
+    allFluids = await fluidsRes.json();
+    allFluids.forEach(f => { f.mod_name = modNames[f.mod_id] || f.mod_id; });
+    resetAndRender();
+    new WuiAutocomplete({
+      inputEl:   searchEl,
+      dropEl:    document.getElementById('fluid-search-ac'),
+      primary:   r => r.name || r.fluid_id,
+      secondary: r => r.mod_name,
+      fetch(q, offset) {
+        const rows = wuiFilter(allFluids, q, ['name', 'fluid_id', 'mod_name']);
+        return Promise.resolve({ rows: rows.slice(offset, offset + 50), hasMore: offset + 50 < rows.length });
+      },
+      onSelect(r) { searchEl.value = r.name || r.fluid_id; searchEl.dispatchEvent(new Event('input')); },
+    });
+  }
+</script>
+</body>
+</html>

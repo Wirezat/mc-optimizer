@@ -52,9 +52,31 @@ func issueTokensForUser(r *http.Request, database *db.DB, u *model.User) (*token
 	return &tokenPair{rawAccess, rawRefresh}, nil
 }
 
+// AuthConfigHandler handles GET /api/auth/config — public, no auth required.
+func AuthConfigHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		enabled, err := database.RegistrationEnabled(r.Context())
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"registration_enabled": enabled})
+	}
+}
+
 // RegisterHandler handles POST /api/auth/register.
 func RegisterHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if enabled, err := database.RegistrationEnabled(r.Context()); err != nil {
+			errInternal(w, err)
+			return
+		} else if !enabled {
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"error":   "REGISTRATION_DISABLED",
+				"message": "Registration is currently disabled by the administrator.",
+			})
+			return
+		}
 		var req struct {
 			Username string `json:"username"`
 			Password string `json:"password"`

@@ -4,13 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MC Optimizer — Items</title>
-  <link rel="stylesheet" href="/static/css/base.css" />
-  <link rel="stylesheet" href="/static/css/accent.css" />
-  <link rel="stylesheet" href="/static/css/components.css" />
-  <link rel="stylesheet" href="/static/css/layout.css" />
-  <script src="/static/js/auth.js"></script>
-  <script src="/static/js/header.js"></script>
-  <script src="/static/js/utils.js"></script>
+  <link rel="stylesheet" href="/static/ui/index.css" />
+  <link rel="stylesheet" href="/static/css/theme.css" />
   <script>
     (function(){
       const s = localStorage.getItem('theme');
@@ -19,258 +14,182 @@
     })();
   </script>
   <style>
-    .catalog-search-bar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .catalog-search-bar input {
-      flex: 1;
-      max-width: 420px;
-    }
-    .catalog-count {
-      font-size: var(--text-xs);
-      color: var(--text-faint);
-      white-space: nowrap;
-    }
-
-    /* ── Mod group ── */
-    .item-group { margin-bottom: 12px; }
-    .item-group-header {
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      padding: 6px 14px;
-      background: var(--bg-page);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-      font-size: var(--text-xs);
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-faint);
-    }
-    .item-group-name { color: var(--text-muted); font-size: var(--text-sm); font-weight: 600; text-transform: none; letter-spacing: 0; }
-    .item-group-count {
-      margin-left: auto;
-      font-weight: 400;
-      font-size: var(--text-xs);
-    }
-    .item-group-body {
-      border: 1px solid var(--border);
-      border-top: none;
-      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-      background: var(--bg-card);
-      overflow: hidden;
-    }
-    .item-row {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-      padding: 6px 14px;
-      border-bottom: 1px solid var(--border);
-      font-size: var(--text-sm);
-    }
-    .item-row:last-child { border-bottom: none; }
-    .item-row-name { flex: 0 0 auto; min-width: 160px; }
-    .item-row-id {
-      font-family: var(--mono);
-      font-size: var(--text-xs);
-      color: var(--text-faint);
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .item-row-stack {
-      font-size: var(--text-xs);
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-    .catalog-empty {
-      padding: 32px;
-      text-align: center;
-      color: var(--text-faint);
-      font-size: var(--text-sm);
-    }
-
+    .row-name-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
+    .row-name-link:hover { color: var(--accent); border-color: var(--accent); }
+    .group-toggle { cursor: pointer; user-select: none; font-size: .7em; opacity: .5; padding-right: 4px; }
+    .catalog-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
+    .catalog-link:hover { color: var(--accent); border-color: var(--accent); }
+    .table-group-hd.collapsed .group-toggle::before { content: '▸'; }
+    .group-toggle::before { content: '▾'; }
   </style>
 </head>
-<body>
-<div class="app-shell">
-
+<body class="app-shell">
   <header class="header">
-    <a class="header-brand" href="/saves">
-      <div class="header-logo">⚙️</div>
-      <span>MC Optimizer</span>
-    </a>
+    <a class="header-brand" href="/saves"><div class="header-logo">⚙️</div><span>MC Optimizer</span></a>
     <div class="header-right">
-      <button class="btn btn-ghost btn-sm" onclick="toggleTheme()" id="theme-btn">🌙</button>
-      <div class="user-menu" id="user-menu">
-        <button class="user-menu-trigger" id="user-menu-trigger">
-          <div class="avatar">?</div>
-          <span class="username">…</span>
-          <span class="chevron">▾</span>
-        </button>
-        <div class="user-dropdown" id="user-dropdown"></div>
-      </div>
+      <button data-wui-theme data-i18n-title="common.toggle_theme"></button>
+      <div class="dropdown-wrap" data-wui-lang><button data-dropdown-trigger></button><div class="dropdown-panel"><button class="dropdown-item" data-lang="en">🇬🇧 English</button><button class="dropdown-item" data-lang="de">🇩🇪 Deutsch</button></div></div>
+      <div class="dropdown-wrap" data-wui-user-menu><button class="user-menu-trigger" data-wui-user-trigger data-dropdown-trigger><div class="avatar">?</div><span class="username">…</span><span class="chevron">▾</span></button><div class="dropdown-panel" data-wui-user-dropdown></div></div>
     </div>
   </header>
-
   <div class="app-body">
     <nav class="sidebar"></nav>
+    <main class="main"><div class="page">
 
-    <main class="main">
-      <div class="page">
-
-        <div class="page-header">
-          <div>
-            <div class="page-title">Items &amp; Fluids</div>
-            <div class="page-subtitle">Browse all registered resources</div>
-          </div>
+      <div class="page-header" data-page-header-area>
+        <div class="page-title-row">
+          <h1 class="page-title" data-i18n="catalog.items.title"></h1>
         </div>
-
-        <nav class="tabs-bar" id="tabs">
-          <button class="tab-btn active" data-tab="items">Items</button>
-          <button class="tab-btn" data-tab="fluids">Fluids</button>
-        </nav>
-
-        <!-- ══ Tab: Items ══════════════════════════════════════════════════════ -->
-        <div class="tab-panel active" id="panel-items">
-          <div class="catalog-search-bar">
-            <input class="form-input" id="item-search" placeholder="Search by name or ID…"
-              oninput="_scheduleItemSearch()" autocomplete="off" />
-            <span class="catalog-count" id="item-count"></span>
-          </div>
-          <div id="item-list"><div class="catalog-empty">Loading…</div></div>
-        </div>
-
-        <!-- ══ Tab: Fluids ═════════════════════════════════════════════════════ -->
-        <div class="tab-panel" id="panel-fluids">
-          <div class="catalog-search-bar">
-            <input class="form-input" id="fluid-search" placeholder="Search by name or ID…"
-              oninput="_scheduleFluidSearch()" autocomplete="off" />
-            <span class="catalog-count" id="fluid-count"></span>
-          </div>
-          <div id="fluid-list"><div class="catalog-empty">Loading…</div></div>
-        </div>
-
       </div>
-    </main>
+
+      <div class="container">
+        <div class="container-header">
+          <span class="container-title" id="item-count"></span>
+        </div>
+        <div class="container-filter">
+          <div class="wui-ac-wrap" style="width:220px;">
+            <input class="input" id="item-search" data-i18n-placeholder="catalog.search_placeholder"
+              style="width:100%;height:var(--h-btn-sm);" autocomplete="off" />
+            <div class="wui-ac-drop" id="item-search-ac"></div>
+          </div>
+        </div>
+        <div class="container-body-flush">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
+                <th data-i18n="catalog.items.col.item_id"></th>
+                <th data-i18n="catalog.items.col.stack"></th>
+              </tr>
+            </thead>
+            <tbody id="item-tbody">
+              <tr><td colspan="3" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
+            </tbody>
+          </table>
+          <div id="item-sentinel" style="height:1px;"></div>
+        </div>
+      </div>
+
+    </div></main>
   </div>
 </div>
 
-<script>
-  Auth.guard();
-  Header.init();
+<script type="module">
+  import { guard, apiFetch } from '/static/ui/js/auth.js';
+  import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
+  import { init as initHeader } from '/static/js/header.js';
+  import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
+  import { wuiFilter } from '/static/ui/js/filter.js';
 
-  let _mods   = [];
-  let _items  = [];
-  let _fluids = [];
+  await load(getLang());
+  applyI18n();
+  guard();
+  initHeader();
 
-  const _scheduleItemSearch  = Utils.debounce(() => loadItems(document.getElementById('item-search').value.trim()));
-  const _scheduleFluidSearch = Utils.debounce(() => loadFluids(document.getElementById('fluid-search').value.trim()));
+  const tbody    = document.getElementById('item-tbody');
+  const countEl  = document.getElementById('item-count');
+  const searchEl = document.getElementById('item-search');
+  const sentinel = document.getElementById('item-sentinel');
+  const urlMod   = new URLSearchParams(location.search).get('mod') || '';
 
-  // ── Tabs ──────────────────────────────────────────────
-  document.getElementById('tabs').addEventListener('click', e => {
-    const tab = e.target.closest('.tab-btn');
-    if (!tab) return;
-    document.querySelectorAll('#tabs .tab-btn').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
-  });
-
-  // ── Init ──────────────────────────────────────────────
-  async function init() {
-    const modsRes = await Auth.apiFetch('/api/mods');
-    if (modsRes && modsRes.ok) _mods = await modsRes.json();
-    loadItems('');
-    loadFluids('');
-  }
-
-  // ── Items ──────────────────────────────────────────────
-  async function loadItems(q) {
-    document.getElementById('item-list').innerHTML = '<div class="catalog-empty">Loading…</div>';
-    const res = await Auth.apiFetch('/api/items?q=' + encodeURIComponent(q));
-    if (!res || !res.ok) { document.getElementById('item-list').innerHTML = '<div class="catalog-empty">Error loading items</div>'; return; }
-    _items = await res.json();
-    renderItems();
-  }
-
-  function renderItems() {
-    const list = document.getElementById('item-list');
-    document.getElementById('item-count').textContent = _items.length + ' item' + (_items.length !== 1 ? 's' : '');
-    if (!_items.length) { list.innerHTML = '<div class="catalog-empty">No items found</div>'; return; }
-    Utils.suggestions(document.getElementById('item-search'),
-      [...new Set(_items.map(i => i.name).filter(Boolean))].sort());
-    list.innerHTML = groupByMod(_items, 'item_id', i =>
-      `<div class="item-row">
-        <span class="item-row-name">${esc(i.name)}</span>
-        <span class="item-row-id">${esc(i.item_id)}</span>
-        <span class="item-row-stack">${i.max_stack}×</span>
-      </div>`
-    );
-  }
-
-  // ── Fluids ─────────────────────────────────────────────
-  async function loadFluids(q = '') {
-    document.getElementById('fluid-list').innerHTML = '<div class="catalog-empty">Loading…</div>';
-    const res = await Auth.apiFetch('/api/fluids?q=' + encodeURIComponent(q));
-    if (!res || !res.ok) { document.getElementById('fluid-list').innerHTML = '<div class="catalog-empty">Error loading fluids</div>'; return; }
-    _fluids = await res.json();
-    renderFluids();
-  }
-
-  function renderFluids() {
-    const list = document.getElementById('fluid-list');
-    document.getElementById('fluid-count').textContent = _fluids.length + ' fluid' + (_fluids.length !== 1 ? 's' : '');
-    if (!_fluids.length) { list.innerHTML = '<div class="catalog-empty">No fluids found</div>'; return; }
-    Utils.suggestions(document.getElementById('fluid-search'),
-      [...new Set(_fluids.map(f => f.name).filter(Boolean))].sort());
-    list.innerHTML = groupByMod(_fluids, 'fluid_id', f =>
-      `<div class="item-row">
-        <span class="item-row-name">${esc(f.name)}</span>
-        <span class="item-row-id">${esc(f.fluid_id)}</span>
-      </div>`
-    );
-  }
-
-  // ── Shared helpers ─────────────────────────────────────
-  function groupByMod(entries, idKey, rowFn) {
-    const byMod = {};
-    entries.forEach(e => {
-      if (!byMod[e.mod_id]) byMod[e.mod_id] = [];
-      byMod[e.mod_id].push(e);
-    });
-    return Object.entries(byMod).map(([modID, rows]) => {
-      const mod = _mods.find(m => m.mod_id === modID);
-      const modName = mod?.name || modID;
-      return `<div class="item-group">
-        <div class="item-group-header">
-          <span class="item-group-name">${esc(modName)}</span>
-          <span style="font-family:var(--mono);font-size:var(--text-xs);color:var(--text-faint);text-transform:none;letter-spacing:0;">${esc(modID)}</span>
-          <span class="item-group-count">${rows.length}</span>
-        </div>
-        <div class="item-group-body">${rows.map(rowFn).join('')}</div>
-      </div>`;
-    }).join('');
-  }
+  const PAGE_SIZE = 100;
+  let allItems  = [];
+  let modNames  = {};
+  let filtered  = [];
+  let rendered  = 0;
 
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  function toggleTheme() {
-    const dark = document.documentElement.classList.toggle('dark');
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
-    document.getElementById('theme-btn').textContent = dark ? '☀️' : '🌙';
+  function renderChunk() {
+    const chunk = filtered.slice(rendered, rendered + PAGE_SIZE);
+    if (!chunk.length) return;
+    let html = '';
+    let lastMod = rendered === 0 ? null : filtered[rendered - 1].mod_id;
+    for (const item of chunk) {
+      if (item.mod_id !== lastMod) {
+        lastMod = item.mod_id;
+        const modName = modNames[item.mod_id] || item.mod_id;
+        html += `<tr class="table-group-hd"><td colspan="3"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a></td></tr>`;
+      }
+      html += `<tr>
+        <td>
+          <a href="/catalog/recipes?item=${encodeURIComponent(item.mod_id + ':' + item.item_id)}"
+             class="row-name-link">${esc(item.name || item.item_id)}</a>
+        </td>
+        <td class="td-mono td-muted">${esc(item.item_id)}</td>
+        <td class="td-muted td-num">${esc(item.max_stack)}×</td>
+      </tr>`;
+    }
+    tbody.insertAdjacentHTML('beforeend', html);
+    rendered += chunk.length;
+    applyCollapseState();
   }
-  document.getElementById('theme-btn').textContent =
-    document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
 
-  init();
+  function resetAndRender() {
+    const q = searchEl.value.trim().toLowerCase();
+    filtered = urlMod ? allItems.filter(i => i.mod_id === urlMod) : allItems;
+    if (q) filtered = filtered.filter(i => wuiFilter(i, q, ['name', 'item_id', 'mod_name']));
+    countEl.textContent = filtered.length + ' item' + (filtered.length !== 1 ? 's' : '');
+    rendered = 0;
+    tbody.innerHTML = '';
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="3" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_items')}</td></tr>`;
+      return;
+    }
+    renderChunk();
+  }
+
+  new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting && rendered < filtered.length) renderChunk();
+  }, { rootMargin: '300px' }).observe(sentinel);
+
+  function applyCollapseState() {
+    let collapsed = false;
+    for (const row of tbody.rows) {
+      if (row.classList.contains('table-group-hd')) {
+        collapsed = row.classList.contains('collapsed');
+      } else {
+        row.hidden = collapsed;
+      }
+    }
+  }
+
+  tbody.addEventListener('click', e => {
+    if (e.target.closest('a')) return;
+    const hd = e.target.closest('.table-group-hd');
+    if (!hd) return;
+    hd.classList.toggle('collapsed');
+    applyCollapseState();
+  });
+
+  searchEl.addEventListener('input', resetAndRender);
+
+  const [itemsRes, modsRes] = await Promise.all([
+    apiFetch('/api/items?all=true'),
+    apiFetch('/api/mods'),
+  ]);
+  if (modsRes?.ok) {
+    const mods = await modsRes.json();
+    mods.forEach(m => { modNames[m.mod_id] = m.name; });
+  }
+  if (itemsRes?.ok) {
+    allItems = await itemsRes.json();
+    allItems.forEach(i => { i.mod_name = modNames[i.mod_id] || i.mod_id; });
+    resetAndRender();
+    new WuiAutocomplete({
+      inputEl:   searchEl,
+      dropEl:    document.getElementById('item-search-ac'),
+      primary:   r => r.name || r.item_id,
+      secondary: r => r.mod_name,
+      fetch(q, offset) {
+        const rows = wuiFilter(allItems, q, ['name', 'item_id', 'mod_name']);
+        return Promise.resolve({ rows: rows.slice(offset, offset + 50), hasMore: offset + 50 < rows.length });
+      },
+      onSelect(r) { searchEl.value = r.name || r.item_id; searchEl.dispatchEvent(new Event('input')); },
+    });
+  }
 </script>
 </body>
 </html>

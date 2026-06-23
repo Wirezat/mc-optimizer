@@ -27,7 +27,9 @@ func (d *DB) CreateSave(ctx context.Context, userID uuid.UUID, name string) (*mo
 // ListSavesByUser returns all saves owned by userID, newest first.
 func (d *DB) ListSavesByUser(ctx context.Context, userID uuid.UUID) ([]*model.Save, error) {
 	rows, err := d.Pool.Query(ctx,
-		`SELECT id, user_id, name, created_at FROM saves WHERE user_id = $1 ORDER BY created_at DESC`,
+		`SELECT id, user_id, name, created_at,
+		        (SELECT COUNT(*) FROM factories WHERE save_id = saves.id) AS factory_count
+		 FROM saves WHERE user_id = $1 ORDER BY created_at DESC`,
 		userID,
 	)
 	if err != nil {
@@ -38,7 +40,7 @@ func (d *DB) ListSavesByUser(ctx context.Context, userID uuid.UUID) ([]*model.Sa
 	var saves []*model.Save
 	for rows.Next() {
 		s := &model.Save{}
-		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.CreatedAt, &s.FactoryCount); err != nil {
 			return nil, fmt.Errorf("db: scan save: %w", err)
 		}
 		saves = append(saves, s)

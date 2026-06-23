@@ -4,12 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MC Optimizer — Saves</title>
-  <link rel="stylesheet" href="/static/css/base.css" />
-  <link rel="stylesheet" href="/static/css/accent.css" />
-  <link rel="stylesheet" href="/static/css/components.css" />
-  <link rel="stylesheet" href="/static/css/layout.css" />
-  <script src="/static/js/auth.js"></script>
-  <script src="/static/js/header.js"></script>
+  <link rel="stylesheet" href="/static/ui/index.css" />
+  <link rel="stylesheet" href="/static/css/theme.css" />
   <script>
     (function(){
       const s = localStorage.getItem('theme');
@@ -17,64 +13,8 @@
         document.documentElement.classList.add('dark');
     })();
   </script>
-  <style>
-    /* ── Save cards grid ── */
-    .saves-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 14px;
-    }
-
-    .save-card {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 18px 20px;
-      cursor: pointer;
-      text-decoration: none;
-      color: inherit;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      transition: border-color 0.15s, box-shadow 0.15s;
-      position: relative;
-    }
-
-    .save-card:hover {
-      border-color: var(--accent);
-      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-      text-decoration: none;
-    }
-
-    .save-card-name {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .save-card-meta {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      font-size: 12px;
-      color: var(--text-faint);
-    }
-
-    .save-card-delete {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      opacity: 0;
-      transition: opacity 0.15s;
-    }
-
-    .save-card:hover .save-card-delete {
-      opacity: 1;
-    }
-  </style>
 </head>
-<body>
-<div class="app-shell">
+<body class="app-shell">
 
   <!-- ── Header ── -->
   <header class="header">
@@ -83,22 +23,28 @@
       <span>MC Optimizer</span>
     </a>
     <div class="header-right">
-      <button class="btn btn-ghost btn-sm" onclick="toggleTheme()" id="theme-btn">🌙</button>
-      <!-- User dropdown -->
-      <div class="user-menu" id="user-menu">
-        <button class="user-menu-trigger" id="user-menu-trigger">
-          <div class="avatar" id="user-avatar">?</div>
-          <span class="username" id="user-username">…</span>
+      <button data-wui-theme data-i18n-title="common.toggle_theme"></button>
+      <div class="dropdown-wrap" data-wui-lang>
+        <button data-dropdown-trigger></button>
+        <div class="dropdown-panel">
+          <button class="dropdown-item" data-lang="en">🇬🇧 English</button>
+          <button class="dropdown-item" data-lang="de">🇩🇪 Deutsch</button>
+        </div>
+      </div>
+      <div class="dropdown-wrap" data-wui-user-menu>
+        <button class="user-menu-trigger" data-wui-user-trigger data-dropdown-trigger>
+          <div class="avatar">?</div>
+          <span class="username">…</span>
           <span class="chevron">▾</span>
         </button>
-        <div class="user-dropdown" id="user-dropdown"></div>
+        <div class="dropdown-panel" data-wui-user-dropdown></div>
       </div>
     </div>
   </header>
 
   <div class="app-body">
 
-    <!-- ── Sidebar ── -->
+    <!-- ── Sidebar (populated by header.js) ── -->
     <nav class="sidebar"></nav>
 
     <!-- ── Main ── -->
@@ -107,58 +53,70 @@
 
         <div class="page-header">
           <div>
-            <div class="page-title">Saves</div>
-            <div class="page-subtitle">Each save represents one Minecraft world</div>
+            <div class="page-title" data-i18n="saves.title"></div>
+            <div class="page-subtitle" data-i18n="saves.subtitle"></div>
           </div>
-          <button class="btn btn-primary" onclick="openModal()">+ New Save</button>
+          <button class="btn btn-primary" id="new-save-btn" data-i18n="saves.new"></button>
         </div>
 
-        <!-- Save cards -->
-        <div class="saves-grid" id="saves-grid">
-          <!-- populated by JS -->
-        </div>
+        <div class="tile-grid" id="saves-grid"></div>
 
-        <!-- Empty state (hidden when saves exist) -->
         <div class="empty-state" id="empty-state" style="display:none;">
           <div class="empty-state-icon">💾</div>
-          <div class="empty-state-text">No saves yet — create your first one</div>
-          <button class="btn btn-primary" onclick="openModal()">+ New Save</button>
+          <div class="empty-state-text" data-i18n="saves.empty"></div>
+          <div class="empty-state-action">
+            <button class="btn btn-primary" id="new-save-btn-empty" data-i18n="saves.new"></button>
+          </div>
         </div>
 
       </div>
     </main>
   </div>
-</div>
 
-<!-- ── New Save Modal ── -->
-<div class="modal-backdrop" id="modal-backdrop" onclick="closeModal()"></div>
-<div class="modal" id="modal" role="dialog" aria-modal="true">
-  <div class="modal-header">
-    <span class="modal-title">New Save</span>
-    <button class="modal-close" onclick="closeModal()">×</button>
-  </div>
-  <div class="modal-body">
-    <div class="field">
-      <label>Save name</label>
-      <input type="text" id="save-name" placeholder="e.g. Survival World" autocomplete="off"
-        onkeydown="if(event.key==='Enter') doCreate()" />
+  <!-- ── New Save Modal ── -->
+  <div class="modal-backdrop" data-wui-modal>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span class="modal-title" data-i18n="saves.modal.title"></span>
+        <button class="modal-close" data-modal-close>×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label" data-i18n="saves.modal.name_label"></label>
+          <input class="input" type="text" id="save-name"
+            data-i18n-placeholder="saves.modal.name_placeholder"
+            autocomplete="off" />
+        </div>
+        <span class="status-msg" id="status-create"></span>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" data-modal-cancel data-i18n="common.cancel"></button>
+        <button class="btn btn-primary" id="modal-create-btn" data-i18n="common.create"></button>
+      </div>
     </div>
-    <span class="status-msg" id="status-create"></span>
   </div>
-  <div class="modal-footer">
-    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-primary" onclick="doCreate()">Create</button>
-  </div>
-</div>
 
-<script>
-  // ── Auth guard ────────────────────────────────────────
-  Auth.guard();
-  Header.init();
+<script type="module">
+  import { guard, apiFetch } from '/static/ui/js/auth.js';
+  import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
+  import { init as initHeader } from '/static/js/header.js';
+  import { initTileScroll } from '/static/ui/js/tile-scroll.js';
+  import { initModal, closeModal } from '/static/ui/js/modal.js';
 
-  // ── Load saves ────────────────────────────────────────
+  await load(getLang());
+  applyI18n();
+  guard();
+  initHeader();
+  initModal();
+
+  document.getElementById('new-save-btn').addEventListener('click', openModal);
+  document.getElementById('new-save-btn-empty').addEventListener('click', openModal);
+  document.getElementById('modal-create-btn').addEventListener('click', doCreate);
+  document.getElementById('save-name').addEventListener('keydown', e => { if (e.key === 'Enter') doCreate(); });
+
+  // ── Load saves ────────────────────────────────────────────────────────────
   async function loadSaves() {
-    const res = await Auth.apiFetch('/api/saves');
+    const res = await apiFetch('/api/saves');
     if (!res) return;
     const saves = await res.json();
     renderSaves(saves);
@@ -173,53 +131,66 @@
       return;
     }
     empty.style.display = 'none';
+
     grid.innerHTML = saves.map(s => `
-      <a class="save-card" href="/saves/${s.id}">
-        <button class="btn btn-ghost btn-sm save-card-delete"
-          onclick="event.preventDefault();deleteSave('${s.id}',this)">🗑</button>
-        <div class="save-card-name">${esc(s.name)}</div>
-        <div class="save-card-meta">
-          <span>Created ${fmtDate(s.created_at)}</span>
+      <a class="tile" href="/saves/${esc(s.id)}">
+        <button class="btn btn-danger-flat btn-sm btn-icon tile-action"
+          data-id="${esc(s.id)}" title="${esc(t('common.delete'))}">🗑</button>
+        <div class="tile-title">${esc(s.name)}</div>
+        <!-- TODO: show s.mod_count in tile-subtitle once /api/saves returns mod_count -->
+        <div class="tile-meta">
+          <span>${fmtFactories(s.factory_count)}</span>
+          <span>·</span>
+          <span>${esc(fmtDate(s.created_at))}</span>
         </div>
       </a>
     `).join('');
+
+    grid.querySelectorAll('.tile-action').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        deleteSave(btn.dataset.id, btn);
+      });
+    });
+
+    initTileScroll(grid);
   }
 
-  // ── Create save ───────────────────────────────────────
+  // ── Create save ───────────────────────────────────────────────────────────
   function openModal() {
     document.getElementById('save-name').value = '';
     document.getElementById('status-create').className = 'status-msg';
-    document.getElementById('modal-backdrop').classList.add('open');
-    document.getElementById('modal').classList.add('open');
+    document.getElementById('status-create').textContent = '';
+    document.querySelector('[data-wui-modal]').classList.add('open');
     setTimeout(() => document.getElementById('save-name').focus(), 80);
-  }
-
-  function closeModal() {
-    document.getElementById('modal-backdrop').classList.remove('open');
-    document.getElementById('modal').classList.remove('open');
   }
 
   async function doCreate() {
     const name = document.getElementById('save-name').value.trim();
-    if (!name) { showStatus('status-create', 'err', 'Name is required'); return; }
-    const res = await Auth.apiFetch('/api/saves', { method: 'POST', body: JSON.stringify({ name }) });
+    if (!name) { showStatus('status-create', 'err', t('msg.name_required')); return; }
+    const res = await apiFetch('/api/saves', { method: 'POST', body: JSON.stringify({ name }) });
     if (!res) return;
     const data = await res.json();
-    if (!res.ok) { showStatus('status-create', 'err', data.message || 'Error'); return; }
+    if (!res.ok) { showStatus('status-create', 'err', data.message || t('msg.error')); return; }
     closeModal();
     loadSaves();
   }
 
-  // ── Delete save ───────────────────────────────────────
+  // ── Delete save ───────────────────────────────────────────────────────────
   async function deleteSave(id, btn) {
-    if (!confirm('Delete this save? This cannot be undone.')) return;
+    if (!confirm(t('saves.confirm_delete'))) return;
     btn.disabled = true;
-    const res = await Auth.apiFetch('/api/saves/' + id, { method: 'DELETE' });
+    const res = await apiFetch('/api/saves/' + id, { method: 'DELETE' });
     if (res && (res.ok || res.status === 204)) { loadSaves(); }
     else btn.disabled = false;
   }
 
-  // ── Helpers ───────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function fmtFactories(n) {
+    if (!n) return esc(t('saves.factories_none'));
+    return esc(t('saves.factory_count').replace('{n}', n));
+  }
+
   function showStatus(id, cls, text) {
     const el = document.getElementById(id);
     el.className = 'status-msg ' + cls;
@@ -227,22 +198,13 @@
   }
 
   function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   function fmtDate(iso) {
     if (!iso) return '';
-    return new Date(iso).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+    return new Date(iso).toLocaleDateString(getLang(), { year:'numeric', month:'short', day:'numeric' });
   }
-
-  // ── Theme ─────────────────────────────────────────────
-  function toggleTheme() {
-    const dark = document.documentElement.classList.toggle('dark');
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
-    document.getElementById('theme-btn').textContent = dark ? '☀️' : '🌙';
-  }
-  document.getElementById('theme-btn').textContent =
-    document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
 
   loadSaves();
 </script>

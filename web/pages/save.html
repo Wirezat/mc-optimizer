@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MC Optimizer — Save</title>
-  <link rel="stylesheet" href="/static/css/base.css" />
-  <link rel="stylesheet" href="/static/css/accent.css" />
-  <link rel="stylesheet" href="/static/css/components.css" />
-  <link rel="stylesheet" href="/static/css/layout.css" />
-  <script src="/static/js/auth.js"></script>
-  <script src="/static/js/header.js"></script>
+  <title>MC Optimizer</title>
+  <link rel="stylesheet" href="/static/ui/index.css" />
+  <link rel="stylesheet" href="/static/css/theme.css" />
+  <style>
+    .tile-src { border-style: dashed; }
+    .tile-src:hover { border-style: solid; }
+  </style>
   <script>
     (function(){
       const s = localStorage.getItem('theme');
@@ -17,62 +17,8 @@
         document.documentElement.classList.add('dark');
     })();
   </script>
-  <style>
-    .factories-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 14px;
-    }
-
-    .factory-card {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 18px 20px;
-      text-decoration: none;
-      color: inherit;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      transition: border-color 0.15s, box-shadow 0.15s;
-      position: relative;
-    }
-    .factory-card:hover {
-      border-color: var(--accent);
-      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-      text-decoration: none;
-    }
-
-    .factory-card-name {
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .factory-card-delete {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      opacity: 0;
-      transition: opacity 0.15s;
-    }
-    .factory-card:hover .factory-card-delete { opacity: 1; }
-
-    .breadcrumb {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: var(--text-sm);
-      color: var(--text-faint);
-      margin-bottom: 4px;
-    }
-    .breadcrumb a { color: var(--text-muted); }
-    .breadcrumb a:hover { color: var(--accent); text-decoration: none; }
-    .breadcrumb-sep { font-size: 10px; }
-  </style>
 </head>
-<body>
-<div class="app-shell">
+<body class="app-shell">
 
   <!-- ── Header ── -->
   <header class="header">
@@ -81,84 +27,113 @@
       <span>MC Optimizer</span>
     </a>
     <div class="header-right">
-      <button class="btn btn-ghost btn-sm" onclick="toggleTheme()" id="theme-btn">🌙</button>
-      <div class="user-menu" id="user-menu">
-        <button class="user-menu-trigger" id="user-menu-trigger">
+      <button data-wui-theme data-i18n-title="common.toggle_theme"></button>
+      <div class="dropdown-wrap" data-wui-lang>
+        <button data-dropdown-trigger></button>
+        <div class="dropdown-panel">
+          <button class="dropdown-item" data-lang="en">🇬🇧 English</button>
+          <button class="dropdown-item" data-lang="de">🇩🇪 Deutsch</button>
+        </div>
+      </div>
+      <div class="dropdown-wrap" data-wui-user-menu>
+        <button class="user-menu-trigger" data-wui-user-trigger data-dropdown-trigger>
           <div class="avatar">?</div>
           <span class="username">…</span>
           <span class="chevron">▾</span>
         </button>
-        <div class="user-dropdown" id="user-dropdown"></div>
+        <div class="dropdown-panel" data-wui-user-dropdown></div>
       </div>
     </div>
   </header>
 
   <div class="app-body">
-
-    <!-- ── Sidebar ── -->
     <nav class="sidebar"></nav>
 
-    <!-- ── Main ── -->
     <main class="main">
       <div class="page">
 
         <div class="page-header">
           <div>
             <div class="breadcrumb">
-              <a href="/saves">Saves</a>
+              <a href="/saves" data-i18n="nav.saves"></a>
               <span class="breadcrumb-sep">▸</span>
-              <span id="breadcrumb-name">…</span>
+              <span class="breadcrumb-current" id="breadcrumb-name">…</span>
             </div>
             <div class="page-title" id="page-title">…</div>
           </div>
-          <button class="btn btn-primary" onclick="openModal()">+ New Factory</button>
+          <button class="btn btn-primary" id="new-factory-btn" data-i18n="save.new_factory"></button>
         </div>
 
-        <!-- Factory cards -->
-        <div class="factories-grid" id="factories-grid"></div>
+        <div class="tile-grid" id="factories-grid"></div>
 
-        <!-- Empty state -->
         <div class="empty-state" id="empty-state" style="display:none;">
           <div class="empty-state-icon">🏭</div>
-          <div class="empty-state-text">No factories yet — create your first one</div>
-          <button class="btn btn-primary" onclick="openModal()">+ New Factory</button>
+          <div class="empty-state-text" data-i18n="save.empty"></div>
+          <div class="empty-state-action">
+            <button class="btn btn-primary" id="new-factory-btn-empty" data-i18n="save.new_factory"></button>
+          </div>
         </div>
 
       </div>
     </main>
   </div>
-</div>
 
-<!-- ── New Factory Modal ── -->
-<div class="modal-backdrop" id="modal-backdrop" onclick="closeModal()"></div>
-<div class="modal" id="modal" role="dialog" aria-modal="true">
-  <div class="modal-header">
-    <span class="modal-title">New Factory</span>
-    <button class="modal-close" onclick="closeModal()">×</button>
-  </div>
-  <div class="modal-body">
-    <div class="field">
-      <label>Factory name</label>
-      <input type="text" id="factory-name" placeholder="e.g. Iron Processing" autocomplete="off"
-        onkeydown="if(event.key==='Enter') doCreate()" />
+  <!-- ── New Factory Modal ── -->
+  <div class="modal-backdrop" data-wui-modal>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span class="modal-title" data-i18n="save.modal.title"></span>
+        <button class="modal-close" data-modal-close>×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label" data-i18n="save.modal.name_label"></label>
+          <input class="input" type="text" id="factory-name"
+            data-i18n-placeholder="save.modal.name_placeholder"
+            autocomplete="off" />
+        </div>
+        <label class="field" style="flex-direction:row;align-items:center;gap:var(--gap-control);cursor:pointer;">
+          <input type="checkbox" id="factory-src" />
+          <span class="field-label" style="margin:0" data-i18n="save.modal.src_label"></span>
+          <span class="badge badge-accent" style="margin-left:auto" data-i18n="save.src_label"></span>
+        </label>
+        <div id="src-hint" class="field-caption" style="display:none;padding-left:20px"
+          data-i18n="save.modal.src_hint"></div>
+        <span class="status-msg" id="status-create"></span>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" data-modal-cancel data-i18n="common.cancel"></button>
+        <button class="btn btn-primary" id="modal-ok-btn" data-i18n="common.create"></button>
+      </div>
     </div>
-    <span class="status-msg" id="status-create"></span>
   </div>
-  <div class="modal-footer">
-    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-primary" onclick="doCreate()">Create</button>
-  </div>
-</div>
 
-<script>
-  Auth.guard();
-  Header.init();
+<script type="module">
+  import { guard, apiFetch } from '/static/ui/js/auth.js';
+  import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
+  import { init as initHeader } from '/static/js/header.js';
+  import { initTileScroll } from '/static/ui/js/tile-scroll.js';
+  import { initModal, closeModal } from '/static/ui/js/modal.js';
+
+  await load(getLang());
+  applyI18n();
+  guard();
+  initHeader();
+  initModal();
 
   const _saveID = window.location.pathname.split('/')[2];
 
-  // ── Load save metadata ────────────────────────────────
+  document.getElementById('new-factory-btn').addEventListener('click', openModal);
+  document.getElementById('new-factory-btn-empty').addEventListener('click', openModal);
+  document.getElementById('modal-ok-btn').addEventListener('click', doCreate);
+  document.getElementById('factory-name').addEventListener('keydown', e => { if (e.key === 'Enter') doCreate(); });
+  document.getElementById('factory-src').addEventListener('change', function() {
+    document.getElementById('src-hint').style.display = this.checked ? '' : 'none';
+  });
+
+  // ── Load save metadata ────────────────────────────────────────────────────
   async function loadSave() {
-    const res = await Auth.apiFetch('/api/saves/' + _saveID);
+    const res = await apiFetch('/api/saves/' + _saveID);
     if (!res || !res.ok) { window.location.href = '/saves'; return; }
     const save = await res.json();
     document.title = 'MC Optimizer — ' + save.name;
@@ -166,9 +141,9 @@
     document.getElementById('breadcrumb-name').textContent = save.name;
   }
 
-  // ── Load factories ────────────────────────────────────
+  // ── Load factories ────────────────────────────────────────────────────────
   async function loadFactories() {
-    const res = await Auth.apiFetch('/api/saves/' + _saveID + '/factories');
+    const res = await apiFetch('/api/saves/' + _saveID + '/factories');
     if (!res) return;
     const factories = await res.json();
     renderFactories(factories);
@@ -183,53 +158,74 @@
       return;
     }
     empty.style.display = 'none';
+
     grid.innerHTML = factories.map(f => `
-      <a class="factory-card" href="/factories/${f.id}">
-        <button class="btn btn-ghost btn-sm factory-card-delete"
-          onclick="event.preventDefault();deleteFactory('${f.id}',this)">🗑</button>
-        <div class="factory-card-name">${esc(f.name)}</div>
+      <a class="tile${f.src ? ' tile-src' : ''}" href="/factories/${esc(f.id)}">
+        <button class="btn btn-danger-flat btn-sm btn-icon tile-action"
+          data-id="${esc(f.id)}" title="${esc(t('common.delete'))}">🗑</button>
+        <div class="tile-title">${esc(f.name)}</div>
+        ${f.src
+          ? `<div class="tile-subtitle"><span class="badge badge-accent">${esc(t('save.src_label'))}</span></div>`
+          : ''}
+        <div class="tile-meta">
+          ${f.src
+            ? `<span>${esc(t('save.src_meta'))}</span>`
+            : `<span>${fmtPL(f.pl_count)}</span>`}
+        </div>
       </a>
     `).join('');
+
+    grid.querySelectorAll('.tile-action').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        deleteFactory(btn.dataset.id, btn);
+      });
+    });
+
+    initTileScroll(grid);
   }
 
-  // ── Create factory ────────────────────────────────────
+  // ── Create factory ────────────────────────────────────────────────────────
   function openModal() {
     document.getElementById('factory-name').value = '';
+    document.getElementById('factory-src').checked = false;
+    document.getElementById('src-hint').style.display = 'none';
     document.getElementById('status-create').className = 'status-msg';
-    document.getElementById('modal-backdrop').classList.add('open');
-    document.getElementById('modal').classList.add('open');
+    document.getElementById('status-create').textContent = '';
+    document.querySelector('[data-wui-modal]').classList.add('open');
     setTimeout(() => document.getElementById('factory-name').focus(), 80);
-  }
-
-  function closeModal() {
-    document.getElementById('modal-backdrop').classList.remove('open');
-    document.getElementById('modal').classList.remove('open');
   }
 
   async function doCreate() {
     const name = document.getElementById('factory-name').value.trim();
-    if (!name) { showStatus('err', 'Name is required'); return; }
-    const res = await Auth.apiFetch('/api/saves/' + _saveID + '/factories', {
+    const src  = document.getElementById('factory-src').checked;
+    if (!name) { showStatus('err', t('msg.name_required')); return; }
+    const res = await apiFetch('/api/saves/' + _saveID + '/factories', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, src }),
     });
     if (!res) return;
     const data = await res.json();
-    if (!res.ok) { showStatus('err', data.message || 'Error'); return; }
+    if (!res.ok) { showStatus('err', data.message || t('msg.error')); return; }
     closeModal();
     loadFactories();
   }
 
-  // ── Delete factory ────────────────────────────────────
+  // ── Delete factory ────────────────────────────────────────────────────────
   async function deleteFactory(id, btn) {
-    if (!confirm('Delete this factory? This cannot be undone.')) return;
+    if (!confirm(t('save.confirm_delete'))) return;
     btn.disabled = true;
-    const res = await Auth.apiFetch('/api/factories/' + id, { method: 'DELETE' });
+    const res = await apiFetch('/api/factories/' + id, { method: 'DELETE' });
     if (res && (res.ok || res.status === 204)) { loadFactories(); }
     else btn.disabled = false;
   }
 
-  // ── Helpers ───────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function fmtPL(n) {
+    if (!n) return esc(t('save.pl_count_none'));
+    return esc(t('save.pl_count').replace('{n}', n));
+  }
+
   function showStatus(cls, text) {
     const el = document.getElementById('status-create');
     el.className = 'status-msg ' + cls;
@@ -237,17 +233,8 @@
   }
 
   function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
-
-  // ── Theme ─────────────────────────────────────────────
-  function toggleTheme() {
-    const dark = document.documentElement.classList.toggle('dark');
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
-    document.getElementById('theme-btn').textContent = dark ? '☀️' : '🌙';
-  }
-  document.getElementById('theme-btn').textContent =
-    document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
 
   loadSave();
   loadFactories();

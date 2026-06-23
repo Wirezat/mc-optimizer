@@ -4,12 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MC Optimizer — Factory</title>
-  <link rel="stylesheet" href="/static/css/base.css" />
-  <link rel="stylesheet" href="/static/css/accent.css" />
-  <link rel="stylesheet" href="/static/css/components.css" />
-  <link rel="stylesheet" href="/static/css/layout.css" />
-  <script src="/static/js/auth.js"></script>
-  <script src="/static/js/header.js"></script>
+  <link rel="stylesheet" href="/static/ui/index.css" />
+  <link rel="stylesheet" href="/static/css/theme.css" />
   <script>
     (function(){
       const s = localStorage.getItem('theme');
@@ -18,59 +14,106 @@
     })();
   </script>
   <style>
-    .breadcrumb {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: var(--text-sm);
-      color: var(--text-faint);
-      margin-bottom: 4px;
-    }
-    .breadcrumb a { color: var(--text-muted); }
-    .breadcrumb a:hover { color: var(--accent); text-decoration: none; }
-    .breadcrumb-sep { font-size: 10px; }
+    /* ── PL table layout ──────────────────────────────────────────────────── */
+    #pl-table { table-layout: fixed; }
+    #pl-table .col-drag    { width: 28px; }
+    #pl-table .col-check   { width: 36px; }
+    #pl-table .col-rate    { width: 90px; }
+    #pl-table .col-actions { width: 96px; }
+    #pl-table td, #pl-table th { padding: var(--gap-item) var(--gap-card); }
+    #pl-table .col-drag,
+    #pl-table .col-check,
+    #pl-table .col-actions { padding: var(--gap-item) var(--gap-control); }
+    #pl-table td { overflow: hidden; }
 
-    /* ── Balance grid ── */
-    .balance-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 16px;
-    }
-    .balance-section-title {
-      font-size: var(--text-xs);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-faint);
-      margin-bottom: 10px;
-    }
-    .balance-empty {
-      font-size: var(--text-sm);
-      color: var(--text-faint);
-      padding: 12px 0;
-    }
-    .balance-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 6px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: var(--text-base);
-      gap: 12px;
-    }
-    .balance-row:last-child { border-bottom: none; }
-    .balance-item { color: var(--text); font-family: var(--mono); font-size: var(--text-sm); }
-    .balance-rate { color: var(--text-muted); white-space: nowrap; }
-    .balance-bottleneck .balance-rate { color: var(--danger); font-weight: 600; }
+    /* ── Row hover / cursor ───────────────────────────────────────────────── */
+    #pl-table tbody tr[data-plid] { cursor: pointer; }
+    #pl-table tbody tr[data-plid].pl-row-archived { cursor: default; }
+    #pl-table tbody tr input, #pl-table tbody tr button { cursor: auto; }
+    #pl-table .td-editable { cursor: text; }
 
-    /* ── PL table actions ── */
-    .row-actions { display: flex; gap: 6px; }
-    .pl-name-link { color: var(--text); font-weight: 500; text-decoration: none; }
-    .pl-name-link:hover { color: var(--accent); }
+
+    /* ── Rate cell ────────────────────────────────────────────────────────── */
+    .pl-rate-val { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+
+    /* ── Tri-state status button ──────────────────────────────────────────── */
+    .pl-tri-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 46px; height: var(--h-btn-sm); flex-shrink: 0;
+      overflow: hidden;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      cursor: pointer; font-size: 13px; white-space: nowrap;
+      transition: background .12s, border-color .12s;
+    }
+    .tri-cur { display: inline; }
+    .tri-nxt { display: none; font-size: 11px; letter-spacing: -.5px; }
+    .pl-tri-btn:hover .tri-cur { display: none; }
+    .pl-tri-btn:hover .tri-nxt { display: inline; }
+
+    .pl-tri-btn.inbau     { --_icon-color: var(--warn); }
+    .pl-tri-btn.gebaut    { --_icon-color: var(--success); }
+    .pl-tri-btn.archiviert { --_icon-color: var(--text-faint); }
+
+    .col-actions { white-space: nowrap; }
+
+    /* ── Archived rows ────────────────────────────────────────────────────── */
+    tr.pl-row-archived { display: none; }
+    #pl-tbody.show-archived tr.pl-row-archived { display: table-row; }
+    tr.pl-row-archived td {
+      color: var(--text-faint);
+      background-image: repeating-linear-gradient(
+        -45deg,
+        transparent 0px, transparent 5px,
+        rgba(128,128,128,.07) 5px, rgba(128,128,128,.07) 6px
+      );
+    }
+    #pl-table tbody tr.pl-row-archived:hover td {
+      background-image: repeating-linear-gradient(
+        -45deg,
+        var(--bg-hover) 0px, var(--bg-hover) 5px,
+        rgba(128,128,128,.1) 5px, rgba(128,128,128,.1) 6px
+      );
+    }
+    .pl-archived-check { opacity: .5; }
+
+    /* ── Archived toggle active state ─────────────────────────────────────── */
+    .btn-archived-toggle.active {
+      background: var(--bg-hover); border-color: var(--border-strong); color: var(--text);
+    }
+
+    /* ── Custom checkboxes ────────────────────────────────────────────────── */
+    #pl-table input[type="checkbox"] {
+      appearance: none; -webkit-appearance: none;
+      width: 15px; height: 15px;
+      border: 1.5px solid var(--text-muted); border-radius: 3px;
+      background: transparent; cursor: pointer;
+      vertical-align: middle; flex-shrink: 0;
+      transition: background .12s, border-color .12s;
+    }
+    #pl-table input[type="checkbox"]:checked {
+      background: var(--accent);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%23fff' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-size: 12px; background-position: center; background-repeat: no-repeat;
+    }
+    #pl-table input[type="checkbox"]:hover:not(:checked) { background: var(--accent-muted); }
+
+    /* Drag handle always readable on group header rows (not just on hover) */
+    #pl-table .table-group-hd .drag-handle { color: var(--text-muted); }
+
+    /* ── Context menu ─────────────────────────────────────────────────────── */
+    .ctx-menu { position: fixed; z-index: 1000; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.15); min-width: 160px; padding: var(--gap-icon) 0; display: none; }
+    .ctx-menu.open { display: block; }
+    .ctx-item { padding: var(--gap-inline) var(--pad-btn); font-size: var(--text-sm); cursor: pointer; position: relative; white-space: nowrap; color: var(--text); }
+    .ctx-item:hover { background: var(--accent-muted); color: var(--accent-dark); }
+    .ctx-item.danger:hover { background: var(--danger-muted); color: var(--danger); }
+    .ctx-sep { height: 1px; background: var(--border); margin: var(--gap-icon) 0; }
+    .ctx-has-sub::after { content: '▸'; position: absolute; right: var(--gap-field); opacity: .5; font-size: 10px; }
+    .ctx-sub { display: none; position: absolute; left: 100%; top: -4px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.15); min-width: 150px; padding: var(--gap-icon) 0; z-index: 1001; }
+    .ctx-has-sub:hover .ctx-sub { display: block; }
   </style>
 </head>
-<body>
-<div class="app-shell">
+<body class="app-shell">
 
   <!-- ── Header ── -->
   <header class="header">
@@ -79,278 +122,1042 @@
       <span>MC Optimizer</span>
     </a>
     <div class="header-right">
-      <button class="btn btn-ghost btn-sm" onclick="toggleTheme()" id="theme-btn">🌙</button>
-      <div class="user-menu" id="user-menu">
-        <button class="user-menu-trigger" id="user-menu-trigger">
+      <button data-wui-theme data-i18n-title="common.toggle_theme"></button>
+      <div class="dropdown-wrap" data-wui-lang>
+        <button data-dropdown-trigger></button>
+        <div class="dropdown-panel">
+          <button class="dropdown-item" data-lang="en">🇬🇧 English</button>
+          <button class="dropdown-item" data-lang="de">🇩🇪 Deutsch</button>
+        </div>
+      </div>
+      <div class="dropdown-wrap" data-wui-user-menu>
+        <button class="user-menu-trigger" data-wui-user-trigger data-dropdown-trigger>
           <div class="avatar">?</div>
           <span class="username">…</span>
           <span class="chevron">▾</span>
         </button>
-        <div class="user-dropdown" id="user-dropdown"></div>
+        <div class="dropdown-panel" data-wui-user-dropdown></div>
       </div>
     </div>
   </header>
 
   <div class="app-body">
-
-    <!-- ── Sidebar ── -->
     <nav class="sidebar"></nav>
-
-    <!-- ── Main ── -->
     <main class="main">
       <div class="page">
 
-        <div class="page-header">
+        <div class="page-header" data-page-header-area>
           <div>
             <div class="breadcrumb">
-              <a href="/saves">Saves</a>
+              <a href="/saves" data-i18n="nav.saves"></a>
               <span class="breadcrumb-sep">▸</span>
-              <a id="breadcrumb-save" href="#">…</a>
+              <a id="breadcrumb-save" href="#"></a>
               <span class="breadcrumb-sep">▸</span>
-              <span id="breadcrumb-factory">…</span>
+              <span class="breadcrumb-current" id="breadcrumb-factory">…</span>
             </div>
-            <div class="page-title" id="page-title">…</div>
-          </div>
-          <a class="btn btn-primary" id="solve-btn" href="#">Run Solver ▸</a>
-        </div>
-
-        <!-- Tabs -->
-        <nav class="tabs-bar" id="tabs">
-          <button class="tab-btn active" data-tab="lines">Production Lines</button>
-          <button class="tab-btn" data-tab="balance">Balance</button>
-        </nav>
-
-        <!-- Tab: Production Lines -->
-        <div class="tab-panel active" id="panel-lines">
-          <div class="card" style="overflow:hidden;">
-            <table id="pl-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Target</th>
-                  <th>Rate</th>
-                  <th>Mode</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="pl-tbody">
-                <tr><td colspan="6" class="table-info">
-                  <span class="table-info-icon">⏳</span>Loading…
-                </td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="empty-state" id="pl-empty" style="display:none;">
-            <div class="empty-state-icon">📋</div>
-            <div class="empty-state-text">No production lines yet — run the solver to create one</div>
-            <a class="btn btn-primary" id="solve-btn-empty" href="#">Run Solver ▸</a>
+            <div class="page-title-row">
+              <div class="page-title" id="page-title">…</div>
+              <button class="konfig-trigger" data-konfig-trigger>⚙</button>
+              <span class="badge badge-accent" id="src-badge" style="visibility:hidden; justify-content:center;"></span>
+            </div>
+            <div class="konfig-bar" data-konfig-bar>
+              <div class="konfig-item">
+                <span data-i18n="factory.mode.label"></span>
+                <button class="btn btn-ghost btn-sm" id="mode-btn"></button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Tab: Balance -->
-        <div class="tab-panel" id="panel-balance">
-          <div class="balance-grid" id="balance-grid">
-            <div class="card card-body">
-              <div class="balance-section-title">External Inputs</div>
-              <div id="balance-inputs"><span class="balance-empty">—</span></div>
+        <!-- ── Normal mode: split-layout ── -->
+        <div id="normal-content" class="split-layout">
+
+          <!-- Left: PL list -->
+          <div class="main-panel">
+            <div class="container" id="pl-container">
+              <div class="container-toolbar">
+                <a class="btn btn-primary btn-sm" id="new-pl-btn" href="#" data-i18n="factory.pl.new"></a>
+                <button class="btn btn-ghost btn-sm" id="new-group-btn" data-i18n="factory.pl.new_group"></button>
+                <div style="flex:1;"></div>
+                <button class="btn btn-ghost btn-sm btn-archived-toggle" id="archived-toggle" data-i18n="factory.pl.show_archived"></button>
+              </div>
+              <div class="container-filter">
+                <div class="wui-ac-wrap" style="flex:1;max-width:300px;">
+                  <input type="search" class="input input-sm" id="pl-filter" data-i18n-placeholder="factory.pl.filter_placeholder" autocomplete="off" style="width:100%;" />
+                  <div class="wui-ac-drop" id="pl-filter-ac"></div>
+                </div>
+              </div>
+              <div class="container-body-flush">
+                <table class="table table-checklist" id="pl-table">
+                  <colgroup>
+                    <col class="col-drag" />
+                    <col class="col-check" />
+                    <col />
+                    <col />
+                    <col class="col-rate" />
+                    <col class="col-actions" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th class="col-drag"></th>
+                      <th class="col-check"><input type="checkbox" id="check-all" data-i18n-title="common.select_all" /></th>
+                      <th data-i18n="factory.pl.col.name"></th>
+                      <th data-i18n="factory.pl.col.target"></th>
+                      <th data-i18n="factory.pl.col.rate"></th>
+                      <th class="col-actions"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="pl-tbody">
+                    <tr><td colspan="6" class="td-faint" style="padding:var(--gap-control) var(--pad-cell);" data-i18n="common.loading"></td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div class="card card-body">
-              <div class="balance-section-title">Outputs</div>
-              <div id="balance-outputs"><span class="balance-empty">—</span></div>
+            <div class="empty-state" id="pl-empty" style="display:none;">
+              <div class="empty-state-text" data-i18n="factory.pl.empty"></div>
             </div>
-            <div class="card card-body">
-              <div class="balance-section-title">Surplus / Bottlenecks</div>
-              <div id="balance-surplus"><span class="balance-empty">—</span></div>
+          </div>
+
+          <!-- Right: Balance panel -->
+          <div class="side-panel">
+            <div class="container">
+              <div class="container-header">
+                <span class="container-title" data-i18n="factory.tab.balance"></span>
+              </div>
+              <div class="container-body-flush">
+                <table class="table">
+                  <colgroup>
+                    <col />
+                    <col style="width:80px;" />
+                  </colgroup>
+                  <tbody id="balance-tbody"></tbody>
+                </table>
+              </div>
             </div>
+          </div>
+
+        </div>
+
+        <!-- ── Source mode ── -->
+        <div id="src-content" style="display:none;">
+          <div class="container" style="overflow:visible;">
+            <div class="container-body-flush">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th data-i18n="common.name"></th>
+                    <th data-i18n="common.mod"></th>
+                    <th data-i18n="common.rate"></th>
+                    <th data-i18n="common.unit"></th>
+                    <th style="width:80px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="src-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="padding-top:var(--gap-icon);">
+            <span class="status-msg" id="src-add-status"></span>
           </div>
         </div>
 
       </div>
     </main>
   </div>
+
+<!-- Context menu (right-click PL row) -->
+<!-- Modal -->
+<div class="modal-backdrop" data-wui-modal>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="wui-modal-title">
+    <div class="modal-header">
+      <span class="modal-title" data-modal-title id="wui-modal-title"></span>
+      <button class="modal-close" data-modal-close>✕</button>
+    </div>
+    <div class="modal-body" data-modal-body></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-modal-cancel data-i18n="common.cancel"></button>
+      <button class="btn btn-primary" data-modal-confirm></button>
+    </div>
+  </div>
 </div>
 
-<script>
-  Auth.guard();
-  Header.init();
+<div class="ctx-menu" id="ctx-menu">
+  <div class="ctx-item ctx-has-sub" data-i18n="factory.pl.to_group">
+    <div class="ctx-sub" id="ctx-group-sub"></div>
+  </div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" id="ctx-delete-item" data-i18n="common.delete"></div>
+</div>
+
+<script type="module">
+  import { guard, apiFetch } from '/static/ui/js/auth.js';
+  import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
+  import { init as initHeader } from '/static/js/header.js';
+  import { initClickToEdit, initBulkRow, initCellClampScroll, initCollapsibleGroups, initDraggableRows } from '/static/ui/js/table-features.js';
+  import { initInfocards } from '/static/ui/js/infocard.js';
+  import { initKonfigBar, initModal, openModal } from '/static/ui/js/index.js';
+  import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
+  import { wuiFilter } from '/static/ui/js/filter.js';
+
+  await load(getLang());
+  applyI18n();
+  guard();
+  initHeader();
+  initKonfigBar();
+  initModal();
+  lockBadgeWidth();
 
   const _factoryID = window.location.pathname.split('/')[2];
+  let _factory  = null;
+  let _groups   = [];
+  let _pls      = [];
+  let _selected = new Set();
+  let _ctxPLID  = null;
+  let _modNames = {};
+  let bulkRowCtl = null;
+
+  function modName(modID) { return _modNames[modID] || modID; }
 
   // ── Bootstrap ─────────────────────────────────────────
+  const plTable = document.getElementById('pl-table');
+  const plTbody = document.getElementById('pl-tbody');
+
   async function init() {
-    const [factoryRes, plRes] = await Promise.all([
-      Auth.apiFetch('/api/factories/' + _factoryID),
-      Auth.apiFetch('/api/factories/' + _factoryID + '/production-lines'),
+    const [factRes, plRes, groupsRes, modsRes] = await Promise.all([
+      apiFetch('/api/factories/' + _factoryID),
+      apiFetch('/api/factories/' + _factoryID + '/production-lines'),
+      apiFetch('/api/factories/' + _factoryID + '/pl-groups'),
+      apiFetch('/api/mods'),
     ]);
 
-    if (!factoryRes || !factoryRes.ok) { window.location.href = '/saves'; return; }
-    const { factory, balance } = await factoryRes.json();
+    if (!factRes?.ok) { window.location.href = '/saves'; return; }
+    const { factory, balance } = await factRes.json();
+    _factory = factory;
 
-    // Set page identity
     document.title = 'MC Optimizer — ' + factory.name;
     document.getElementById('page-title').textContent         = factory.name;
     document.getElementById('breadcrumb-factory').textContent = factory.name;
-    document.getElementById('solve-btn').href       = '/factories/' + _factoryID + '/solve';
-    document.getElementById('solve-btn-empty').href = '/factories/' + _factoryID + '/solve';
+    document.getElementById('new-pl-btn').href = '/factories/' + _factoryID + '/solve';
 
-    // Breadcrumb: load save name
+    applySrcState(factory.src);
     loadSaveName(factory.save_id);
-
-    // Balance
     renderBalance(balance);
 
-    // Production lines
-    if (!plRes || !plRes.ok) return;
-    const pls = await plRes.json();
-    renderPLs(pls);
+    if (modsRes?.ok) {
+      const mods = await modsRes.json();
+      for (const m of mods) _modNames[m.mod_id] = m.name;
+    }
+    if (groupsRes?.ok) _groups = await groupsRes.json();
+    if (plRes?.ok) {
+      _pls = await plRes.json();
+      renderPLs();
+    }
   }
 
   async function loadSaveName(saveID) {
-    const res = await Auth.apiFetch('/api/saves/' + saveID);
-    if (!res || !res.ok) return;
+    const res = await apiFetch('/api/saves/' + saveID);
+    if (!res?.ok) return;
     const save = await res.json();
     const link = document.getElementById('breadcrumb-save');
     link.textContent = save.name;
     link.href = '/saves/' + saveID;
   }
 
-  // ── Production Lines ──────────────────────────────────
-  function renderPLs(pls) {
-    const tbody = document.getElementById('pl-tbody');
-    const empty = document.getElementById('pl-empty');
-    const table = document.getElementById('pl-table');
-
-    if (!pls || pls.length === 0) {
-      table.style.display = 'none';
-      empty.style.display = '';
-      return;
+  function lockBadgeWidth() {
+    const badge = document.getElementById('src-badge');
+    const texts = [t('factory.auto_badge'), t('factory.src_badge')];
+    badge.style.minWidth = '0';
+    let maxW = 0;
+    for (const txt of texts) {
+      badge.textContent = txt;
+      badge.style.visibility = 'hidden';
+      badge.style.display = '';
+      maxW = Math.max(maxW, badge.offsetWidth);
     }
-    table.style.display = '';
+    badge.style.minWidth = maxW + 'px';
+  }
+
+  function applySrcState(src) {
+    const badge = document.getElementById('src-badge');
+    badge.textContent    = src ? t('factory.src_badge') : t('factory.auto_badge');
+    badge.style.visibility = '';
+    document.getElementById('new-pl-btn').style.display     = src ? 'none' : '';
+    document.getElementById('normal-content').style.display = src ? 'none' : '';
+    document.getElementById('src-content').style.display    = src ? '' : 'none';
+    document.getElementById('mode-btn').textContent         = src ? t('factory.mode.manual') : t('factory.mode.auto');
+    if (src) {
+      loadSrcInputs();
+      loadSrcOutputs();
+    }
+  }
+
+  async function doSwitchMode(src) {
+    const res = await apiFetch('/api/factories/' + _factoryID, {
+      method: 'PATCH', body: JSON.stringify({ src }),
+    });
+    if (res?.ok) {
+      const factory = await res.json();
+      _factory = factory;
+      applySrcState(factory.src);
+    }
+  }
+
+  document.getElementById('mode-btn').addEventListener('click', () => {
+    const nextSrc = !_factory?.src;
+    openModal({
+      title:        t('factory.mode.confirm_title'),
+      bodyHTML:     `<p>${esc(t('factory.mode.confirm_body'))}</p>`,
+      confirmLabel: t('common.confirm'),
+      onConfirm:    () => doSwitchMode(nextSrc),
+    });
+  });
+
+  // ── Production Lines ──────────────────────────────────
+  function bulkRowHTML() {
+    return `<tr data-wui-bulk-row>
+      <td class="col-drag"></td>
+      <td class="col-check"></td>
+      <td>
+        <div class="td-editable bulk-writable" data-wui-field="name" data-wui-bulk-enumerate>
+          <span class="td-val td-faint" data-bulk-count></span>
+          <input class="td-input" type="text" placeholder="${esc(t('factory.pl.bulk_name_placeholder'))}" />
+        </div>
+      </td>
+      <td></td>
+      <td></td>
+      <td class="col-actions">
+        <button class="btn btn-icon btn-sm btn-icon-color" style="--_icon-color:var(--danger)" data-bulk-delete title="${esc(t('common.delete'))}">🗑</button>
+      </td>
+    </tr>`;
+  }
+
+  function renderPLs() {
+    const container = document.getElementById('pl-container');
+    const empty     = document.getElementById('pl-empty');
+
+    _selected.clear();
+    container.style.display = '';
     empty.style.display = 'none';
 
-    tbody.innerHTML = pls.map(pl => `
-      <tr>
-        <td>
-          <a class="pl-name-link" href="/production-lines/${pl.id}">${esc(pl.name)}</a>
-        </td>
-        <td style="font-family:var(--mono);font-size:var(--text-sm);">${esc(pl.target_mod_id)}:${esc(pl.target_item_id)}</td>
-        <td>${fmtRate(pl.rate_num, pl.rate_den, pl.time_unit)}</td>
-        <td><span style="font-size:var(--text-xs);color:var(--text-faint);">${esc(pl.optimize_mode)}</span></td>
-        <td>${statusPill(pl.status)}</td>
-        <td>
-          <div class="row-actions">
-            ${pl.status === 'active' ? `
-              <button class="btn btn-ghost btn-sm" title="Mark all built"
-                onclick="markBuilt('${pl.id}')">✓ Built</button>
-              <button class="btn btn-ghost btn-sm" title="Archive"
-                onclick="archivePL('${pl.id}')">Archive</button>
-            ` : ''}
-            <button class="btn btn-danger-ghost btn-sm" title="Delete"
-              onclick="deletePL('${pl.id}', this)">🗑</button>
-          </div>
-        </td>
-      </tr>
-    `).join('');
+    if (!_pls || _pls.length === 0) {
+      plTbody.innerHTML = bulkRowHTML() +
+        Array(5).fill('<tr><td colspan="6" style="height:2.2rem;"></td></tr>').join('');
+      bulkRowCtl = initBulkRow(plTable);
+      plTbody.querySelector('[data-bulk-count]').dataset.bulkCountTpl = '{n} ' + t('factory.pl.selected');
+      bulkRowCtl.refresh();
+      return;
+    }
+
+    // Build maps for O(1) group lookup
+    const groupMap = new Map();
+    const groupById = new Map(_groups.map(g => [g.id, g]));
+    for (const pl of _pls) {
+      const key = pl.pl_group_id || null;
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key).push(pl);
+    }
+
+    // Build a sorted list of "entries" — groups and ungrouped PLs interleaved
+    // by their unified position key so the render order matches drag order.
+    const entries = [];
+    for (const g of _groups) {
+      entries.push({ type: 'group', pos: g.position, g });
+    }
+    for (const pl of (groupMap.get(null) || [])) {
+      entries.push({ type: 'ungrouped', pos: pl.position, pl });
+    }
+    entries.sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0));
+
+    let html = bulkRowHTML();
+
+    for (const entry of entries) {
+      if (entry.type === 'group') {
+        const g = entry.g;
+        const pls = groupMap.get(g.id) || [];
+        const activeCount = pls.filter(pl => pl.status !== 'archived').length;
+        html += `<tr class="table-group-hd collapsible" data-group="${esc(g.id)}" data-group-editable${pls.length > 0 ? ' data-group-populated' : ''}>
+          <td class="col-drag"><span class="drag-handle" title="${esc(t('factory.pl.drag_group'))}">⠿</span></td>
+          <td colspan="5">
+            <div class="group-hd-inner">
+              <span class="group-hd-arrow">▾</span>
+              <span class="group-hd-name">${esc(g.name)}</span>
+              <input class="group-hd-input" type="text" value="${esc(g.name)}" />
+              <span class="td-faint" style="font-weight:400;">(${activeCount})</span>
+              <button class="group-hd-del btn btn-icon btn-sm btn-icon-color" style="--_icon-color:var(--danger)" type="button" title="${esc(t('factory.pl.group_delete'))}">🗑</button>
+            </div>
+          </td>
+        </tr>`;
+        for (const pl of pls) html += plRow(pl, g.id);
+        html += `<tr class="row-spacer"><td colspan="6"></td></tr>`;
+      } else {
+        html += plRow(entry.pl);
+      }
+    }
+
+    // End-zone: always-visible drop target for "ungrouped at end of list"
+    html += `<tr class="wui-drop-zone-end" data-wui-drop-zone-end><td colspan="6"></td></tr>`;
+
+    plTbody.innerHTML = html;
+    document.getElementById('check-all').checked = false;
+    document.getElementById('check-all').indeterminate = false;
+
+    // Re-init package features on fresh DOM
+    bulkRowCtl = initBulkRow(plTable);
+    plTbody.querySelector('[data-bulk-count]').dataset.bulkCountTpl = '{n} ' + t('factory.pl.selected');
+    initClickToEdit(plTbody);
+    initCellClampScroll(plTbody);
+    initInfocards(plTbody);
+    bulkRowCtl.refresh();
   }
 
-  async function markBuilt(plID) {
-    await Auth.apiFetch('/api/production-lines/' + plID + '/mark-built', { method: 'PATCH', body: '{}' });
-    reload();
+  function plRow(pl, groupId = null) {
+    const triCls = { draft: 'inbau', active: 'gebaut', archived: 'archiviert' };
+    const triCur = { draft: '⚒',    active: '✓',      archived: '▣' };
+    const triNxt = { draft: '⚒→✓',  active: '✓→▣',    archived: '▣→✓' };
+    const triTip = { draft: t('factory.pl.activate'), active: t('factory.pl.archive'), archived: t('factory.pl.reactivate') };
+    const archived   = pl.status === 'archived';
+    const rowCls     = archived ? ' class="pl-row-archived"' : '';
+    const groupAttr  = groupId ? ` data-group="${esc(groupId)}"` : '';
+    const chkCls     = archived ? ' pl-archived-check' : '';
+    const delBtn     = archived ? '' : `<button class="btn btn-icon btn-sm btn-icon-color" style="--_icon-color:var(--danger)" data-plid="${esc(pl.id)}" data-action="delete" title="${esc(t('factory.pl.confirm_delete_single'))}">🗑</button>`;
+    return `<tr data-plid="${esc(pl.id)}" data-id="${esc(pl.id)}"${rowCls}${groupAttr}>
+      <td class="col-drag"><span class="drag-handle" title="${esc(t('factory.pl.drag_reorder'))}">⠿</span></td>
+      <td class="col-check"><input type="checkbox" class="pl-check${chkCls}" data-id="${esc(pl.id)}" title="${esc(t('common.select_all'))}" /></td>
+      <td>
+        <div class="td-editable" data-wui-field="name">
+          <span class="td-val">${esc(pl.name)}</span>
+          <input class="td-input" type="text" value="${esc(pl.name)}" />
+        </div>
+      </td>
+      <td>${itemHtml(pl.target_item_id, pl.target_item_name, pl.target_mod_id, 'cell-clamp--dots td-muted')}</td>
+      <td>${rateHtml(pl.rate_num, pl.rate_den, pl.time_unit, 'pl-rate-val')}</td>
+      <td class="col-actions">
+        <button class="pl-tri-btn btn-icon-color ${esc(triCls[pl.status] || 'inbau')}" data-plid="${esc(pl.id)}" data-action="triAdvance" data-status="${esc(pl.status)}" title="${esc(triTip[pl.status] || '')}">
+          <span class="tri-cur">${triCur[pl.status] || '⚒'}</span>
+          <span class="tri-nxt">${triNxt[pl.status] || '⚒→✓'}</span>
+        </button>
+        ${delBtn}
+      </td>
+    </tr>`;
   }
 
-  async function archivePL(plID) {
-    await Auth.apiFetch('/api/production-lines/' + plID + '/status', {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'archived' }),
+  // ── Centralized infocard helpers ─────────────────────
+  // These are used wherever items or rates are displayed — the infocard
+  // definition is always co-located with its trigger (inline mode).
+
+  const _fmtN = n => {
+    const r = Math.round(n * 10000) / 10000;
+    return Number.isInteger(r) ? String(r) : r.toFixed(4).replace(/\.?0+$/, '');
+  };
+  const _toPerSec = { s: 1, min: 1/60, t: 20 };
+  const _TRIGGER  = `<span class="infocard-trigger" data-infocard-inline style="color:var(--text-faint);font-size:var(--text-xs);flex-shrink:0;line-height:1;">ℹ</span>`;
+
+  function itemHtml(itemId, itemName, modId, clampClass = 'cell-clamp--dots td-muted') {
+    const name    = esc(itemName || itemId || '');
+    const modDisp = esc(modName(modId));
+    const def     = itemId ? `<div class="infocard-def" hidden>
+      <div class="infocard-header">
+        <!-- TODO: item icon <img class="infocard-icon" src="..." /> -->
+        <div class="infocard-heading">
+          <span class="infocard-title">${esc(itemName || itemId)}</span>
+          <span class="infocard-subtitle">${modDisp}</span>
+        </div>
+      </div>
+      <div class="infocard-section">
+        <div class="infocard-row"><span class="infocard-key">Item ID</span><span class="infocard-val">${esc(itemId)}</span></div>
+        <div class="infocard-row"><span class="infocard-key">Mod ID</span><span class="infocard-val">${esc(modId || '')}</span></div>
+      </div>
+    </div>` : '';
+    return `<div style="display:flex;align-items:center;gap:var(--gap-icon);">
+      <div class="cell-clamp ${esc(clampClass)}" style="flex:1;min-width:0;"><span class="cell-clamp-inner">${name}</span></div>
+      ${itemId ? _TRIGGER + def : ''}
+    </div>`;
+  }
+
+  function rateHtml(num, den, unit, extraClass = null) {
+    if (!num) return '';
+    const perSec = (num / den) * (_toPerSec[unit] ?? 1);
+    const rows   = [
+      { key: '/sec',  val: unit === 's'   ? fmtRateFrac(num, den) : _fmtN(perSec) },
+      { key: '/min',  val: unit === 'min' ? fmtRateFrac(num, den) : _fmtN(perSec * 60) },
+      { key: '/tick', val: unit === 't'   ? fmtRateFrac(num, den) : _fmtN(perSec / 20) },
+      { key: '/hr',   val: _fmtN(perSec * 3600) },
+    ];
+    const valCls = extraClass ? ` class="${esc(extraClass)}"` : '';
+    return `<span${valCls}>${esc(fmtRateFrac(num, den))} /${esc(unit)}</span>
+    ${_TRIGGER}<div class="infocard-def" hidden>
+      <div class="infocard-section" data-label="Rate">
+        ${rows.map(r => `<div class="infocard-row"><span class="infocard-key">${r.key}</span><span class="infocard-val">${esc(r.val)}</span></div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  initCollapsibleGroups(plTable);
+  initDraggableRows(plTable);
+
+  // ── Row reorder ───────────────────────────────────────
+  plTable.addEventListener('wui:row-reorder', async e => {
+    const { id, afterId, beforeId, toGroupId, afterGroupId, beforeGroupId } = e.detail;
+    const pl = _pls.find(p => p.id === id);
+
+    if (pl && toGroupId !== (pl.pl_group_id ?? null)) {
+      pl.pl_group_id = toGroupId ?? undefined;
+      await apiFetch('/api/production-lines/' + id + '/group', {
+        method: 'PATCH', body: JSON.stringify({ group_id: toGroupId }),
+      });
+    }
+
+    await apiFetch('/api/production-lines/' + id + '/position', {
+      method: 'PATCH', body: JSON.stringify({
+        after_id:        afterId        ?? null,
+        before_id:       beforeId       ?? null,
+        after_group_id:  afterGroupId   ?? null,
+        before_group_id: beforeGroupId  ?? null,
+      }),
     });
-    reload();
+
+    _updateGroupCounts();
+  });
+
+  function _updateGroupCounts() {
+    plTbody.querySelectorAll('tr.table-group-hd[data-group]').forEach(hd => {
+      const gid = hd.dataset.group;
+      const count = [...plTbody.querySelectorAll('tr[data-id]')]
+        .filter(r => (r.dataset.group ?? null) === gid && !r.classList.contains('pl-row-archived'))
+        .length;
+      const countEl = hd.querySelector('.td-faint');
+      if (countEl) countEl.textContent = `(${count})`;
+    });
   }
 
-  async function deletePL(plID, btn) {
-    if (!confirm('Delete this production line? This cannot be undone.')) return;
+  // ── Group rename / delete ─────────────────────────────
+  plTable.addEventListener('wui:group-rename', async e => {
+    const { groupId, name, prev } = e.detail;
+    const res = await apiFetch('/api/pl-groups/' + groupId, {
+      method: 'PATCH', body: JSON.stringify({ name }),
+    });
+    if (!res?.ok) {
+      // Revert optimistic name update
+      const hd = plTable.querySelector(`tr.table-group-hd[data-group="${CSS.escape(groupId)}"]`);
+      if (hd) hd.querySelector('.group-hd-name').textContent = prev;
+      if (res?.status === 409) alert(t('common.error_name_exists'));
+      else alert(t('common.error'));
+    }
+  });
+
+  plTable.addEventListener('wui:group-delete', async e => {
+    const { groupId } = e.detail;
+    const res = await apiFetch('/api/pl-groups/' + groupId, {
+      method: 'DELETE',
+    });
+    if (res?.ok) {
+      await reload();
+    } else {
+      alert(t('common.error'));
+    }
+  });
+
+  // ── Table event delegation ─────────────────────────────
+  plTbody.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const id = btn.dataset.plid;
+    if (btn.dataset.action === 'triAdvance') {
+      const status = btn.dataset.status;
+      if (status === 'draft') markBuilt(id);
+      else                    toggleStatus(id, status);
+    }
+    if (btn.dataset.action === 'delete') deletePL(id, btn);
+  });
+
+  plTbody.addEventListener('change', e => {
+    const cb = e.target.closest('.pl-check');
+    if (!cb) return;
+    if (cb.checked) _selected.add(cb.dataset.id);
+    else            _selected.delete(cb.dataset.id);
+    updateCheckAll();
+  });
+
+  plTbody.addEventListener('contextmenu', e => {
+    const row = e.target.closest('tr[data-plid]');
+    if (!row) return;
+    e.preventDefault();
+    _ctxPLID = row.dataset.plid;
+    buildGroupSub(document.getElementById('ctx-group-sub'), async gid => {
+      await apiFetch('/api/production-lines/' + _ctxPLID + '/group', {
+        method: 'PATCH', body: JSON.stringify({ group_id: gid }),
+      });
+      closeAllMenus();
+      await reload();
+    });
+    const menu = document.getElementById('ctx-menu');
+    menu.style.left = e.clientX + 'px';
+    menu.style.top  = e.clientY + 'px';
+    menu.classList.add('open');
+  });
+
+  document.getElementById('ctx-delete-item').addEventListener('click', async () => {
+    if (!_ctxPLID) return;
+    const id = _ctxPLID;
+    closeAllMenus();
+    if (!confirm(t('factory.pl.confirm_delete_single'))) return;
+    await apiFetch('/api/production-lines/' + id, { method: 'DELETE' });
+    await reload();
+  });
+
+  // ── Check-all ─────────────────────────────────────────
+  document.getElementById('check-all').addEventListener('change', e => {
+    document.querySelectorAll('.pl-check').forEach(cb => {
+      cb.checked = e.target.checked;
+      if (e.target.checked) _selected.add(cb.dataset.id);
+      else                  _selected.delete(cb.dataset.id);
+    });
+    if (bulkRowCtl) bulkRowCtl.refresh();
+    updateCheckAll();
+  });
+
+  function updateCheckAll() {
+    const all = document.querySelectorAll('.pl-check');
+    const ca  = document.getElementById('check-all');
+    ca.checked = all.length > 0 && _selected.size === all.length;
+    ca.indeterminate = _selected.size > 0 && _selected.size < all.length;
+  }
+
+  // ── Bulk actions ──────────────────────────────────────
+  plTable.addEventListener('click', async e => {
+    if (!e.target.closest('[data-bulk-delete]')) return;
+    if (!_selected.size || !confirm(`${_selected.size} ${t('factory.pl.confirm_delete_bulk')}`)) return;
+    await Promise.all([..._selected].map(id => apiFetch('/api/production-lines/' + id, { method: 'DELETE' })));
+    await reload();
+  });
+
+  // ── Row click → navigate ──────────────────────────────
+  plTable.addEventListener('click', e => {
+    if (e.target.closest('[data-wui-bulk-row]')) return;
+    if (e.target.closest('.table-group-hd')) return;
+    const row = e.target.closest('tr[data-plid]');
+    if (!row) return;
+    if (row.classList.contains('pl-row-archived')) return;
+    if (e.target.closest('input, button, .td-editable')) return;
+    window.location.href = '/production-lines/' + row.dataset.plid;
+  });
+
+  // ── Inline cell write → PATCH name ────────────────────
+  plTable.addEventListener('wui:cell-write', async e => {
+    const { field, value, row } = e.detail;
+    if (field !== 'name') return;
+    const plid = row.dataset.plid;
+    if (!plid) return;
+    await apiFetch('/api/production-lines/' + plid, {
+      method: 'PATCH', body: JSON.stringify({ name: value }),
+    });
+    const pl = _pls.find(p => p.id === plid);
+    if (pl) pl.name = value;
+  });
+
+  // ── Bulk write → PATCH name ────────────────────────────
+  plTable.addEventListener('wui:bulk-write', async e => {
+    const { field, value, row } = e.detail;
+    if (field !== 'name') return;
+    const plid = row.dataset.plid;
+    if (!plid) return;
+    await apiFetch('/api/production-lines/' + plid, {
+      method: 'PATCH', body: JSON.stringify({ name: value }),
+    });
+    const pl = _pls.find(p => p.id === plid);
+    if (pl) pl.name = value;
+  });
+
+  // ── Archived toggle ────────────────────────────────────
+  document.getElementById('archived-toggle').addEventListener('click', function() {
+    this.classList.toggle('active');
+    plTbody.classList.toggle('show-archived');
+  });
+
+  // ── Group name modal helper ────────────────────────────
+  function openGroupNameModal(onConfirm) {
+    openModal({
+      title:        t('factory.pl.new_group_title'),
+      bodyHTML:     `<div style="padding:var(--gap-icon) 0 var(--gap-card);">
+        <label style="display:block;font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--gap-icon);">${esc(t('factory.pl.group_name_prompt'))}</label>
+        <input id="group-name-modal-input" class="input input-sm" type="text" style="width:100%;" autocomplete="off" />
+      </div>`,
+      confirmLabel: t('common.confirm'),
+      onConfirm:    () => {
+        const name = document.getElementById('group-name-modal-input')?.value?.trim();
+        if (name) onConfirm(name);
+      },
+    });
+    setTimeout(() => document.getElementById('group-name-modal-input')?.focus(), 50);
+  }
+
+  // ── New group ──────────────────────────────────────────
+  document.getElementById('new-group-btn').addEventListener('click', () => {
+    openGroupNameModal(async name => {
+      const res = await apiFetch('/api/factories/' + _factoryID + '/pl-groups', {
+        method: 'POST', body: JSON.stringify({ name }),
+      });
+      if (res?.ok) {
+        const ng = await res.json();
+        _groups.push(ng);
+        await reload();
+      } else if (res?.status === 409) {
+        alert(t('common.error_name_exists'));
+      } else {
+        alert(t('common.error'));
+      }
+    });
+  });
+
+  // ── Filter ────────────────────────────────────────────
+  document.getElementById('pl-filter').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    plTbody.querySelectorAll('tr.table-group-hd').forEach(hd => {
+      const plRows = [];
+      let sib = hd.nextElementSibling;
+      while (sib && !sib.classList.contains('table-group-hd') && !sib.classList.contains('row-spacer')) {
+        if (sib.dataset.plid) plRows.push(sib);
+        sib = sib.nextElementSibling;
+      }
+      let anyMatch = false;
+      plRows.forEach(r => {
+        const name  = r.querySelector('.td-val')?.textContent.toLowerCase() ?? '';
+        const match = !q || name.includes(q);
+        r.style.display = match ? '' : 'none';
+        if (match) anyMatch = true;
+      });
+      hd.style.display = (anyMatch || !q) ? '' : 'none';
+    });
+    // Ungrouped rows (no group header parent)
+    plTbody.querySelectorAll('tr[data-plid]').forEach(r => {
+      let sib = r.previousElementSibling;
+      while (sib && !sib.classList.contains('table-group-hd') && !sib.classList.contains('row-spacer')) {
+        if (sib === plTbody.firstElementChild) { sib = null; break; }
+        sib = sib.previousElementSibling;
+      }
+      if (sib?.classList.contains('table-group-hd')) return; // handled above
+      const name  = r.querySelector('.td-val')?.textContent.toLowerCase() ?? '';
+      const match = !q || name.includes(q);
+      r.style.display = match ? '' : 'none';
+    });
+  });
+
+  // Autocomplete suggestions on the PL filter — selecting fills the input and
+  // triggers the existing table filter via the input event.
+  (() => {
+    const filterEl = document.getElementById('pl-filter');
+    new WuiAutocomplete({
+      inputEl:   filterEl,
+      dropEl:    document.getElementById('pl-filter-ac'),
+      primary:   pl => pl.name,
+      secondary: pl => pl.target_item_name || pl.target_item_id,
+      fetch(q, offset) {
+        const rows = wuiFilter(_pls, q, ['name', 'target_item_name', 'target_item_id']);
+        return Promise.resolve({ rows: rows.slice(offset, offset + 50), hasMore: offset + 50 < rows.length });
+      },
+      onSelect(pl) { filterEl.value = pl.name; filterEl.dispatchEvent(new Event('input')); },
+    });
+  })();
+
+  // ── Group submenu builder ─────────────────────────────
+  function buildGroupSub(container, callback) {
+    container.innerHTML =
+      _groups.map(g => `<div class="ctx-item" data-gid="${esc(g.id)}">${esc(g.name)}</div>`).join('') +
+      '<div class="ctx-sep"></div>' +
+      `<div class="ctx-item" data-gid="__ungroup__">${esc(t('factory.pl.ungroup'))}</div>` +
+      `<div class="ctx-item" data-gid="__new__">${esc(t('factory.pl.new_group'))}</div>`;
+
+    container.querySelectorAll('[data-gid]').forEach(item => {
+      item.addEventListener('click', async e => {
+        e.stopPropagation();
+        const gid = item.dataset.gid;
+        if (gid === '__ungroup__') {
+          await callback(null);
+        } else if (gid === '__new__') {
+          closeAllMenus();
+          openGroupNameModal(async name => {
+            const res = await apiFetch('/api/factories/' + _factoryID + '/pl-groups', {
+              method: 'POST', body: JSON.stringify({ name }),
+            });
+            if (res?.ok) {
+              const ng = await res.json();
+              _groups.push(ng);
+              await callback(ng.id);
+            }
+          });
+        } else {
+          await callback(gid);
+        }
+      });
+    });
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.ctx-menu')) closeAllMenus();
+  });
+  document.addEventListener('contextmenu', e => {
+    if (!e.target.closest('#pl-tbody')) closeAllMenus();
+  });
+
+  function closeAllMenus() {
+    document.querySelectorAll('.ctx-menu').forEach(m => m.classList.remove('open'));
+    _ctxPLID = null;
+  }
+
+  // ── PL Actions ────────────────────────────────────────
+  async function toggleStatus(id, current) {
+    const next = current === 'active' ? 'archived' : 'active';
+    await apiFetch('/api/production-lines/' + id + '/status', {
+      method: 'PATCH', body: JSON.stringify({ status: next }),
+    });
+    await reload();
+  }
+
+  async function markBuilt(id) {
+    await apiFetch('/api/production-lines/' + id + '/mark-built', { method: 'PATCH', body: '{}' });
+    await reload();
+  }
+
+  async function deletePL(id, btn) {
+    if (!confirm(t('factory.pl.confirm_delete_single'))) return;
     btn.disabled = true;
-    const res = await Auth.apiFetch('/api/production-lines/' + plID, { method: 'DELETE' });
-    if (res && (res.ok || res.status === 204)) { reload(); }
+    const res = await apiFetch('/api/production-lines/' + id, { method: 'DELETE' });
+    if (res && (res.ok || res.status === 204)) { await reload(); }
     else btn.disabled = false;
   }
 
   async function reload() {
-    const [factoryRes, plRes] = await Promise.all([
-      Auth.apiFetch('/api/factories/' + _factoryID),
-      Auth.apiFetch('/api/factories/' + _factoryID + '/production-lines'),
+    const [factRes, plRes, groupsRes] = await Promise.all([
+      apiFetch('/api/factories/' + _factoryID),
+      apiFetch('/api/factories/' + _factoryID + '/production-lines'),
+      apiFetch('/api/factories/' + _factoryID + '/pl-groups'),
     ]);
-    if (factoryRes && factoryRes.ok) {
-      const { balance } = await factoryRes.json();
+    if (factRes?.ok) {
+      const { factory, balance } = await factRes.json();
+      _factory = factory;
       renderBalance(balance);
     }
-    if (plRes && plRes.ok) {
-      renderPLs(await plRes.json());
+    if (groupsRes?.ok) _groups = await groupsRes.json();
+    if (plRes?.ok) {
+      _pls = await plRes.json();
+      renderPLs();
     }
   }
 
   // ── Balance ───────────────────────────────────────────
   function renderBalance(balance) {
-    renderBalanceSection('balance-inputs',  balance?.external_inputs ?? [], false);
-    renderBalanceSection('balance-outputs', balance?.outputs ?? [], false);
-    renderBalanceSection('balance-surplus', balance?.surplus ?? [], true);
+    const tbody = document.getElementById('balance-tbody');
+    const sort  = arr => [...(arr ?? [])].sort((a, b) => (a.name || a.item_fluid_id).localeCompare(b.name || b.item_fluid_id));
+    const secHd = label =>
+      `<tr class="table-group-hd"><td colspan="2">${esc(label)}</td></tr>`;
+    const emptyRow = () =>
+      `<tr><td colspan="2" class="td-faint" style="padding:var(--gap-control) var(--pad-cell);">—</td></tr>`;
+
+    const dataRow = (e, isSurplus) => {
+      const bot     = isSurplus && e.is_bottleneck;
+      const rateCls = bot ? ' style="color:var(--danger);font-weight:600;"' : '';
+      return `<tr>
+        <td>${itemHtml(e.item_fluid_id, e.name, e.mod_id, 'cell-clamp--scroll')}</td>
+        <td style="text-align:right;white-space:nowrap;"${rateCls}>${rateHtml(e.rate_num, e.rate_den, 'min', null)}</td>
+      </tr>`;
+    };
+
+    const inputs  = sort(balance?.external_inputs);
+    const outputs = sort(balance?.outputs);
+    const surplus = sort(balance?.surplus);
+
+    tbody.innerHTML =
+      secHd(t('factory.balance.external_inputs')) +
+      (inputs.length  ? inputs.map(e  => dataRow(e, false)).join('') : emptyRow()) +
+      secHd(t('factory.balance.outputs')) +
+      (outputs.length ? outputs.map(e => dataRow(e, false)).join('') : emptyRow()) +
+      secHd(t('factory.balance.surplus')) +
+      (surplus.length ? surplus.map(e => dataRow(e, true)).join('')  : emptyRow());
+    initCellClampScroll(tbody);
+    initInfocards(tbody);
   }
 
-  function renderBalanceSection(elID, entries, isSurplus) {
-    const el = document.getElementById(elID);
-    if (!entries || entries.length === 0) {
-      el.innerHTML = '<span class="balance-empty">—</span>';
-      return;
+  function balanceItemDef(e, defId) {
+    const perMin = e.rate_num / e.rate_den;
+    const fmtN   = n => {
+      const r = Math.round(n * 10000) / 10000;
+      return Number.isInteger(r) ? String(r) : r.toFixed(4).replace(/\.?0+$/, '');
+    };
+    return `<div id="${defId}" class="infocard-def" hidden>
+      <div class="infocard-header">
+        <!-- TODO: item icon <img class="infocard-icon" src="..." /> -->
+        <div class="infocard-heading">
+          <span class="infocard-title">${esc(e.name || e.item_fluid_id)}</span>
+          <span class="infocard-subtitle">${esc(e.item_fluid_id)}</span>
+        </div>
+      </div>
+      <div class="infocard-section" data-label="Rate">
+        <div class="infocard-row">
+          <span class="infocard-key">/min</span>
+          <span class="infocard-val">${esc(fmtRateFrac(e.rate_num, e.rate_den))}</span>
+        </div>
+        <div class="infocard-row">
+          <span class="infocard-key">/sec</span>
+          <span class="infocard-val">${esc(fmtN(perMin / 60))}</span>
+        </div>
+        <div class="infocard-row">
+          <span class="infocard-key">/hr</span>
+          <span class="infocard-val">${esc(fmtN(perMin * 60))}</span>
+        </div>
+        <div class="infocard-row">
+          <span class="infocard-key">/tick</span>
+          <span class="infocard-val">${esc(fmtN(perMin / 1200))}</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── Source Mode IO ────────────────────────────────────
+  let _srcInputs  = [];
+  let _srcOutputs = [];
+  let _srcSel     = null;
+
+  async function loadSrcInputs() {
+    const res = await apiFetch('/api/factories/' + _factoryID + '/source-inputs');
+    if (res?.ok) { _srcInputs = await res.json(); renderSrcIO(); }
+  }
+
+  async function loadSrcOutputs() {
+    const res = await apiFetch('/api/factories/' + _factoryID + '/source-outputs');
+    if (res?.ok) { _srcOutputs = await res.json(); renderSrcIO(); }
+  }
+
+  function renderSrcIO() {
+    const tbody = document.getElementById('src-tbody');
+    const secHd = label =>
+      `<tr class="table-group-hd"><td colspan="5">${esc(label)}</td></tr>`;
+    const dataRow = (o, attr, dir) =>
+      `<tr>
+        <td class="td-mono">${esc(o.item_id)}</td>
+        <td class="td-faint">${esc(o.mod_id)}</td>
+        <td class="td-muted">${esc(fmtRateFrac(o.rate_num, o.rate_den))}</td>
+        <td class="td-muted" style="white-space:nowrap;">/${esc(o.time_unit)}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:var(--gap-icon);width:100%;">
+            <span class="td-faint" style="font-weight:600;letter-spacing:.04em;">${esc(dir)}</span>
+            <button class="btn btn-danger-ghost btn-sm" ${attr}="${esc(o.id)}" style="padding:0 var(--gap-inline);border-color:transparent;margin-left:auto;">🗑</button>
+          </div>
+        </td>
+      </tr>`;
+    const emptyRow = msg =>
+      `<tr><td colspan="5" class="td-faint" style="padding:var(--gap-control) var(--pad-cell);">${esc(msg)}</td></tr>`;
+    const addRow = () =>
+      `<tr style="border-top:1px solid var(--border);">
+        <td><div class="wui-ac-wrap"><input class="input input-sm" id="src-add-item-input" placeholder="${esc(t('factory.src_outputs.item_placeholder'))}" autocomplete="off" style="width:100%;" /><div class="wui-ac-drop" id="src-add-item-ac"></div></div></td>
+        <td id="src-add-mod-label" class="td-faint">—</td>
+        <td><input class="input input-sm" id="src-add-rate-num" type="number" min="0.001" step="any" placeholder="${esc(t('common.rate'))}" style="width:100%;" /></td>
+        <td><select class="input input-sm" id="src-add-rate-unit">
+          <option value="s">${esc(t('common.per_sec'))}</option>
+          <option value="min" selected>${esc(t('common.per_min'))}</option>
+          <option value="h">${esc(t('common.per_hour'))}</option>
+          <option value="t">${esc(t('common.per_tick'))}</option>
+        </select></td>
+        <td style="padding:var(--gap-icon) var(--gap-inline);">
+          <div style="display:flex;align-items:center;gap:var(--gap-icon);width:100%;">
+            <select id="src-add-dir" style="background:transparent;border:1px solid var(--border-strong);border-radius:var(--radius);padding:0 var(--gap-icon);height:var(--h-btn-sm);font-size:var(--text-sm);color:var(--text-muted);font-family:inherit;">
+              <option value="in">In</option>
+              <option value="out">Out</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" id="src-add-btn" style="padding:0 var(--gap-control);border-color:transparent;margin-left:auto;">+</button>
+          </div>
+        </td>
+      </tr>`;
+
+    tbody.innerHTML =
+      secHd(t('factory.src.inputs')) +
+      (_srcInputs.length  ? _srcInputs.map(o  => dataRow(o, 'data-inid',  'In')).join('')  : emptyRow(t('factory.src_inputs.empty'))) +
+      secHd(t('factory.src.outputs')) +
+      (_srcOutputs.length ? _srcOutputs.map(o => dataRow(o, 'data-outid', 'Out')).join('') : emptyRow(t('factory.src_outputs.empty'))) +
+      addRow();
+
+    tbody.querySelectorAll('[data-inid]').forEach(btn =>
+      btn.addEventListener('click', async () => {
+        await apiFetch('/api/source-inputs/' + btn.dataset.inid, { method: 'DELETE' });
+        await loadSrcInputs();
+      })
+    );
+    tbody.querySelectorAll('[data-outid]').forEach(btn =>
+      btn.addEventListener('click', async () => {
+        await apiFetch('/api/source-outputs/' + btn.dataset.outid, { method: 'DELETE' });
+        await loadSrcOutputs();
+      })
+    );
+
+    _srcSel = null;
+    new WuiAutocomplete({
+      inputEl:   document.getElementById('src-add-item-input'),
+      dropEl:    document.getElementById('src-add-item-ac'),
+      fetch:     itemAndFluidFetcher,
+      primary:   it => it.name || it.item_id,
+      secondary: it => it.mod_id,
+      onSelect(it) {
+        _srcSel = it;
+        document.getElementById('src-add-item-input').value = it.name || it.item_id;
+        document.getElementById('src-add-mod-label').textContent = it.mod_id || '—';
+      },
+    });
+
+    document.getElementById('src-add-btn').addEventListener('click', () => doAddSrc());
+  }
+
+  async function doAddSrc() {
+    const statusEl = document.getElementById('src-add-status');
+    const dir      = document.getElementById('src-add-dir').value;
+    if (!_srcSel) { statusEl.className = 'status-msg err'; statusEl.textContent = t('msg.select_target'); return; }
+    const rateNum = parseFloat(document.getElementById('src-add-rate-num').value);
+    if (!rateNum || rateNum <= 0) { statusEl.className = 'status-msg err'; statusEl.textContent = t('msg.positive_rate'); return; }
+    const [rn, rd] = toFraction(rateNum);
+    const unit = document.getElementById('src-add-rate-unit').value;
+    const ep = '/api/factories/' + _factoryID + '/source-' + (dir === 'in' ? 'inputs' : 'outputs');
+    const res = await apiFetch(ep, {
+      method: 'POST',
+      body: JSON.stringify({ mod_id: _srcSel.mod_id, item_id: _srcSel.item_id, rate_num: rn, rate_den: rd, time_unit: unit }),
+    });
+    if (res?.ok) {
+      statusEl.className = 'status-msg ok'; statusEl.textContent = t('msg.saved');
+      if (dir === 'in') await loadSrcInputs();
+      else              await loadSrcOutputs();
+      setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'status-msg'; }, 2000);
+    } else {
+      statusEl.className = 'status-msg err'; statusEl.textContent = t('common.error');
     }
-    entries.sort((a, b) => (a.mod_id + ':' + a.item_fluid_id).localeCompare(b.mod_id + ':' + b.item_fluid_id));
-    el.innerHTML = entries.map(e => {
-      const isBottleneck = isSurplus && e.is_bottleneck;
-      return `<div class="balance-row${isBottleneck ? ' balance-bottleneck' : ''}">
-        <span class="balance-item">${esc(e.mod_id)}:${esc(e.item_fluid_id)}</span>
-        <span class="balance-rate">${fmtRateFrac(e.rate_num, e.rate_den)} /min</span>
-      </div>`;
-    }).join('');
   }
 
-  // ── Tabs ──────────────────────────────────────────────
-  document.getElementById('tabs').addEventListener('click', e => {
-    const tab = e.target.closest('.tab-btn');
-    if (!tab) return;
-    document.querySelectorAll('#tabs .tab-btn').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
-  });
+  // ── Shared AC fetcher ─────────────────────────────────
+  async function itemAndFluidFetcher(q, offset) {
+    const [ir, fr] = await Promise.all([
+      apiFetch('/api/items?q=' + encodeURIComponent(q) + '&offset=' + offset),
+      apiFetch('/api/fluids?q=' + encodeURIComponent(q) + '&offset=' + offset),
+    ]);
+    const items  = ir?.ok ? await ir.json() : [];
+    const fluids = fr?.ok ? await fr.json() : [];
+    return {
+      rows: [...items, ...fluids.map(f => ({ mod_id: f.mod_id, item_id: f.fluid_id, name: f.name }))],
+      hasMore: items.length >= 50 || fluids.length >= 50,
+    };
+  }
 
   // ── Helpers ───────────────────────────────────────────
-  function fmtRate(num, den, unit) {
-    return fmtRateFrac(num, den) + ' /' + unit;
-  }
-
   function fmtRateFrac(num, den) {
     if (!den || den === 1) return String(num);
-    // Show as decimal if clean, otherwise fraction
     const dec = num / den;
     return Number.isInteger(dec) ? String(dec) : (num + '/' + den);
   }
 
-  function statusPill(status) {
-    const map = { active: 'pill-active', draft: 'pill-draft', archived: 'pill-archived' };
-    return `<span class="pill ${map[status] || ''}">${esc(status)}</span>`;
+  function toFraction(dec) {
+    const d = 10000, n = Math.round(dec * d), g = gcd(n, d);
+    return [n / g, d / g];
   }
+  function gcd(a, b) { return b ? gcd(b, a % b) : a; }
 
   function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
-
-  // ── Theme ─────────────────────────────────────────────
-  function toggleTheme() {
-    const dark = document.documentElement.classList.toggle('dark');
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
-    document.getElementById('theme-btn').textContent = dark ? '☀️' : '🌙';
-  }
-  document.getElementById('theme-btn').textContent =
-    document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
 
   init();
 </script>

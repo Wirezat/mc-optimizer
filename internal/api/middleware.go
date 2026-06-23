@@ -17,6 +17,7 @@ type contextKey int
 const (
 	contextKeyUserID  contextKey = iota
 	contextKeyIsAdmin contextKey = iota
+	contextKeyIsOwner contextKey = iota
 )
 
 // RequireAuth validates Bearer token, injects userID and isAdmin into context, else 401.
@@ -51,7 +52,8 @@ func RequireAuth(database *db.DB) func(http.Handler) http.Handler {
 				return
 			}
 			ctx := context.WithValue(r.Context(), contextKeyUserID, token.UserID)
-			ctx = context.WithValue(ctx, contextKeyIsAdmin, user.IsAdmin)
+			ctx = context.WithValue(ctx, contextKeyIsAdmin, user.IsAdmin || user.IsOwner)
+			ctx = context.WithValue(ctx, contextKeyIsOwner, user.IsOwner)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -80,6 +82,23 @@ func userIDFromContext(ctx context.Context) uuid.UUID {
 // isAdminFromContext returns true if the authenticated user is an admin.
 func isAdminFromContext(ctx context.Context) bool {
 	v, _ := ctx.Value(contextKeyIsAdmin).(bool)
+	return v
+}
+
+// RequireOwner returns 403 if the authenticated user is not the owner.
+func RequireOwner(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isOwnerFromContext(r.Context()) {
+			errForbidden(w)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// isOwnerFromContext returns true if the authenticated user is the server owner.
+func isOwnerFromContext(ctx context.Context) bool {
+	v, _ := ctx.Value(contextKeyIsOwner).(bool)
 	return v
 }
 

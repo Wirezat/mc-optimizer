@@ -1,1 +1,129 @@
-/tbhome/wirezat/files/software_open/wirezat-ui/pages/auth.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login</title>
+  <link rel="stylesheet" href="/static/ui/index.css" />
+  <link rel="stylesheet" href="/static/css/theme.css" />
+  <script>
+    (function(){
+      const s = localStorage.getItem('theme');
+      if (s === 'dark' || (!s && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+</head>
+<body class="app-shell">
+
+  <header class="header">
+    <div class="header-brand"></div>
+    <div class="header-right">
+      <div class="dropdown-wrap" data-wui-lang>
+        <button data-dropdown-trigger></button>
+        <div class="dropdown-panel">
+          <button class="dropdown-item" data-lang="en">🇬🇧 English</button>
+          <button class="dropdown-item" data-lang="de">🇩🇪 Deutsch</button>
+        </div>
+      </div>
+      <button data-wui-theme data-i18n-title="common.toggle_theme"></button>
+    </div>
+  </header>
+
+  <div class="auth-main">
+  <div class="auth-card">
+
+    <div class="auth-header">
+      <div class="auth-logo" id="auth-logo">⚙️</div>
+      <div class="auth-title" id="auth-title">MC Optimizer</div>
+      <div class="auth-sub"   id="auth-sub"></div>
+    </div>
+
+    <div class="auth-tabs" id="auth-tabs">
+      <button class="auth-tab active" id="tab-login"    data-i18n="login.tab_login">Login</button>
+      <button class="auth-tab"        id="tab-register" data-i18n="login.tab_register">Register</button>
+    </div>
+
+    <div class="auth-body">
+
+      <div class="auth-panel active" id="panel-login">
+        <div class="field">
+          <label data-i18n="login.username">Username</label>
+          <input class="input" type="text" id="login-username"
+                 data-i18n-placeholder="login.username_placeholder"
+                 autocomplete="username" />
+        </div>
+        <div class="field">
+          <label data-i18n="login.password">Password</label>
+          <input class="input" type="password" id="login-password"
+                 placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <div class="auth-footer">
+          <span class="status-msg" id="status-login"></span>
+          <button class="btn btn-primary" id="btn-login" data-i18n="login.submit">Sign in</button>
+        </div>
+      </div>
+
+      <div class="auth-panel" id="panel-password">
+        <div class="field">
+          <label data-i18n="login.password">Password</label>
+          <input class="input" type="password" id="password-only"
+                 placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <div class="auth-footer">
+          <span class="status-msg" id="status-password"></span>
+          <button class="btn btn-primary" id="btn-password" data-i18n="login.confirm">Confirm</button>
+        </div>
+      </div>
+
+      <div class="auth-panel" id="panel-register">
+        <div class="field">
+          <label data-i18n="login.username">Username</label>
+          <input class="input" type="text" id="reg-username"
+                 data-i18n-placeholder="login.reg_username_placeholder"
+                 autocomplete="username" />
+        </div>
+        <div class="field">
+          <label data-i18n="login.password">Password</label>
+          <div class="input-wrap">
+            <input class="input" type="password" id="reg-password"
+                   placeholder="••••••••" autocomplete="new-password" />
+          </div>
+        </div>
+        <div class="field">
+          <label data-i18n="login.confirm_password">Confirm password</label>
+          <div class="input-wrap" id="reg-confirm-wrap">
+            <input class="input" type="password" id="reg-confirm"
+                   placeholder="••••••••" autocomplete="new-password" />
+            <span class="input-indicator" id="reg-match-icon"></span>
+          </div>
+        </div>
+        <div class="auth-footer">
+          <span class="status-msg" id="status-reg"></span>
+          <button class="btn btn-primary" id="btn-register" data-i18n="login.register_submit">Create account</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </div><!-- .auth-main -->
+
+<script type="module">
+  import { load, applyI18n, getLang, setLang, t } from '/static/js/i18n.js';
+  import { initAuth } from '/static/ui/js/auth.js';
+
+  await load(getLang());
+  applyI18n();
+
+  const sp = new URLSearchParams(window.location.search);
+  initAuth({
+    name:     sp.get('name')     || 'MC Optimizer',
+    logo:     sp.get('logo')     || '⚙️',
+    subtitle: sp.get('subtitle') || t('app.subtitle'),
+    mode:     sp.get('mode')     || 'both',
+    redirect: sp.get('redirect') || '/saves',
+  }, { t, getLang, setLang });
+</script>
+
+</body>
+</html>

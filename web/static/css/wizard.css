@@ -6,13 +6,13 @@
     display: flex;
     align-items: center;
     gap: 0;
-    margin-bottom: 8px;
+    margin-bottom: var(--sp-8);
 }
 
 .wizard-step {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-8);
     flex: 1;
     position: relative;
 }
@@ -22,7 +22,7 @@
     flex: 1;
     height: 1px;
     background: var(--border-strong);
-    margin: 0 8px;
+    margin: 0 var(--sp-8);
 }
 
 .wizard-step.done::after {
@@ -30,13 +30,13 @@
 }
 
 .wizard-step-num {
-    width: 28px;
-    height: 28px;
+    width: var(--sp-28);
+    height: var(--sp-28);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: var(--text-sm);
     font-weight: 700;
     flex-shrink: 0;
     border: 2px solid var(--border-strong);
@@ -62,7 +62,7 @@ html.dark .wizard-step.done .wizard-step-num {
 }
 
 .wizard-step-label {
-    font-size: 12px;
+    font-size: var(--text-sm);
     font-weight: 500;
     color: var(--text-faint);
     white-space: nowrap;
@@ -79,7 +79,7 @@ html.dark .wizard-step.done .wizard-step-num {
 .wizard-panel.active {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--pad-card);
 }
 
 /* ── Wizard navigation ───────────────────────────────────────────────────── */
@@ -87,9 +87,9 @@ html.dark .wizard-step.done .wizard-step-num {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-top: 8px;
+    padding-top: var(--sp-8);
     border-top: 1px solid var(--border);
-    margin-top: 4px;
+    margin-top: var(--sp-4);
 }
 
 /* ── Result preview (step 2) ─────────────────────────────────────────────── */
@@ -97,9 +97,9 @@ html.dark .wizard-step.done .wizard-step-num {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 16px;
+    padding: var(--pad-item-row);
     border-bottom: 1px solid var(--border);
-    gap: 12px;
+    gap: var(--gap-item-row);
 }
 
 .result-line:last-child {
@@ -107,20 +107,20 @@ html.dark .wizard-step.done .wizard-step-num {
 }
 
 .result-machine {
-    font-size: 13px;
+    font-size: var(--text-base);
     font-weight: 500;
     color: var(--text);
 }
 
 .result-count {
-    font-size: 13px;
+    font-size: var(--text-base);
     color: var(--text-muted);
     font-family: var(--mono);
     white-space: nowrap;
 }
 
 .result-recipe {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--text-faint);
     margin-top: 1px;
 }

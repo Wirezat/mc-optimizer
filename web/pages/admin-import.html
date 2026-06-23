@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MC Optimizer — Data Import</title>
+  <link rel="stylesheet" href="/static/ui/index.css" />
+  <link rel="stylesheet" href="/static/css/theme.css" />
+  <script>
+    (function(){
+      const s = localStorage.getItem('theme');
+      if (s === 'dark' || (!s && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    /* ── Import card ───────────────────────────────────────────────────────── */
+    .import-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      max-width: 600px;
+      overflow: hidden;
+    }
+
+    /* ── Status checklist ──────────────────────────────────────────────────── */
+    .checklist { list-style: none; padding: 0; margin: 0; }
+    .checklist li {
+      display: flex;
+      align-items: center;
+      gap: var(--gap-control);
+      padding: var(--gap-inline) var(--pad-card);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--text-sm);
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .cl-icon { width: 14px; text-align: center; font-size: var(--text-xs); }
+    .cl-icon.ok      { color: var(--accent); }
+    .cl-icon.missing { color: var(--text-faint); }
+    .cl-label { flex: 1; color: var(--text); }
+    .cl-hint  { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono); }
+
+    /* ── Card divider ──────────────────────────────────────────────────────── */
+    .card-divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+    /* ── Progress bar (flush, no margin) ──────────────────────────────────── */
+    .progress-bar { height: 3px; background: var(--border); overflow: hidden; display: none; }
+    .progress-bar.visible { display: block; }
+    .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+
+    /* ── Drop zone ─────────────────────────────────────────────────────────── */
+    .drop-zone {
+      margin: var(--pad-card);
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--gap-section) var(--pad-card);
+      text-align: center;
+      color: var(--text-faint);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+      background: var(--bg-page);
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-muted);
+      color: var(--text);
+    }
+    .drop-zone.disabled { opacity: 0.5; pointer-events: none; }
+    .drop-zone-icon { font-size: 24px; display: block; margin-bottom: var(--gap-inline); opacity: 0.5; }
+    .drop-zone-main { font-size: var(--text-sm); color: var(--text); }
+    .drop-zone-browse {
+      color: var(--accent); text-decoration: underline; cursor: pointer;
+      background: none; border: none; font-size: inherit; font-family: inherit; padding: 0;
+    }
+    .drop-zone-file { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--accent); margin-top: var(--gap-inline); }
+    .drop-zone-sub { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--gap-inline); }
+
+    /* ── Prefix reference ──────────────────────────────────────────────────── */
+    .prefix-ref {
+      font-size: var(--text-xs);
+      color: var(--text-faint);
+      text-align: center;
+      margin-top: var(--gap-inline);
+      line-height: 1.7;
+    }
+    .prefix-ref code {
+      background: var(--border);
+      border-radius: var(--radius-sm);
+      padding: 1px var(--gap-inline);
+      font-size: 10px;
+      color: var(--text);
+    }
+
+    /* ── Action row ────────────────────────────────────────────────────────── */
+    .card-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--gap-control);
+      padding: var(--gap-control) var(--pad-card);
+      border-top: 1px solid var(--border);
+    }
+    .status-msg     { font-size: var(--text-sm); }
+    .status-msg.ok  { color: var(--success); }
+    .status-msg.err { color: var(--danger); }
+
+    /* ── Import result ─────────────────────────────────────────────────────── */
+    .import-result {
+      display: none;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--gap-control) var(--pad-card);
+      max-width: 600px;
+      margin-top: var(--gap-section);
+      font-size: var(--text-sm);
+    }
+    .import-result.visible { display: block; }
+    .import-result-row { display: flex; gap: var(--pad-card); flex-wrap: wrap; }
+    .import-stat { display: flex; align-items: center; gap: var(--gap-inline); }
+    .import-stat-num { font-size: var(--text-md); font-weight: var(--weight-bold); color: var(--accent); }
+    .import-warnings { margin-top: var(--gap-inline); max-height: 140px; overflow-y: auto; }
+    .import-warn-line {
+      color: var(--text-muted); font-family: var(--mono); font-size: var(--text-xs);
+      padding: 2px 0; word-break: break-all;
+    }
+  </style>
+</head>
+<body class="app-shell">
+
+  <!-- ── Header ── -->
+  <header class="header">
+    <a class="header-brand" href="/saves">
+      <div class="header-logo">⚙️</div>
+      <span>MC Optimizer</span>
+    </a>
+    <div class="header-right">
+      <button data-wui-theme data-i18n-title="common.toggle_theme"></button>
+      <div class="dropdown-wrap" data-wui-lang>
+        <button data-dropdown-trigger></button>
+        <div class="dropdown-panel">
+          <button class="dropdown-item" data-lang="en">🇬🇧 English</button>
+          <button class="dropdown-item" data-lang="de">🇩🇪 Deutsch</button>
+        </div>
+      </div>
+      <div class="dropdown-wrap" data-wui-user-menu>
+        <button class="user-menu-trigger" data-wui-user-trigger data-dropdown-trigger>
+          <div class="avatar">?</div>
+          <span class="username">…</span>
+          <span class="chevron">▾</span>
+        </button>
+        <div class="dropdown-panel" data-wui-user-dropdown></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <nav class="sidebar"></nav>
+
+    <main class="main">
+      <div class="page">
+
+        <div class="page-header">
+          <div>
+            <div class="page-title" data-i18n="admin.import.title"></div>
+            <div class="page-subtitle" data-i18n="admin.import.subtitle"></div>
+          </div>
+        </div>
+
+        <div class="import-card">
+
+          <!-- Status checklist -->
+          <ul class="checklist" id="checklist">
+            <li style="color:var(--text-faint);padding:var(--gap-inline) var(--pad-card);" data-i18n="common.loading"></li>
+          </ul>
+
+          <hr class="card-divider" />
+
+          <!-- Progress bar (flush above drop zone) -->
+          <div class="progress-bar" id="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+
+          <!-- Drop zone -->
+          <div class="drop-zone" id="drop-zone">
+            <span class="drop-zone-icon">📦</span>
+            <div class="drop-zone-main">
+              <span data-i18n="admin.import.drop_hint"></span>
+              <button class="drop-zone-browse" id="drop-browse" data-i18n="admin.import.browse"></button>
+            </div>
+            <div class="drop-zone-file" id="drop-file"></div>
+            <div class="drop-zone-sub" data-i18n="admin.import.drop_sub"></div>
+            <div class="prefix-ref">
+              <span data-i18n="admin.import.order_note"></span>
+              &nbsp;·&nbsp; Forge: <code>forge:</code> &nbsp; NeoForge: <code>neoforge:</code> &nbsp; Fabric: <code>c:</code> &nbsp; Vanilla: <code>minecraft:</code>
+            </div>
+          </div>
+          <input type="file" id="jar-input" accept=".jar" multiple style="display:none" />
+
+          <!-- Action row -->
+          <div class="card-actions">
+            <button class="btn btn-primary btn-sm" id="import-btn" disabled data-i18n="admin.import.btn"></button>
+            <span class="status-msg" id="import-status"></span>
+          </div>
+
+        </div>
+
+        <!-- Result (shown after successful import) -->
+        <div class="import-result" id="import-result">
+          <div class="import-result-row" id="import-stats"></div>
+          <div class="import-warnings" id="import-warnings"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+<script type="module">
+  import { guard, apiFetch, getUser } from '/static/ui/js/auth.js';
+  import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
+  import { init as initHeader } from '/static/js/header.js';
+
+  await load(getLang());
+  applyI18n();
+  guard();
+  initHeader();
+
+  async function init() {
+    const user = await getUser();
+    if (!user?.is_admin) { window.location.href = '/personal'; return; }
+    loadStatus();
+  }
+
+  async function loadStatus() {
+    try {
+      const res = await apiFetch('/api/import/status');
+      if (!res?.ok) return;
+      const s = await res.json();
+      const cl = document.getElementById('checklist');
+      cl.innerHTML = '';
+      const checks = [
+        { key: 'minecraft', label: 'Vanilla',   hint: 'minecraft-<v>.jar' },
+        { key: 'forge',     label: 'Forge',      hint: 'forge-<v>-universal.jar' },
+        { key: 'neoforge',  label: 'NeoForge',   hint: 'neoforge-<v>-universal.jar' },
+        { key: 'fabric',    label: 'Fabric API', hint: 'fabric-api-<v>.jar' },
+      ];
+      for (const c of checks) {
+        const ok = s[c.key];
+        const li = document.createElement('li');
+        li.innerHTML =
+          `<span class="cl-icon ${ok ? 'ok' : 'missing'}">${ok ? '✓' : '○'}</span>` +
+          `<span class="cl-label">${c.label}</span>` +
+          `<span class="cl-hint">${ok ? t('admin.import.present') : c.hint}</span>`;
+        cl.appendChild(li);
+      }
+      const li = document.createElement('li');
+      li.innerHTML =
+        `<span class="cl-icon" style="color:var(--text-faint)">Σ</span>` +
+        `<span class="cl-label" style="color:var(--text-faint)">Mods</span>` +
+        `<span class="cl-hint">${s.total_mods}</span>`;
+      cl.appendChild(li);
+    } catch(e) { console.warn('status:', e); }
+  }
+
+  let _files = [];
+
+  const jarInput = document.getElementById('jar-input');
+  const dropZone = document.getElementById('drop-zone');
+
+  dropZone.addEventListener('click', () => jarInput.click());
+  document.getElementById('drop-browse').addEventListener('click', e => {
+    e.stopPropagation();
+    jarInput.click();
+  });
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) setFiles(Array.from(e.dataTransfer.files));
+  });
+
+  jarInput.addEventListener('change', () => { if (jarInput.files.length) setFiles(Array.from(jarInput.files)); });
+
+  document.getElementById('import-btn').addEventListener('click', runImport);
+
+  function setFiles(files) {
+    if (!files.length) return;
+    _files = files;
+    document.getElementById('drop-file').textContent = files.length === 1
+      ? files[0].name
+      : `${files.length} JARs selected`;
+    document.getElementById('import-btn').disabled = false;
+    setStatus('', '');
+  }
+
+  async function runImport() {
+    if (!_files.length) return;
+    const btn = document.getElementById('import-btn');
+    btn.disabled = true;
+    dropZone.classList.add('disabled');
+    document.getElementById('import-result').classList.remove('visible');
+    setStatus('', '');
+
+    const pb = document.getElementById('progress-bar');
+    const pf = document.getElementById('progress-fill');
+    pb.classList.add('visible');
+    pf.style.width = '15%';
+
+    try {
+      const form = new FormData();
+      for (const f of _files) form.append('jar', f);
+      const res = await apiFetch('/api/import/jar', { method: 'POST', body: form });
+      pf.style.width = '85%';
+      const data = await res.json();
+      pf.style.width = '100%';
+      setTimeout(() => { pb.classList.remove('visible'); pf.style.width = '0%'; }, 350);
+      dropZone.classList.remove('disabled');
+
+      if (!res.ok) {
+        document.getElementById('import-stats').innerHTML =
+          `<div class="import-stat"><span class="import-stat-num" style="color:var(--danger)">${t('common.error')}</span> ${esc(data.message || String(res.status))}</div>`;
+        document.getElementById('import-warnings').innerHTML = '';
+        document.getElementById('import-result').classList.add('visible');
+        setStatus(t('msg.save_error'), 'err');
+        btn.disabled = false;
+        return;
+      }
+
+      document.getElementById('import-stats').innerHTML = [
+        stat(data.recipes_imported, t('admin.import.stat.recipes')),
+        stat(data.recipes_skipped,  t('admin.import.stat.skipped'), true),
+        stat(data.items_seeded,     t('admin.import.stat.items')),
+        stat(data.translations,     t('admin.import.stat.translations')),
+        stat(data.tags,             t('admin.import.stat.tags')),
+        stat(data.tag_members,      t('admin.import.stat.tag_members'), true),
+        stat(data.textures,         t('admin.import.stat.textures')),
+        stat(data.block_drops,      t('admin.import.stat.block_drops')),
+        stat(data.villager_trades,  t('admin.import.stat.villager_trades')),
+      ].filter(Boolean).join('');
+
+      const warnEl = document.getElementById('import-warnings');
+      warnEl.innerHTML = data.warnings?.length
+        ? data.warnings.map(w => `<div class="import-warn-line">${esc(w)}</div>`).join('')
+        : '';
+      document.getElementById('import-result').classList.add('visible');
+
+      setStatus(t('msg.saved'), 'ok');
+      document.getElementById('drop-file').textContent = '';
+      _files = [];
+      loadStatus();
+    } catch(e) {
+      pb.classList.remove('visible');
+      dropZone.classList.remove('disabled');
+      setStatus(t('msg.network_error') + ': ' + e.message, 'err');
+    }
+    document.getElementById('import-btn').disabled = true;
+  }
+
+  function setStatus(msg, type) {
+    const el = document.getElementById('import-status');
+    el.textContent = msg;
+    el.className = 'status-msg' + (type ? ' ' + type : '');
+  }
+
+  function stat(n, label, muted) {
+    if (!n && n !== 0) return '';
+    const col = muted ? 'color:var(--text-muted)' : '';
+    return `<div class="import-stat"><span class="import-stat-num" style="${col}">${n}</span> ${label}</div>`;
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  init();
+</script>
+</body>
+</html>

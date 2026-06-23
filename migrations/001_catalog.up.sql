@@ -2,15 +2,23 @@
 -- Catalog / seed data tables. No per-user ownership — admins write, all users read.
 
 CREATE TABLE mods (
-    mod_id      TEXT PRIMARY KEY,
-    name        TEXT NOT NULL,
-    energy_type TEXT NOT NULL CHECK (energy_type IN ('EU', 'FE', 'SU', 'NONE', 'CUSTOM'))
+    mod_id        TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    energy_type   TEXT NOT NULL CHECK (energy_type IN ('EU', 'FE', 'SU', 'NONE', 'CUSTOM')),
+    description   TEXT,
+    author        TEXT,
+    license       TEXT,
+    url_source    TEXT,
+    url_modrinth  TEXT,
+    url_wiki      TEXT,
+    url_issues    TEXT,
+    url_discord   TEXT,
+    modrinth_slug TEXT
 );
 
 CREATE TABLE items (
     mod_id    TEXT     NOT NULL REFERENCES mods(mod_id),
     item_id   TEXT     NOT NULL,
-    name      TEXT     NOT NULL,
     max_stack SMALLINT NOT NULL DEFAULT 64,
     PRIMARY KEY (mod_id, item_id)
 );
@@ -18,12 +26,21 @@ CREATE TABLE items (
 CREATE TABLE fluids (
     mod_id   TEXT NOT NULL REFERENCES mods(mod_id),
     fluid_id TEXT NOT NULL,
-    name     TEXT NOT NULL,
     PRIMARY KEY (mod_id, fluid_id)
 );
 
+CREATE TABLE translations (
+    lang     TEXT NOT NULL,
+    lang_key TEXT NOT NULL,
+    name     TEXT NOT NULL,
+    PRIMARY KEY (lang, lang_key)
+);
+
+CREATE INDEX ON translations (lang, lang_key);
+CREATE INDEX ON translations (lang_key);
+
 CREATE TABLE tags (
-    id   UUID PRIMARY KEY,
+    id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL UNIQUE
 );
 
@@ -35,6 +52,15 @@ CREATE TABLE tag_members (
     FOREIGN KEY (item_mod_id, item_id) REFERENCES items(mod_id, item_id) ON DELETE CASCADE
 );
 
+-- Stores raw tag file values per tag name for cross-JAR tag resolution.
+CREATE TABLE tag_values (
+    tag_name TEXT NOT NULL,
+    value    TEXT NOT NULL,
+    PRIMARY KEY (tag_name, value)
+);
+
+CREATE INDEX ON tag_values (tag_name);
+
 CREATE TABLE machine_types (
     mod_id           TEXT     NOT NULL REFERENCES mods(mod_id),
     machine_id       TEXT     NOT NULL,
@@ -43,7 +69,36 @@ CREATE TABLE machine_types (
     max_eu_per_tick  BIGINT,
     max_slots        SMALLINT,
     energy_type      TEXT,
+    upgradable       BOOLEAN  NOT NULL DEFAULT FALSE,
     PRIMARY KEY (mod_id, machine_id)
+);
+
+-- Defines the input/output slot grid for each machine type.
+CREATE TABLE machine_slots (
+    mod_id     TEXT     NOT NULL,
+    machine_id TEXT     NOT NULL,
+    slot_index SMALLINT NOT NULL,
+    slot_type  TEXT     NOT NULL
+        CHECK (slot_type IN ('item_input', 'item_output', 'fluid_input', 'fluid_output')),
+    slot_x     SMALLINT,
+    slot_y     SMALLINT,
+    label      TEXT,
+    PRIMARY KEY (mod_id, machine_id, slot_index),
+    FOREIGN KEY (mod_id, machine_id) REFERENCES machine_types(mod_id, machine_id) ON DELETE CASCADE
+);
+
+CREATE INDEX ON machine_slots (mod_id, machine_id);
+
+CREATE TABLE machine_interfaces (
+    machine_mod_id  TEXT NOT NULL,
+    machine_id      TEXT NOT NULL,
+    base_mod_id     TEXT NOT NULL,
+    base_machine_id TEXT NOT NULL,
+    PRIMARY KEY (machine_mod_id, machine_id, base_mod_id, base_machine_id),
+    FOREIGN KEY (machine_mod_id, machine_id)
+        REFERENCES machine_types(mod_id, machine_id) ON DELETE CASCADE,
+    FOREIGN KEY (base_mod_id, base_machine_id)
+        REFERENCES machine_types(mod_id, machine_id) ON DELETE CASCADE
 );
 
 CREATE TABLE upgrade_tiers (
@@ -51,23 +106,25 @@ CREATE TABLE upgrade_tiers (
     mod_id            TEXT   NOT NULL REFERENCES mods(mod_id),
     name              TEXT   NOT NULL,
     eu_bonus_per_slot BIGINT,
-    item_ref          TEXT
+    item_ref          TEXT   NOT NULL UNIQUE
 );
 
+-- shape: 9-element row-major 3×3 array for crafting_shaped recipes. NULL for non-shaped.
 CREATE TABLE recipes (
-    id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-    machine_mod_id  TEXT    NOT NULL,
-    machine_id      TEXT    NOT NULL,
-    name            TEXT,
-    duration_ticks  INT     NOT NULL,
-    eu_per_tick     BIGINT,
-    total_eu        BIGINT,
-    content_hash    TEXT,
-    priority        INT     NOT NULL DEFAULT 0,
+    id             UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
+    machine_mod_id TEXT   NOT NULL,
+    machine_id     TEXT   NOT NULL,
+    name           TEXT,
+    duration_ticks INT    NOT NULL,
+    eu_per_tick    BIGINT,
+    total_eu       BIGINT,
+    content_hash   TEXT,
+    shape          TEXT[],
     FOREIGN KEY (machine_mod_id, machine_id) REFERENCES machine_types(mod_id, machine_id)
 );
 
 CREATE UNIQUE INDEX recipes_content_hash_idx ON recipes (content_hash) WHERE content_hash IS NOT NULL;
+CREATE INDEX ON recipes (machine_mod_id, machine_id);
 
 CREATE TABLE recipe_item_inputs (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -100,22 +157,32 @@ CREATE TABLE recipe_item_outputs (
 CREATE TABLE recipe_fluid_inputs (
     id              UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id       UUID   NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-    fluid_mod_id    TEXT   NOT NULL,
-    fluid_id        TEXT   NOT NULL,
+    fluid_mod_id    TEXT,
+    fluid_id        TEXT,
+    tag_id          UUID   REFERENCES tags(id),
     amount_mb       BIGINT NOT NULL,
     probability_num INT    NOT NULL DEFAULT 1,
     probability_den INT    NOT NULL DEFAULT 1,
+    CONSTRAINT recipe_fluid_inputs_ref_check CHECK (
+        (fluid_mod_id IS NOT NULL AND fluid_id IS NOT NULL AND tag_id IS NULL) OR
+        (fluid_mod_id IS NULL     AND fluid_id IS NULL     AND tag_id IS NOT NULL)
+    ),
     FOREIGN KEY (fluid_mod_id, fluid_id) REFERENCES fluids(mod_id, fluid_id)
 );
 
 CREATE TABLE recipe_fluid_outputs (
     id              UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id       UUID   NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-    fluid_mod_id    TEXT   NOT NULL,
-    fluid_id        TEXT   NOT NULL,
+    fluid_mod_id    TEXT,
+    fluid_id        TEXT,
+    tag_id          UUID   REFERENCES tags(id),
     amount_mb       BIGINT NOT NULL,
     probability_num INT    NOT NULL DEFAULT 1,
     probability_den INT    NOT NULL DEFAULT 1,
+    CONSTRAINT recipe_fluid_outputs_ref_check CHECK (
+        (fluid_mod_id IS NOT NULL AND fluid_id IS NOT NULL AND tag_id IS NULL) OR
+        (fluid_mod_id IS NULL     AND fluid_id IS NULL     AND tag_id IS NOT NULL)
+    ),
     FOREIGN KEY (fluid_mod_id, fluid_id) REFERENCES fluids(mod_id, fluid_id)
 );
 
@@ -129,20 +196,47 @@ CREATE TABLE valid_recipe_types (
         REFERENCES machine_types(mod_id, machine_id) ON DELETE SET NULL
 );
 
--- Machine A implements machine B: A can run all of B's recipes.
--- Allows a modded machine to act as a drop-in for another without cloning recipes.
-CREATE TABLE machine_interfaces (
-    machine_mod_id  TEXT NOT NULL,
-    machine_id      TEXT NOT NULL,
-    base_mod_id     TEXT NOT NULL,
-    base_machine_id TEXT NOT NULL,
-    PRIMARY KEY (machine_mod_id, machine_id, base_mod_id, base_machine_id),
-    FOREIGN KEY (machine_mod_id, machine_id)
-        REFERENCES machine_types(mod_id, machine_id) ON DELETE CASCADE,
-    FOREIGN KEY (base_mod_id, base_machine_id)
-        REFERENCES machine_types(mod_id, machine_id) ON DELETE CASCADE
+CREATE INDEX ON valid_recipe_types (target_mod_id, target_machine_id);
+
+-- Block loot drops: what a block yields when broken.
+CREATE TABLE block_drops (
+    id            UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+    block_mod_id  TEXT    NOT NULL,
+    block_item_id TEXT    NOT NULL,
+    drop_mod_id   TEXT    NOT NULL,
+    drop_item_id  TEXT    NOT NULL,
+    min_count     INT     NOT NULL DEFAULT 1,
+    max_count     INT     NOT NULL DEFAULT 1,
+    condition     TEXT    NOT NULL DEFAULT 'normal'
+        CHECK (condition IN ('normal', 'silk_touch', 'fortune')),
+    FOREIGN KEY (block_mod_id, block_item_id) REFERENCES items(mod_id, item_id) ON DELETE CASCADE,
+    FOREIGN KEY (drop_mod_id,  drop_item_id)  REFERENCES items(mod_id, item_id) ON DELETE CASCADE
 );
 
--- MI furnace implements vanilla furnace: runs all minecraft:smelting recipes.
-INSERT INTO machine_interfaces (machine_mod_id, machine_id, base_mod_id, base_machine_id)
-VALUES ('modern_industrialization', 'furnace', 'minecraft', 'furnace');
+CREATE INDEX ON block_drops (block_mod_id, block_item_id);
+CREATE INDEX ON block_drops (drop_mod_id,  drop_item_id);
+
+-- Villager trades: what each profession buys/sells at each tier.
+CREATE TABLE villager_trades (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    profession       TEXT NOT NULL,
+    tier             INT  NOT NULL CHECK (tier BETWEEN 1 AND 5),
+    cost_mod_id      TEXT NOT NULL,
+    cost_item_id     TEXT NOT NULL,
+    cost_count       INT  NOT NULL DEFAULT 1,
+    result_mod_id    TEXT NOT NULL,
+    result_item_id   TEXT NOT NULL,
+    result_count     INT  NOT NULL DEFAULT 1,
+    result_modified  BOOL NOT NULL DEFAULT FALSE,
+    max_uses         INT,
+    xp               INT,
+    FOREIGN KEY (cost_mod_id,   cost_item_id)   REFERENCES items(mod_id, item_id) ON DELETE CASCADE,
+    FOREIGN KEY (result_mod_id, result_item_id) REFERENCES items(mod_id, item_id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX villager_trades_unique_idx
+    ON villager_trades (profession, tier, cost_mod_id, cost_item_id, result_mod_id, result_item_id);
+
+CREATE INDEX ON villager_trades (profession, tier);
+CREATE INDEX ON villager_trades (cost_mod_id,   cost_item_id);
+CREATE INDEX ON villager_trades (result_mod_id, result_item_id);

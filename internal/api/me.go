@@ -22,7 +22,13 @@ func MeHandler(database *db.DB) http.HandlerFunc {
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, user)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"id":         user.ID,
+			"username":   user.Username,
+			"is_admin":   user.IsAdmin || user.IsOwner,
+			"is_owner":   user.IsOwner,
+			"created_at": user.CreatedAt,
+		})
 	}
 }
 

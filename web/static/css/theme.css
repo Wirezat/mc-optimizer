@@ -1,0 +1,83 @@
+/* mc_optimizer / theme.css
+   Color tokens for wirezatUI. Accent: copper.
+   Surface style: flat (bg = bg-page = bg-card — borders carry hierarchy, no card elevation).
+   Load after: /static/ui/index.css
+*/
+
+:root {
+    /* Accent — copper */
+    --accent:           #b45309;
+    --accent-dark:      #92400e;
+    --accent-text:      #fffbeb;
+    --accent-muted:     #fef3c7;
+
+    /* Text */
+    --text:             #1a1a1a;
+    --text-muted:       #6b6b6b;
+    --text-faint:       #aaaaaa;
+
+    /* Borders */
+    --border:           rgba(0, 0, 0, 0.12);
+    --border-strong:    rgba(0, 0, 0, 0.22);
+
+    /* Surfaces — flat style */
+    --bg:               #f0f0ee;
+    --bg-page:          #f0f0ee;
+    --bg-card:          #f0f0ee;
+    --bg-hover:         #e6e6e4;
+
+    /* Semantic */
+    --danger:           #c0392b;
+    --danger-muted:     #fdf0ee;
+    --success:          #2e7d32;
+    --success-muted:    #f0f7f0;
+    --warn:             #d97706;
+    --warn-muted:       #fef3c7;
+
+    /* Config-Container (accent tint) */
+    --config-bg:        #fef3c7;
+    --config-border:    color-mix(in srgb, var(--accent) 22%, transparent);
+    --config-header-bg: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+html.dark {
+    /* Accent — copper (lighter for dark backgrounds) */
+    --accent:           #d97706;
+    --accent-dark:      #b45309;
+    --accent-text:      #fffbeb;
+    --accent-muted:     #1c1200;
+
+    /* Text */
+    --text:             #f0ede8;
+    --text-muted:       #9a9790;
+    --text-faint:       #5a5854;
+
+    /* Borders */
+    --border:           rgba(255, 255, 255, 0.08);
+    --border-strong:    rgba(255, 255, 255, 0.16);
+
+    /* Surfaces */
+    --bg:               #0f0e0d;
+    --bg-page:          #0f0e0d;
+    --bg-card:          #0f0e0d;
+    --bg-hover:         #1c1b19;
+
+    /* Semantic */
+    --danger:           #e57373;
+    --danger-muted:     #2a1010;
+    --success:          #81c784;
+    --success-muted:    #0f2010;
+    --warn:             #fbbf24;
+    --warn-muted:       #1c1500;
+
+    /* Config-Container (accent tint) */
+    --config-bg:        #1c1200;
+    --config-border:    color-mix(in srgb, var(--accent) 22%, transparent);
+    --config-header-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* ── Status messages ─────────────────────────────────────────────────────── */
+.status-msg { font-size: var(--text-sm); font-weight: var(--weight-medium); padding: var(--gap-inline) var(--gap-field); border-radius: var(--radius); display: none; }
+.status-msg.ok   { background: var(--success-muted); color: var(--success); display: inline-flex; }
+.status-msg.err  { background: var(--danger-muted);  color: var(--danger);  display: inline-flex; }
+.status-msg.warn { background: var(--warn-muted);    color: var(--warn);    display: inline-flex; }

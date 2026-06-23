@@ -52,19 +52,7 @@ func (d *DB) GetSolverDraft(ctx context.Context, id uuid.UUID) (*model.SolverDra
 	return draft, nil
 }
 
-// DeleteSolverDraft removes a single draft by ID.
-func (d *DB) DeleteSolverDraft(ctx context.Context, id uuid.UUID) error {
-	tag, err := d.Pool.Exec(ctx, `DELETE FROM solver_drafts WHERE id = $1`, id)
-	if err != nil {
-		return fmt.Errorf("db: delete solver draft: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-// DeleteExpiredSolverDrafts removes all drafts past their expiry; returns count deleted.
+// DeleteExpiredSolverDrafts removes drafts past their expiry; returns the count deleted.
 func (d *DB) DeleteExpiredSolverDrafts(ctx context.Context) (int64, error) {
 	tag, err := d.Pool.Exec(ctx, `DELETE FROM solver_drafts WHERE expires_at <= now()`)
 	if err != nil {
@@ -72,3 +60,4 @@ func (d *DB) DeleteExpiredSolverDrafts(ctx context.Context) (int64, error) {
 	}
 	return tag.RowsAffected(), nil
 }
+

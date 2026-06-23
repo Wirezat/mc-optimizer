@@ -9,14 +9,24 @@ CREATE TABLE saves (
 );
 
 CREATE TABLE factories (
-    id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    save_id UUID NOT NULL REFERENCES saves(id) ON DELETE CASCADE,
-    name    TEXT NOT NULL
+    id      UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+    save_id UUID    NOT NULL REFERENCES saves(id) ON DELETE CASCADE,
+    name    TEXT    NOT NULL,
+    src     BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE TABLE pl_groups (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    factory_id UUID NOT NULL REFERENCES factories(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    position   TEXT NOT NULL DEFAULT 'V',
+    UNIQUE (factory_id, name)
 );
 
 CREATE TABLE production_lines (
     id             UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
     factory_id     UUID    REFERENCES factories(id) ON DELETE CASCADE,
+    pl_group_id    UUID    REFERENCES pl_groups(id) ON DELETE SET NULL,
     parent_pl_id   UUID    REFERENCES production_lines(id) ON DELETE SET NULL,
     name           TEXT    NOT NULL,
     target_mod_id  TEXT    NOT NULL,
@@ -25,8 +35,11 @@ CREATE TABLE production_lines (
     rate_den       INT     NOT NULL,
     time_unit      TEXT    NOT NULL CHECK (time_unit IN ('t', 's', 'min', 'h')),
     optimize_mode  TEXT    NOT NULL CHECK (optimize_mode IN ('TARGET', 'AUTO')),
-    status         TEXT    NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived'))
+    status         TEXT    NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')),
+    position       TEXT    NOT NULL DEFAULT 'V'
 );
+
+CREATE INDEX ON production_lines (factory_id, status);
 
 CREATE TABLE pl_io (
     id            UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -39,6 +52,8 @@ CREATE TABLE pl_io (
     rate_den      INT    NOT NULL,
     is_stop_point BOOL   NOT NULL DEFAULT false
 );
+
+CREATE INDEX ON pl_io (pl_id, direction);
 
 CREATE TABLE machine_groups (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -53,6 +68,8 @@ CREATE TABLE machine_groups (
     FOREIGN KEY (machine_mod_id, machine_id) REFERENCES machine_types(mod_id, machine_id)
 );
 
+CREATE INDEX ON machine_groups (pl_id, status);
+
 CREATE TABLE solver_drafts (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     factory_id UUID        NOT NULL REFERENCES factories(id) ON DELETE CASCADE,
@@ -60,4 +77,59 @@ CREATE TABLE solver_drafts (
     result     JSONB       NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + INTERVAL '24 hours',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX ON solver_drafts (factory_id, user_id);
+CREATE INDEX ON solver_drafts (expires_at);
+
+CREATE TABLE factory_source_outputs (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    factory_id UUID NOT NULL REFERENCES factories(id) ON DELETE CASCADE,
+    mod_id     TEXT NOT NULL,
+    item_id    TEXT NOT NULL,
+    rate_num   INT  NOT NULL DEFAULT 1,
+    rate_den   INT  NOT NULL DEFAULT 1,
+    time_unit  TEXT NOT NULL DEFAULT 'min' CHECK (time_unit IN ('t', 's', 'min', 'h')),
+    UNIQUE (factory_id, mod_id, item_id)
+);
+
+CREATE TABLE factory_source_inputs (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    factory_id UUID NOT NULL REFERENCES factories(id) ON DELETE CASCADE,
+    mod_id     TEXT NOT NULL,
+    item_id    TEXT NOT NULL,
+    rate_num   INT  NOT NULL DEFAULT 1,
+    rate_den   INT  NOT NULL DEFAULT 1,
+    time_unit  TEXT NOT NULL DEFAULT 'min' CHECK (time_unit IN ('t', 's', 'min', 'h')),
+    UNIQUE (factory_id, mod_id, item_id)
+);
+
+CREATE TABLE user_active_machines (
+    user_id    UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+    mod_id     TEXT NOT NULL,
+    machine_id TEXT NOT NULL,
+    PRIMARY KEY (user_id, mod_id, machine_id),
+    FOREIGN KEY (mod_id, machine_id) REFERENCES machine_types(mod_id, machine_id) ON DELETE CASCADE
+);
+
+CREATE TABLE save_active_mods (
+    save_id UUID NOT NULL REFERENCES saves(id)    ON DELETE CASCADE,
+    mod_id  TEXT NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
+    PRIMARY KEY (save_id, mod_id)
+);
+
+CREATE TABLE save_unlocked_items (
+    save_id UUID NOT NULL REFERENCES saves(id)                ON DELETE CASCADE,
+    mod_id  TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    PRIMARY KEY (save_id, mod_id, item_id),
+    FOREIGN KEY (mod_id, item_id) REFERENCES items(mod_id, item_id) ON DELETE CASCADE
+);
+
+CREATE TABLE save_unlocked_fluids (
+    save_id  UUID NOT NULL REFERENCES saves(id)                 ON DELETE CASCADE,
+    mod_id   TEXT NOT NULL,
+    fluid_id TEXT NOT NULL,
+    PRIMARY KEY (save_id, mod_id, fluid_id),
+    FOREIGN KEY (mod_id, fluid_id) REFERENCES fluids(mod_id, fluid_id) ON DELETE CASCADE
 );

@@ -43,16 +43,16 @@ func ContentHash(n model.NormalizedRecipe) string {
 		Duration: n.Duration,
 	}
 	for _, io := range n.ItemInputs {
-		c.II = append(c.II, itemEntry{itemRef(io), io.AmountNum, io.ProbNum, io.ProbDen})
+		c.II = append(c.II, itemEntry{ioRef(io), io.AmountNum, io.ProbNum, io.ProbDen})
 	}
 	for _, io := range n.ItemOutputs {
-		c.IO = append(c.IO, itemEntry{itemRef(io), io.AmountNum, io.ProbNum, io.ProbDen})
+		c.IO = append(c.IO, itemEntry{ioRef(io), io.AmountNum, io.ProbNum, io.ProbDen})
 	}
 	for _, io := range n.FluidInputs {
-		c.FI = append(c.FI, fluidEntry{io.FluidModID + ":" + io.FluidID, io.AmountMB, io.ProbNum, io.ProbDen})
+		c.FI = append(c.FI, fluidEntry{ioRef(io), io.AmountMB, io.ProbNum, io.ProbDen})
 	}
 	for _, io := range n.FluidOutputs {
-		c.FO = append(c.FO, fluidEntry{io.FluidModID + ":" + io.FluidID, io.AmountMB, io.ProbNum, io.ProbDen})
+		c.FO = append(c.FO, fluidEntry{ioRef(io), io.AmountMB, io.ProbNum, io.ProbDen})
 	}
 
 	sort.Slice(c.II, func(i, j int) bool { return c.II[i].Ref < c.II[j].Ref })
@@ -65,9 +65,9 @@ func ContentHash(n model.NormalizedRecipe) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-func itemRef(io model.NormalizedItemIO) string {
+func ioRef(io model.NormalizedIO) string {
 	if io.TagName != nil {
 		return "#" + *io.TagName
 	}
-	return *io.ItemModID + ":" + *io.ItemID
+	return *io.ModID + ":" + *io.ID
 }

@@ -10,7 +10,7 @@
 *.out
 vendor/
 
-# DB-Daten
+# DB-Data
 pg_data/
 
 # IDE
@@ -18,7 +18,17 @@ pg_data/
 .vscode/
 *.swp
 
-# Sonstiges
+# Other
 markdown/*
 logs/
-graphify-out/
+/scripts/
+/.dockerignore
+/.gitignore
+
+Claude
+/.claude/
+CLAUDE.md
+
+# Import Data
+/assets/
+/temp mc jar/

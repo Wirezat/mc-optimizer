@@ -17,10 +17,6 @@ const (
 	CodeNotFound            = "NOT_FOUND"
 	CodeConflict            = "CONFLICT"
 	CodeInternal            = "INTERNAL_SERVER_ERROR"
-	CodeMachineTypeNotFound = "MACHINE_TYPE_NOT_FOUND"
-	CodeUnknownRecipeType   = "UNKNOWN_RECIPE_TYPE"
-	CodeInvalidRecipeFormat = "INVALID_RECIPE_FORMAT"
-	CodeInvalidFormat       = "INVALID_FORMAT"
 )
 
 // apiError is the standard error envelope for all API responses.

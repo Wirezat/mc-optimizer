@@ -4,13 +4,45 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/Wirezat/production-optimizer/internal/db"
+	"github.com/Wirezat/production-optimizer/internal/importer"
 	"github.com/Wirezat/production-optimizer/internal/model"
 )
 
 // ListModsHandler returns all mods.
+// ListAllMachinesHandler returns all machine types across all mods.
+func ListAllMachinesHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		machines, err := database.ListAllMachines(r.Context())
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		if machines == nil {
+			machines = []*model.MachineType{}
+		}
+		writeJSON(w, http.StatusOK, machines)
+	}
+}
+
+// ListUpgradeTiersHandler returns all upgrade tiers for the solve UI's tier picker.
+func ListUpgradeTiersHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tiers, err := database.ListUpgradeTiers(r.Context())
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		if tiers == nil {
+			tiers = []model.UpgradeTier{}
+		}
+		writeJSON(w, http.StatusOK, tiers)
+	}
+}
+
 func ListModsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		mods, err := database.ListMods(r.Context())
@@ -65,7 +97,7 @@ func CreateModHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// UpdateModHandler updates name and/or energy_type of a mod. Admin only (enforced at route level).
+// UpdateModHandler updates all editable fields of a mod. Admin only (enforced at route level).
 func UpdateModHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := strings.TrimSpace(r.PathValue("mod_id"))
@@ -74,8 +106,17 @@ func UpdateModHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		var body struct {
-			Name       *string `json:"name"`
-			EnergyType *string `json:"energy_type"`
+			Name         *string `json:"name"`
+			EnergyType   *string `json:"energy_type"`
+			Description  *string `json:"description"`
+			Author       *string `json:"author"`
+			License      *string `json:"license"`
+			URLSource    *string `json:"url_source"`
+			URLModrinth  *string `json:"url_modrinth"`
+			URLWiki      *string `json:"url_wiki"`
+			URLIssues    *string `json:"url_issues"`
+			URLDiscord   *string `json:"url_discord"`
+			ModrinthSlug *string `json:"modrinth_slug"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			errBadRequest(w, "invalid JSON")
@@ -89,14 +130,19 @@ func UpdateModHandler(database *db.DB) http.HandlerFunc {
 			}
 		}
 		if body.EnergyType != nil {
-			*body.EnergyType = strings.TrimSpace(*body.EnergyType)
+			*body.EnergyType = strings.ToUpper(strings.TrimSpace(*body.EnergyType))
 			if *body.EnergyType == "" {
 				errBadRequest(w, "energy_type must not be empty")
 				return
 			}
 		}
-		err := database.UpdateMod(r.Context(), modID, body.Name, body.EnergyType)
-		if err != nil {
+		u := model.ModUpdate{
+			Name: body.Name, EnergyType: body.EnergyType,
+			Description: body.Description, Author: body.Author, License: body.License,
+			URLSource: body.URLSource, URLModrinth: body.URLModrinth, URLWiki: body.URLWiki,
+			URLIssues: body.URLIssues, URLDiscord: body.URLDiscord, ModrinthSlug: body.ModrinthSlug,
+		}
+		if err := database.UpdateModFull(r.Context(), modID, u); err != nil {
 			if errors.Is(err, db.ErrNotFound) {
 				errNotFound(w)
 				return
@@ -105,6 +151,45 @@ func UpdateModHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// ModrinthPreviewHandler fetches Modrinth metadata for a mod without saving it.
+// Accepts optional ?slug= query param to override the lookup slug.
+// Admin only (enforced at route level).
+func ModrinthPreviewHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		modID := strings.TrimSpace(r.PathValue("mod_id"))
+		if modID == "" {
+			errBadRequest(w, "mod_id is required")
+			return
+		}
+		slugOverride := strings.TrimSpace(r.URL.Query().Get("slug"))
+
+		// Get the mod's display name so lookupProject can search by it.
+		mods, err := database.ListMods(r.Context())
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		var displayName string
+		for _, m := range mods {
+			if m.ModID == modID {
+				displayName = m.Name
+				break
+			}
+		}
+
+		meta, err := importer.FetchModrinthMetadata(modID, displayName, slugOverride)
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		if meta == nil {
+			errNotFound(w)
+			return
+		}
+		writeJSON(w, http.StatusOK, meta)
 	}
 }
 
@@ -165,6 +250,7 @@ func UpdateMachineHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			Name          *string `json:"name"`
 			BaseEUPerTick *int64  `json:"base_eu_per_tick"`
+			MaxEUPerTick  *int64  `json:"max_eu_per_tick"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			errBadRequest(w, "invalid JSON")
@@ -177,7 +263,7 @@ func UpdateMachineHandler(database *db.DB) http.HandlerFunc {
 				return
 			}
 		}
-		err := database.UpdateMachineType(r.Context(), modID, machineID, body.Name, body.BaseEUPerTick)
+		err := database.UpdateMachineType(r.Context(), modID, machineID, body.Name, body.BaseEUPerTick, body.MaxEUPerTick)
 		if err != nil {
 			if errors.Is(err, db.ErrNotFound) {
 				errNotFound(w)
@@ -249,8 +335,45 @@ func ListModItemsHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
+// ListModFluidsHandler returns all fluids for a mod.
+func ListModFluidsHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		modID := strings.TrimSpace(r.PathValue("mod_id"))
+		if modID == "" {
+			errBadRequest(w, "mod_id is required")
+			return
+		}
+		fluids, err := database.ListFluidsByMod(r.Context(), modID)
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		if fluids == nil {
+			fluids = []*model.Fluid{}
+		}
+		writeJSON(w, http.StatusOK, fluids)
+	}
+}
+
+// ListRecipesCatalogHandler returns recipes for the catalog page with optional ?mod= and ?machine= filters.
+// Returns recipes without IO details (IO is fetched per-recipe on expand).
+func ListRecipesCatalogHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		modID     := strings.TrimSpace(r.URL.Query().Get("mod"))
+		machineID := strings.TrimSpace(r.URL.Query().Get("machine"))
+		recipes, err := database.ListRecipesCatalog(r.Context(), modID, machineID)
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		if recipes == nil {
+			recipes = []*model.Recipe{}
+		}
+		writeJSON(w, http.StatusOK, recipes)
+	}
+}
+
 // ListModRecipesHandler returns all recipes for a mod.
-// Optional query param: ?machine_id=<id> to filter by machine.
 func ListModRecipesHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := strings.TrimSpace(r.PathValue("mod_id"))
@@ -352,7 +475,6 @@ func UpdateRecipeNameHandler(database *db.DB) http.HandlerFunc {
 }
 
 // DeleteRecipeHandler removes a recipe. Admin only (enforced at route level).
-// DELETE /api/recipes/{recipe_id}
 func DeleteRecipeHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		recipeID := strings.TrimSpace(r.PathValue("recipe_id"))
@@ -373,7 +495,6 @@ func DeleteRecipeHandler(database *db.DB) http.HandlerFunc {
 }
 
 // ListMachineInterfacesHandler lists all interfaces (base machines) for a machine.
-// GET /api/mods/{mod_id}/machines/{machine_id}/interfaces
 func ListMachineInterfacesHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := strings.TrimSpace(r.PathValue("mod_id"))
@@ -392,7 +513,6 @@ func ListMachineInterfacesHandler(database *db.DB) http.HandlerFunc {
 
 // AddMachineInterfaceHandler adds an "implements" relationship.
 // Admin only (enforced at route level).
-// POST /api/mods/{mod_id}/machines/{machine_id}/interfaces
 func AddMachineInterfaceHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := strings.TrimSpace(r.PathValue("mod_id"))
@@ -428,7 +548,6 @@ func AddMachineInterfaceHandler(database *db.DB) http.HandlerFunc {
 
 // DeleteMachineInterfaceHandler removes an "implements" relationship.
 // Admin only (enforced at route level).
-// DELETE /api/mods/{mod_id}/machines/{machine_id}/interfaces/{base_mod_id}/{base_machine_id}
 func DeleteMachineInterfaceHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := strings.TrimSpace(r.PathValue("mod_id"))
@@ -449,11 +568,26 @@ func DeleteMachineInterfaceHandler(database *db.DB) http.HandlerFunc {
 }
 
 // SearchItemsHandler returns items matching an optional query string across all mods.
-// Optional query param: ?q=<search term>
+// ?all=true  → returns all items (catalog use, no limit)
+// ?q=&offset → paginated search (autocomplete use, LIMIT 50)
 func SearchItemsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		q := strings.TrimSpace(r.URL.Query().Get("q"))
-		items, err := database.SearchItems(r.Context(), q)
+		if r.URL.Query().Get("all") == "true" {
+			items, err := database.ListAllItems(r.Context())
+			if err != nil {
+				errInternal(w, err)
+				return
+			}
+			if items == nil {
+				items = []*model.Item{}
+			}
+			writeJSON(w, http.StatusOK, items)
+			return
+		}
+		q      := strings.TrimSpace(r.URL.Query().Get("q"))
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		if offset < 0 { offset = 0 }
+		items, err := database.SearchItems(r.Context(), q, offset)
 		if err != nil {
 			errInternal(w, err)
 			return
@@ -466,11 +600,25 @@ func SearchItemsHandler(database *db.DB) http.HandlerFunc {
 }
 
 // SearchFluidsHandler returns fluids matching an optional query string across all mods.
-// Optional query param: ?q=<search term>
+// Optional query params: ?q=<search term>&offset=<int>&all=true
 func SearchFluidsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		q := strings.TrimSpace(r.URL.Query().Get("q"))
-		fluids, err := database.SearchFluids(r.Context(), q)
+		if r.URL.Query().Get("all") == "true" {
+			fluids, err := database.ListAllFluids(r.Context())
+			if err != nil {
+				errInternal(w, err)
+				return
+			}
+			if fluids == nil {
+				fluids = []*model.Fluid{}
+			}
+			writeJSON(w, http.StatusOK, fluids)
+			return
+		}
+		q      := strings.TrimSpace(r.URL.Query().Get("q"))
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		if offset < 0 { offset = 0 }
+		fluids, err := database.SearchFluids(r.Context(), q, offset)
 		if err != nil {
 			errInternal(w, err)
 			return

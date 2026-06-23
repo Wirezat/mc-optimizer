@@ -1,122 +1,30 @@
-/* header.js — shared header with user dropdown */
-const Header = (() => {
-  let _user = null;
+import { init as _wuiInit } from '/static/ui/js/header.js';
+import { getLang, setLang, t } from './i18n.js';
 
-  async function init() {
-    _buildSidebar();
-    try {
-      _user = await Auth.getUser();
-      if (!_user) return;
-    } catch (_) { return; }
+const NAV_LINKS = () => [
+  { section: t('nav.my_work') },
+  { href: '/saves', icon: '💾', label: t('nav.saves'), activeFor: ['/saves/', '/factories/', '/production-lines/'] },
+  { section: t('nav.catalog') },
+  { href: '/catalog/mods',     icon: '🧱', label: t('nav.mods') },
+  { href: '/catalog/items',    icon: '📦', label: t('nav.items') },
+  { href: '/catalog/fluids',   icon: '💧', label: t('nav.fluids') },
+  { href: '/catalog/machines', icon: '🔩', label: t('nav.machines') },
+  { href: '/catalog/recipes',  icon: '📋', label: t('nav.recipes') },
+  { href: '/catalog/trades',   icon: '🏪', label: t('nav.trades') },
+];
 
-    _renderTrigger();
-    _buildDropdown();
-    _wireDropdown();
-    Auth.applyRoles();
-  }
+const ADMIN_SECTIONS = () => [
+  `<a class="dropdown-item" href="/admin/import"><span class="icon">📥</span> ${t('header.admin_import')}</a>`,
+  `<a class="dropdown-item" href="/admin/settings"><span class="icon">⚙️</span> ${t('header.admin_settings')}</a>`,
+];
 
-  function _buildSidebar() {
-    const nav = document.querySelector('nav.sidebar');
-    if (!nav) return;
-    const p = window.location.pathname;
-    const active = href => {
-      if (href === '/saves')
-        return p === '/saves' || p.startsWith('/saves/') || p.startsWith('/factories/') || p.startsWith('/production-lines/');
-      return p === href;
-    };
-    const link = (href, icon, label) =>
-      `<a class="nav-link${active(href) ? ' active' : ''}" href="${href}"><i class="nav-icon">${icon}</i> ${label}</a>`;
-    nav.innerHTML =
-      `<span class="nav-section">My Work</span>` +
-      link('/saves', '💾', 'Saves') +
-      `<span class="nav-section">Catalog</span>` +
-      link('/catalog/items', '📦', 'Items &amp; Fluids') +
-      link('/catalog/recipes', '📋', 'Recipes') +
-      link('/catalog/mods', '🔧', 'Mods');
-  }
+const LABELS = () => ({
+  personal: t('header.personal'),
+  logout:   t('header.logout'),
+  admin:    t('header.role_admin'),
+  user:     t('header.role_user'),
+});
 
-  function _initial(name) {
-    return (name || '?').charAt(0).toUpperCase();
-  }
-
-  function _renderTrigger() {
-    const trigger = document.getElementById('user-menu-trigger');
-    if (!trigger) return;
-    trigger.querySelector('.avatar').textContent = _initial(_user.username);
-    trigger.querySelector('.username').textContent = _user.username;
-  }
-
-  function _buildDropdown() {
-    const dropdown = document.getElementById('user-dropdown');
-    if (!dropdown) return;
-
-    const sections = [];
-
-    sections.push(`
-      <div class="user-dropdown-section">
-        <a class="dropdown-item" href="/personal">
-          <span class="icon">👤</span> Personal
-        </a>
-      </div>`);
-
-    if (_user.is_admin) {
-      sections.push(`
-        <div class="user-dropdown-section">
-          <a class="dropdown-item" href="/catalog/mods">
-            <span class="icon">🗂️</span> Mod-Katalog
-          </a>
-          <a class="dropdown-item" href="/catalog/recipes">
-            <span class="icon">📋</span> Rezept-Katalog
-          </a>
-        </div>`);
-    }
-
-    sections.push(`
-      <div class="user-dropdown-section">
-        <button class="dropdown-item danger" id="logout-btn">
-          <span class="icon">🚪</span> Abmelden
-        </button>
-      </div>`);
-
-    dropdown.innerHTML = `
-      <div class="user-dropdown-header">
-        <div class="user-dropdown-name">${_esc(_user.username)}</div>
-        <div class="user-dropdown-role">${_user.is_admin ? 'Administrator' : 'Benutzer'}</div>
-      </div>
-      ${sections.join('')}`;
-
-    document.getElementById('logout-btn')?.addEventListener('click', () => Auth.logout());
-  }
-
-  function _wireDropdown() {
-    const menu = document.getElementById('user-menu');
-    if (!menu) return;
-
-    document.getElementById('user-menu-trigger')?.addEventListener('click', e => {
-      e.stopPropagation();
-      if (menu.hasAttribute('data-open')) {
-        _closeDropdown();
-      } else {
-        menu.setAttribute('data-open', '');
-      }
-    });
-
-    document.addEventListener('click', e => {
-      if (!menu.contains(e.target)) _closeDropdown();
-    });
-
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') _closeDropdown();
-    });
-  }
-
-  function _closeDropdown() {
-    document.getElementById('user-menu')?.removeAttribute('data-open');
-  }
-
-  function _esc(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  return { init };
-})();
+export function init() {
+  return _wuiInit({ navLinks: NAV_LINKS(), adminSections: ADMIN_SECTIONS(), labels: LABELS(), getLang, setLang });
+}

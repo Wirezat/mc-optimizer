@@ -158,20 +158,27 @@ func (d *DB) DeleteUser(ctx context.Context, userID uuid.UUID) error {
 	return nil
 }
 
-// BootstrapOwner sets is_owner = TRUE for the user with the given username if no owner exists yet.
-// Idempotent: does nothing if an owner already exists or the username is not found.
-func (d *DB) BootstrapOwner(ctx context.Context, username string) error {
-	if username == "" {
-		return nil
+// HasOwner returns true if any user with is_owner = TRUE exists.
+func (d *DB) HasOwner(ctx context.Context) (bool, error) {
+	var exists bool
+	err := d.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE is_owner = TRUE)`).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("db: has owner: %w", err)
 	}
-	_, err := d.Pool.Exec(ctx, `
+	return exists, nil
+}
+
+// PromoteToOwnerIfFirst sets is_owner = TRUE and is_admin = TRUE for the given user
+// if no owner exists yet. Returns true if the promotion happened.
+func (d *DB) PromoteToOwnerIfFirst(ctx context.Context, userID uuid.UUID) (bool, error) {
+	tag, err := d.Pool.Exec(ctx, `
 		UPDATE users SET is_owner = TRUE, is_admin = TRUE
-		WHERE username = $1
+		WHERE id = $1
 		  AND NOT EXISTS (SELECT 1 FROM users WHERE is_owner = TRUE)`,
-		username,
+		userID,
 	)
 	if err != nil {
-		return fmt.Errorf("db: bootstrap owner: %w", err)
+		return false, fmt.Errorf("db: promote to owner: %w", err)
 	}
-	return nil
+	return tag.RowsAffected() > 0, nil
 }

@@ -60,7 +60,15 @@ func AuthConfigHandler(database *db.DB) http.HandlerFunc {
 			errInternal(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"registration_enabled": enabled})
+		hasOwner, err := database.HasOwner(r.Context())
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"registration_enabled": enabled,
+			"has_owner":            hasOwner,
+		})
 	}
 }
 
@@ -108,12 +116,30 @@ func RegisterHandler(database *db.DB) http.HandlerFunc {
 			errInternal(w, err)
 			return
 		}
+		promoted, err := database.PromoteToOwnerIfFirst(r.Context(), u.ID)
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		if promoted {
+			u.IsOwner = true
+			u.IsAdmin = true
+		}
 		pair, err := issueTokensForUser(r, database, u)
 		if err != nil {
 			errInternal(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, pair)
+		type registerResponse struct {
+			AccessToken  string `json:"access_token"`
+			RefreshToken string `json:"refresh_token"`
+			IsFirstUser  bool   `json:"is_first_user,omitempty"`
+		}
+		writeJSON(w, http.StatusCreated, registerResponse{
+			AccessToken:  pair.AccessToken,
+			RefreshToken: pair.RefreshToken,
+			IsFirstUser:  promoted,
+		})
 	}
 }
 

@@ -240,6 +240,7 @@
     "login.register_title": "Konto erstellen",
     "login.submit": "Anmelden",
     "login.tab_login": "Login",
+    "login.first_user_hint": "Der erste registrierte Benutzer wird automatisch Besitzer und Administrator.",
     "login.tab_register": "Registrieren",
     "login.title": "Anmelden",
     "login.username": "Benutzername",

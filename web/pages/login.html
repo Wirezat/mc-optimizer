@@ -77,6 +77,9 @@
       </div>
 
       <div class="auth-panel" id="panel-register">
+        <div id="first-user-hint" style="display:none;font-size:var(--text-sm);color:var(--text-muted);background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius);padding:var(--gap-inline) var(--gap-control);margin-bottom:var(--gap-control);">
+          <span data-i18n="login.first_user_hint"></span>
+        </div>
         <div class="field">
           <label data-i18n="login.username">Username</label>
           <input class="input" type="text" id="reg-username"
@@ -116,11 +119,15 @@
   applyI18n();
 
   const sp = new URLSearchParams(window.location.search);
+  const cfg = await fetch('/api/auth/config').then(r => r.json()).catch(() => ({}));
+  if (cfg.has_owner === false) {
+    document.getElementById('first-user-hint').style.display = '';
+  }
   initAuth({
     name:     sp.get('name')     || 'MC Optimizer',
     logo:     sp.get('logo')     || '⚙️',
     subtitle: sp.get('subtitle') || t('app.subtitle'),
-    mode:     sp.get('mode')     || 'both',
+    mode:     sp.get('mode')     || (cfg.has_owner === false ? 'register' : 'both'),
     redirect: sp.get('redirect') || '/saves',
   }, { t, getLang, setLang });
 </script>

@@ -40,7 +40,6 @@ func run() error {
 		return errors.New("DATABASE_URL is not set")
 	}
 
-	ownerUsername := os.Getenv("OWNER_USERNAME")
 	autoScaleMax := int64(10_000)
 	if v := os.Getenv("AUTO_SCALE_MAX"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
@@ -70,11 +69,7 @@ func run() error {
 	defer database.Close()
 	GoLog.Infof("Database: %s", maskPassword(dbURL))
 
-	if err := database.BootstrapOwner(ctx, ownerUsername); err != nil {
-		GoLog.Warnf("bootstrap owner: %v", err)
-	}
-
-	// ── Background cleanup ticker ─────────────────────────────────────────
+// ── Background cleanup ticker ─────────────────────────────────────────
 	// Purges expired tokens and solver_drafts.
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)

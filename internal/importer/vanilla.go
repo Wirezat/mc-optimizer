@@ -68,7 +68,7 @@ func (p *VanillaParser) KnownFields() []string {
 		"type", "ingredient", "ingredients", "result", "experience", "cookingtime",
 		"pattern", "key", "addition", "base", "template", "count",
 		"shrubs", "dyes",
-		"group", "category", "show_notification",
+		"group", "category", "show_notification", "neoforge:conditions",
 	}
 }
 

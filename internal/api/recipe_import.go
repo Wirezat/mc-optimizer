@@ -1,8 +1,6 @@
 package api
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,77 +8,7 @@ import (
 
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/importer"
-	"github.com/Wirezat/production-optimizer/internal/model"
 )
-
-// ListValidRecipeTypesHandler returns all registered recipe type patterns.
-func ListValidRecipeTypesHandler(database *db.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		vrts, err := database.ListValidRecipeTypes(r.Context())
-		if err != nil {
-			errInternal(w, err)
-			return
-		}
-		if vrts == nil {
-			vrts = []*model.ValidRecipeType{}
-		}
-		writeJSON(w, http.StatusOK, vrts)
-	}
-}
-
-// CreateValidRecipeTypeHandler registers a new valid recipe type pattern.
-func CreateValidRecipeTypeHandler(database *db.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Pattern         string  `json:"pattern"`
-			IsRegex         bool    `json:"is_regex"`
-			TargetModID     *string `json:"target_mod_id"`
-			TargetMachineID *string `json:"target_machine_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
-			return
-		}
-		if body.Pattern == "" {
-			errBadRequest(w, "pattern is required")
-			return
-		}
-		if (body.TargetModID == nil) != (body.TargetMachineID == nil) {
-			errBadRequest(w, "target_mod_id and target_machine_id must be set together")
-			return
-		}
-
-		vrt, err := database.CreateValidRecipeType(r.Context(), body.Pattern, body.IsRegex, body.TargetModID, body.TargetMachineID)
-		if err != nil {
-			if errors.Is(err, db.ErrConflict) {
-				errConflict(w, "pattern already registered")
-				return
-			}
-			errInternal(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, vrt)
-	}
-}
-
-// DeleteValidRecipeTypeHandler removes a valid recipe type by ID.
-func DeleteValidRecipeTypeHandler(database *db.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id, ok := parseUUIDParam(w, r, "vrt_id")
-		if !ok {
-			return
-		}
-		if err := database.DeleteValidRecipeType(r.Context(), id); err != nil {
-			if errors.Is(err, db.ErrNotFound) {
-				errNotFound(w)
-				return
-			}
-			errInternal(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
 
 // ImportJARHandler accepts one or more JAR file uploads and imports all recipes,
 // translations, tags, textures, block loot tables, and villager trades from them.

@@ -14,6 +14,15 @@ type MIParser struct{}
 
 func (p *MIParser) Skip(_ string) bool { return false }
 
+func (p *MIParser) KnownFields() []string {
+	return []string{
+		// standard MIRecipe
+		"type", "eu", "duration", "item_inputs", "item_outputs", "fluid_inputs", "fluid_outputs",
+		// forgeHammerRaw (skipped at import, but avoids false-positive field warnings)
+		"ingredient", "result", "count",
+	}
+}
+
 func (p *MIParser) Accepts(recipeType string) bool {
 	return !isVanillaType(recipeType) && !IsVanillaSkip(recipeType)
 }

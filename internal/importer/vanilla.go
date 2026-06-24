@@ -60,8 +60,17 @@ func IsVanillaSkip(t string) bool {
 // VanillaParser handles vanilla Minecraft recipe formats.
 type VanillaParser struct{}
 
-func (p *VanillaParser) Skip(recipeType string) bool  { return IsVanillaSkip(recipeType) }
+func (p *VanillaParser) Skip(recipeType string) bool    { return IsVanillaSkip(recipeType) }
 func (p *VanillaParser) Accepts(recipeType string) bool { return isVanillaType(recipeType) }
+
+func (p *VanillaParser) KnownFields() []string {
+	return []string{
+		"type", "ingredient", "ingredients", "result", "experience", "cookingtime",
+		"pattern", "key", "addition", "base", "template", "count",
+		"shrubs", "dyes",
+		"group", "category",
+	}
+}
 
 func (p *VanillaParser) Decode(data []byte, modID, machineID, sourceFile string) (model.NormalizedRecipe, error) {
 	var v vanillaRaw

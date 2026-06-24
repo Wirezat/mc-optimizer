@@ -65,14 +65,6 @@ type UpgradeTier struct {
 	ItemID         string `json:"item_id"`
 }
 
-type ValidRecipeType struct {
-	ID              string  `json:"id"`
-	Pattern         string  `json:"pattern"`
-	IsRegex         bool    `json:"is_regex"`
-	TargetModID     *string `json:"target_mod_id,omitempty"`
-	TargetMachineID *string `json:"target_machine_id,omitempty"`
-}
-
 type MachineSlot struct {
 	SlotIndex int16   `json:"slot_index"`
 	SlotType  string  `json:"slot_type"`

@@ -123,6 +123,56 @@
       color: var(--text-muted); font-family: var(--mono); font-size: var(--text-xs);
       padding: 2px 0; word-break: break-all;
     }
+
+    /* ── Field warnings table ──────────────────────────────────────────────── */
+    .fw-section {
+      margin-top: var(--gap-section);
+      border-top: 1px solid var(--border);
+      padding-top: var(--gap-control);
+    }
+    .fw-title {
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
+      color: var(--text-muted);
+      margin-bottom: var(--gap-inline);
+    }
+    .fw-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+    .fw-table th {
+      text-align: left;
+      color: var(--text-faint);
+      font-weight: var(--weight-semibold);
+      padding: var(--gap-inline) var(--gap-control);
+      border-bottom: 1px solid var(--border);
+    }
+    .fw-table td {
+      padding: var(--gap-inline) var(--gap-control);
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .fw-table tr:last-child td { border-bottom: none; }
+    .fw-type { font-family: var(--mono); color: var(--text); }
+    .fw-fields { font-family: var(--mono); color: var(--danger); }
+    .fw-expand-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--accent); font-size: var(--text-xs); padding: 0;
+      text-decoration: underline;
+    }
+    .fw-raw {
+      display: none;
+      margin-top: var(--gap-inline);
+      background: var(--bg-page);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: var(--gap-inline) var(--gap-control);
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-faint);
+      white-space: pre;
+      overflow-x: auto;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .fw-raw.open { display: block; }
   </style>
 </head>
 <body class="app-shell">
@@ -208,21 +258,51 @@
         <div class="import-result" id="import-result">
           <div class="import-result-row" id="import-stats"></div>
           <div class="import-warnings" id="import-warnings"></div>
+          <div class="fw-section" id="fw-section" style="display:none">
+            <div class="fw-title" data-i18n="admin.import.field_warnings.title"></div>
+            <table class="fw-table">
+              <thead>
+                <tr>
+                  <th data-i18n="admin.import.field_warnings.col_type"></th>
+                  <th data-i18n="admin.import.field_warnings.col_fields"></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="fw-body"></tbody>
+            </table>
+          </div>
         </div>
 
       </div>
     </main>
   </div>
 
+  <!-- Modal (wirezatUI) -->
+  <div class="modal-backdrop" data-wui-modal>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="wui-modal-title">
+      <div class="modal-header">
+        <span class="modal-title" data-modal-title id="wui-modal-title"></span>
+        <button class="modal-close" data-modal-close>✕</button>
+      </div>
+      <div class="modal-body" data-modal-body></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" data-modal-cancel data-i18n="common.cancel"></button>
+        <button class="btn btn-primary" data-modal-confirm></button>
+      </div>
+    </div>
+  </div>
+
 <script type="module">
   import { guard, apiFetch, getUser } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
+  import { initModal, openModal } from '/static/ui/js/modal.js';
 
   await load(getLang());
   applyI18n();
   guard();
   initHeader();
+  initModal();
 
   async function init() {
     const user = await getUser();
@@ -338,15 +418,29 @@
       ].filter(Boolean).join('');
 
       const warnEl = document.getElementById('import-warnings');
-      warnEl.innerHTML = data.warnings?.length
-        ? data.warnings.map(w => `<div class="import-warn-line">${esc(w)}</div>`).join('')
-        : '';
+      const skipLines = (data.skip_warnings || []).map(sw => {
+        const msg = t('admin.import.skip.unsupported_type')
+          .replace('{type}', sw.recipe_type)
+          .replace('{count}', sw.count);
+        return `<div class="import-warn-line">${esc(msg)}</div>`;
+      });
+      const warnLines = (data.warnings || []).map(w => `<div class="import-warn-line">${esc(w)}</div>`);
+      warnEl.innerHTML = [...skipLines, ...warnLines].join('');
+
+      renderFieldWarnings(data.field_warnings || []);
       document.getElementById('import-result').classList.add('visible');
 
       setStatus(t('msg.saved'), 'ok');
       document.getElementById('drop-file').textContent = '';
       _files = [];
       loadStatus();
+
+      openModal({
+        title:        t('admin.import.verify.title'),
+        bodyHTML:     `<p>${esc(t('admin.import.verify.body'))}</p>`,
+        confirmLabel: t('admin.import.verify.confirm'),
+        onConfirm:    () => { window.location.href = '/catalog/machines'; },
+      });
     } catch(e) {
       pb.classList.remove('visible');
       dropZone.classList.remove('disabled');
@@ -365,6 +459,43 @@
     if (!n && n !== 0) return '';
     const col = muted ? 'color:var(--text-muted)' : '';
     return `<div class="import-stat"><span class="import-stat-num" style="${col}">${n}</span> ${label}</div>`;
+  }
+
+  function renderFieldWarnings(fws) {
+    const section = document.getElementById('fw-section');
+    const tbody   = document.getElementById('fw-body');
+    if (!fws.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    tbody.innerHTML = '';
+    for (const fw of fws) {
+      const tr = document.createElement('tr');
+      const tdType   = document.createElement('td');
+      const tdFields = document.createElement('td');
+      const tdAction = document.createElement('td');
+      tdType.className   = 'fw-type';
+      tdFields.className = 'fw-fields';
+      tdType.textContent   = fw.recipe_type;
+      tdFields.textContent = fw.unknown_fields.join(', ');
+
+      const btn = document.createElement('button');
+      btn.className = 'fw-expand-btn';
+      btn.textContent = t('admin.import.field_warnings.expand');
+      const pre = document.createElement('pre');
+      pre.className = 'fw-raw';
+      pre.textContent = fw.raw_json || '';
+      btn.addEventListener('click', () => {
+        const open = pre.classList.toggle('open');
+        btn.textContent = t(open ? 'admin.import.field_warnings.collapse' : 'admin.import.field_warnings.expand');
+      });
+      tdAction.appendChild(btn);
+      tdAction.appendChild(pre);
+
+      tr.appendChild(tdType);
+      tr.appendChild(tdFields);
+      tr.appendChild(tdAction);
+      tbody.appendChild(tr);
+    }
+    applyI18n();
   }
 
   function esc(s) {

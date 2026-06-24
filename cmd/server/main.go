@@ -189,9 +189,6 @@ func run() error {
 	mux.Handle("GET /api/tags", protected(api.SearchTagsHandler(database)))
 	mux.Handle("GET /api/trades", protected(api.ListVillagerTradesHandler(database)))
 
-	mux.Handle("GET /api/valid-recipe-types", protected(api.ListValidRecipeTypesHandler(database)))
-	mux.Handle("POST /api/valid-recipe-types", adminOnly(api.CreateValidRecipeTypeHandler(database)))
-	mux.Handle("DELETE /api/valid-recipe-types/{vrt_id}", adminOnly(api.DeleteValidRecipeTypeHandler(database)))
 	mux.Handle("GET /api/import/status", adminOnly(api.ImportStatusHandler(database)))
 	mux.Handle("POST /api/import/jar", adminOnly(api.ImportJARHandler(database, "assets")))
 

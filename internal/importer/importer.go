@@ -12,7 +12,6 @@ import (
 
 // ImporterDB is the subset of the database the JAR importer needs.
 type ImporterDB interface {
-	ListValidRecipeTypes(ctx context.Context) ([]*model.ValidRecipeType, error)
 	ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (bool, error)
 	UpsertTranslations(ctx context.Context, lang string, entries map[string]string) error
 	UpsertTagValues(ctx context.Context, tagName string, values []string, replace bool) error
@@ -32,20 +31,37 @@ type ImporterDB interface {
 	UpdateModMetadata(ctx context.Context, meta model.ModMetadata) error
 }
 
+// SkipWarning describes a group of recipes that were skipped because their type is not auto-importable.
+type SkipWarning struct {
+	Code       string `json:"code"`
+	RecipeType string `json:"recipe_type"`
+	Count      int    `json:"count"`
+}
+
+// FieldWarning describes a recipe file that contains JSON fields the parser doesn't handle.
+type FieldWarning struct {
+	RecipeType    string   `json:"recipe_type"`
+	SourceFile    string   `json:"source_file"`
+	UnknownFields []string `json:"unknown_fields"`
+	RawJSON       string   `json:"raw_json"`
+}
+
 // Result summarises the outcome of importing one or more JARs.
 type Result struct {
-	JARs           []string `json:"jars"`
-	Recipes        int      `json:"recipes_imported"`
-	RecipesSkip    int      `json:"recipes_skipped"`
-	Items          int      `json:"items_seeded"`
-	Translations   int      `json:"translations"`
-	Tags           int      `json:"tags"`
-	TagMembers     int      `json:"tag_members"`
-	Textures       int      `json:"textures"`
-	BlockDrops     int      `json:"block_drops"`
-	VillagerTrades int      `json:"villager_trades"`
-	UpgradeTiers   int      `json:"upgrade_tiers"`
-	Warnings       []string `json:"warnings,omitempty"`
+	JARs           []string       `json:"jars"`
+	Recipes        int            `json:"recipes_imported"`
+	RecipesSkip    int            `json:"recipes_skipped"`
+	Items          int            `json:"items_seeded"`
+	Translations   int            `json:"translations"`
+	Tags           int            `json:"tags"`
+	TagMembers     int            `json:"tag_members"`
+	Textures       int            `json:"textures"`
+	BlockDrops     int            `json:"block_drops"`
+	VillagerTrades int            `json:"villager_trades"`
+	UpgradeTiers   int            `json:"upgrade_tiers"`
+	Warnings       []string       `json:"warnings,omitempty"`
+	SkipWarnings   []SkipWarning  `json:"skip_warnings,omitempty"`
+	FieldWarnings  []FieldWarning `json:"field_warnings,omitempty"`
 }
 
 // Importer reads data from JAR files and writes it to the database.
@@ -62,12 +78,6 @@ func New(db ImporterDB, assetsDir string) *Importer {
 // Run imports all provided JAR files.
 func (imp *Importer) Run(ctx context.Context, jarPaths []string) (Result, error) {
 	res := Result{JARs: jarPaths}
-
-	vrts, err := imp.db.ListValidRecipeTypes(ctx)
-	if err != nil {
-		return res, fmt.Errorf("importer: load valid recipe types: %w", err)
-	}
-	m := buildMatcher(vrts)
 
 	rawTags := make(map[string]*TagFileData)
 
@@ -92,10 +102,20 @@ func (imp *Importer) Run(ctx context.Context, jarPaths []string) (Result, error)
 			res.Warnings = append(res.Warnings, fmt.Sprintf("["+jarPath+"] "+format, args...))
 		}
 
+		skippedUnsupported := map[string]int{}
+
 		err := WalkJAR(jarPath, func(e WalkEntry) error {
 			switch e.Category {
 			case "recipe":
-				imported, skip, w := imp.importRecipe(ctx, e, m)
+				imported, skip, fw, w := imp.importRecipe(ctx, e)
+				if fw != nil {
+					res.FieldWarnings = append(res.FieldWarnings, *fw)
+				}
+				if skip && w != "" {
+					skippedUnsupported[w]++
+					res.RecipesSkip++
+					return nil
+				}
 				if w != "" {
 					warn("%s", w)
 					return nil
@@ -214,6 +234,13 @@ func (imp *Importer) Run(ctx context.Context, jarPaths []string) (Result, error)
 		})
 		if err != nil {
 			return res, fmt.Errorf("importer: walk jar %s: %w", jarPath, err)
+		}
+		for recipeType, count := range skippedUnsupported {
+			res.SkipWarnings = append(res.SkipWarnings, SkipWarning{
+				Code:       "unsupported_type",
+				RecipeType: recipeType,
+				Count:      count,
+			})
 		}
 	}
 
@@ -335,43 +362,80 @@ func (imp *Importer) Run(ctx context.Context, jarPaths []string) (Result, error)
 }
 
 // importRecipe parses and imports one recipe entry.
-// Returns (imported, skipped, warning).
-func (imp *Importer) importRecipe(ctx context.Context, e WalkEntry, m matcher) (imported, skipped bool, warn string) {
+// Returns (imported, skipped, fieldWarning, warning).
+func (imp *Importer) importRecipe(ctx context.Context, e WalkEntry) (imported, skipped bool, fw *FieldWarning, warn string) {
 	rc, err := e.Open()
 	if err != nil {
-		return false, false, fmt.Sprintf("open %s: %v", e.FullPath, err)
+		return false, false, nil, fmt.Sprintf("open %s: %v", e.FullPath, err)
 	}
 	data, err := io.ReadAll(rc)
 	rc.Close()
 	if err != nil {
-		return false, false, fmt.Sprintf("read %s: %v", e.FullPath, err)
+		return false, false, nil, fmt.Sprintf("read %s: %v", e.FullPath, err)
 	}
 
 	recipeType := peekType(data)
 
+	if strings.HasSuffix(recipeType, ":forge_hammer") {
+		return false, true, nil, recipeType
+	}
+
 	for _, parser := range parsers {
 		if parser.Skip(recipeType) {
-			return false, true, ""
+			return false, true, nil, ""
 		}
 		if !parser.Accepts(recipeType) {
 			continue
 		}
-		modID, machineID, ok := m.resolve(recipeType)
+		modID, machineID, ok := ResolveRecipeType(recipeType)
 		if !ok {
-			return false, false, fmt.Sprintf("no machine mapping for %q in %s", recipeType, e.FullPath)
+			return false, false, nil, fmt.Sprintf("no machine mapping for %q in %s", recipeType, e.FullPath)
 		}
 		norm, err := parser.Decode(data, modID, machineID, e.FullPath)
 		if err != nil {
-			return false, false, fmt.Sprintf("decode %s: %v", e.FullPath, err)
+			return false, false, nil, fmt.Sprintf("decode %s: %v", e.FullPath, err)
 		}
 		didImport, err := imp.db.ImportRecipe(ctx, norm)
 		if err != nil {
-			return false, false, fmt.Sprintf("db error for %s: %v", e.FullPath, err)
+			return false, false, nil, fmt.Sprintf("db error for %s: %v", e.FullPath, err)
 		}
-		return didImport, false, ""
+		if unknown := unknownFields(data, parser); len(unknown) > 0 {
+			var pretty []byte
+			if p, err2 := json.MarshalIndent(json.RawMessage(data), "", "  "); err2 == nil {
+				pretty = p
+			} else {
+				pretty = data
+			}
+			fw = &FieldWarning{
+				RecipeType:    recipeType,
+				SourceFile:    e.FullPath,
+				UnknownFields: unknown,
+				RawJSON:       string(pretty),
+			}
+		}
+		return didImport, false, fw, ""
 	}
 
-	return false, false, fmt.Sprintf("unknown type %q in %s", recipeType, e.FullPath)
+	return false, false, nil, fmt.Sprintf("unknown type %q in %s", recipeType, e.FullPath)
+}
+
+// unknownFields returns top-level JSON keys in data that are not in parser.KnownFields().
+func unknownFields(data []byte, parser RecipeParser) []string {
+	known := make(map[string]struct{}, 16)
+	for _, k := range parser.KnownFields() {
+		known[k] = struct{}{}
+	}
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(data, &raw) != nil {
+		return nil
+	}
+	var result []string
+	for k := range raw {
+		if _, ok := known[k]; !ok {
+			result = append(result, k)
+		}
+	}
+	return result
 }
 
 // parseMachineUpgradesDatamap parses a machine_upgrades.json datamap file.

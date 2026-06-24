@@ -10,8 +10,10 @@ type RecipeParser interface {
 	// Accepts returns true if this parser handles the given recipe type.
 	Accepts(recipeType string) bool
 	// Decode parses raw recipe JSON into a normalised recipe.
-	// modID and machineID are resolved by the matcher before Decode is called.
 	Decode(data []byte, modID, machineID, sourceFile string) (model.NormalizedRecipe, error)
+	// KnownFields returns the top-level JSON field names this parser reads.
+	// Used to detect unknown fields in recipe files.
+	KnownFields() []string
 }
 
 // parsers is the ordered registry of recipe parsers.

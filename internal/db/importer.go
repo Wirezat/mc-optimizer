@@ -9,60 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ListValidRecipeTypes returns all registered valid recipe type patterns.
-func (d *DB) ListValidRecipeTypes(ctx context.Context) ([]*model.ValidRecipeType, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT id, pattern, is_regex, target_mod_id, target_machine_id
-		FROM valid_recipe_types
-		ORDER BY pattern
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("db: list valid recipe types: %w", err)
-	}
-	defer rows.Close()
-
-	var result []*model.ValidRecipeType
-	for rows.Next() {
-		v := &model.ValidRecipeType{}
-		if err := rows.Scan(&v.ID, &v.Pattern, &v.IsRegex, &v.TargetModID, &v.TargetMachineID); err != nil {
-			return nil, fmt.Errorf("db: list valid recipe types: scan: %w", err)
-		}
-		result = append(result, v)
-	}
-	return result, rows.Err()
-}
-
-// CreateValidRecipeType inserts a new valid recipe type pattern.
-func (d *DB) CreateValidRecipeType(ctx context.Context, pattern string, isRegex bool, targetModID, targetMachineID *string) (*model.ValidRecipeType, error) {
-	v := &model.ValidRecipeType{}
-	err := d.Pool.QueryRow(ctx, `
-		INSERT INTO valid_recipe_types (id, pattern, is_regex, target_mod_id, target_machine_id)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4)
-		RETURNING id, pattern, is_regex, target_mod_id, target_machine_id
-	`, pattern, isRegex, targetModID, targetMachineID).Scan(
-		&v.ID, &v.Pattern, &v.IsRegex, &v.TargetModID, &v.TargetMachineID,
-	)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return nil, ErrConflict
-		}
-		return nil, fmt.Errorf("db: create valid recipe type: %w", err)
-	}
-	return v, nil
-}
-
-// DeleteValidRecipeType removes a valid recipe type by ID.
-func (d *DB) DeleteValidRecipeType(ctx context.Context, id uuid.UUID) error {
-	tag, err := d.Pool.Exec(ctx, `DELETE FROM valid_recipe_types WHERE id = $1`, id)
-	if err != nil {
-		return fmt.Errorf("db: delete valid recipe type: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // ImportRecipe writes a single normalized recipe to the database in one transaction.
 // It auto-creates any unknown mods, items, fluids, and tags referenced by the recipe.
 // Returns imported=true if the recipe was new, false if a duplicate (same content_hash).

@@ -98,7 +98,7 @@
 
 <script type="module">
   import { guard, apiFetch } from '/static/ui/js/auth.js';
-  import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
+  import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { initCellClampScroll } from '/static/ui/js/table-features.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
@@ -126,9 +126,6 @@
   // recipeId → rendered expand HTML
   const ioCache = new Map();
 
-  function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
 
   function summaryList(ios) {
     return ios.slice(0, 3).map(io => io.item_name || io.fluid_name || io.tag_name || io.item_id || io.fluid_id || '?').join(', ')

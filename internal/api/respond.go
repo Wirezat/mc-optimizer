@@ -8,6 +8,16 @@ import (
 	"github.com/google/uuid"
 )
 
+// decodeJSON decodes JSON from r.Body into v.
+// Writes 400 and returns false on failure; caller must return immediately.
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		errBadRequest(w, "invalid JSON")
+		return false
+	}
+	return true
+}
+
 // Error codes — machine-readable keys sent in every error response.
 // The frontend can display Message directly or key off Code for custom UI.
 const (

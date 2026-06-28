@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -57,8 +56,7 @@ func ReorderHandler(store PositionStore, idParam string) http.HandlerFunc {
 			AfterID  *uuid.UUID `json:"after_id"`
 			BeforeID *uuid.UUID `json:"before_id"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 
@@ -156,8 +154,7 @@ func PLReorderHandler(database *db.DB) http.HandlerFunc {
 			AfterGroupID  *uuid.UUID `json:"after_group_id"`
 			BeforeGroupID *uuid.UUID `json:"before_group_id"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 

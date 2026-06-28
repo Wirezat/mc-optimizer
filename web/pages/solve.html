@@ -438,7 +438,7 @@
 
 <script type="module">
   import { guard, apiFetch } from '/static/ui/js/auth.js';
-  import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
+  import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
 
@@ -1134,9 +1134,6 @@
     const el = document.getElementById(id);
     el.className = 'status-msg' + (cls?' '+cls:'');
     el.textContent = text;
-  }
-  function esc(s) {
-    return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   init();

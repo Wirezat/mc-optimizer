@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -65,8 +64,7 @@ func CreateModHandler(database *db.DB) http.HandlerFunc {
 			Name       string `json:"name"`
 			EnergyType string `json:"energy_type"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		body.ModID = strings.TrimSpace(body.ModID)
@@ -118,8 +116,7 @@ func UpdateModHandler(database *db.DB) http.HandlerFunc {
 			URLDiscord   *string `json:"url_discord"`
 			ModrinthSlug *string `json:"modrinth_slug"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		if body.Name != nil {
@@ -252,8 +249,7 @@ func UpdateMachineHandler(database *db.DB) http.HandlerFunc {
 			BaseEUPerTick *int64  `json:"base_eu_per_tick"`
 			MaxEUPerTick  *int64  `json:"max_eu_per_tick"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		if body.Name != nil {
@@ -289,8 +285,7 @@ func UpdateItemHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			Name string `json:"name"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		body.Name = strings.TrimSpace(body.Name)
@@ -408,8 +403,7 @@ func CreateModRecipeHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		var body model.CreateRecipeRequest
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		if strings.TrimSpace(body.MachineID) == "" {
@@ -449,8 +443,7 @@ func UpdateRecipeNameHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			Name *string `json:"name"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		// empty string → treat as clear (nil)
@@ -521,8 +514,7 @@ func AddMachineInterfaceHandler(database *db.DB) http.HandlerFunc {
 			BaseModID     string `json:"base_mod_id"`
 			BaseMachineID string `json:"base_machine_id"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		if body.BaseModID == "" || body.BaseMachineID == "" {

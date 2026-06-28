@@ -40,27 +40,7 @@ func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([
 	if err != nil {
 		return nil, fmt.Errorf("db: get recipes for item: %w", err)
 	}
-	defer rows.Close()
-
-	var recipes []*solver.RecipeRow
-	for rows.Next() {
-		r := &solver.RecipeRow{}
-		if err := rows.Scan(&r.ID, &r.MachineMod, &r.MachineID,
-			&r.DurationTicks, &r.EUPerTick, &r.TotalEU); err != nil {
-			return nil, fmt.Errorf("db: get recipes for item: %w", err)
-		}
-		recipes = append(recipes, r)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("db: get recipes for item: %w", err)
-	}
-
-	for _, r := range recipes {
-		if err := d.loadRecipeIO(ctx, r); err != nil {
-			return nil, fmt.Errorf("db: get recipes for item: %w", err)
-		}
-	}
-	return recipes, nil
+	return d.scanRecipeRows(ctx, rows, "get recipes for item")
 }
 
 // GetRecipesForFluid returns all recipes that output this fluid.
@@ -90,24 +70,27 @@ func (d *DB) GetRecipesForFluid(ctx context.Context, fluidModID, fluidID string)
 	if err != nil {
 		return nil, fmt.Errorf("db: get recipes for fluid: %w", err)
 	}
-	defer rows.Close()
+	return d.scanRecipeRows(ctx, rows, "get recipes for fluid")
+}
 
+// scanRecipeRows scans a query result into RecipeRows and loads their I/O.
+func (d *DB) scanRecipeRows(ctx context.Context, rows pgx.Rows, label string) ([]*solver.RecipeRow, error) {
+	defer rows.Close()
 	var recipes []*solver.RecipeRow
 	for rows.Next() {
 		r := &solver.RecipeRow{}
 		if err := rows.Scan(&r.ID, &r.MachineMod, &r.MachineID,
 			&r.DurationTicks, &r.EUPerTick, &r.TotalEU); err != nil {
-			return nil, fmt.Errorf("db: get recipes for fluid: %w", err)
+			return nil, fmt.Errorf("db: %s: %w", label, err)
 		}
 		recipes = append(recipes, r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("db: get recipes for fluid: %w", err)
+		return nil, fmt.Errorf("db: %s: %w", label, err)
 	}
-
 	for _, r := range recipes {
 		if err := d.loadRecipeIO(ctx, r); err != nil {
-			return nil, fmt.Errorf("db: get recipes for fluid: %w", err)
+			return nil, fmt.Errorf("db: %s: %w", label, err)
 		}
 	}
 	return recipes, nil

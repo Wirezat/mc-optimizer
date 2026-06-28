@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -49,8 +48,7 @@ func CreatePLGroupHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			Name string `json:"name"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		body.Name = strings.TrimSpace(body.Name)
@@ -90,8 +88,7 @@ func RenamePLGroupHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			Name string `json:"name"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		body.Name = strings.TrimSpace(body.Name)
@@ -162,8 +159,7 @@ func SetPLGroupHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			GroupID *uuid.UUID `json:"group_id"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 

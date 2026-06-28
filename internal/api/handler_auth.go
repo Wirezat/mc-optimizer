@@ -89,8 +89,7 @@ func RegisterHandler(database *db.DB) http.HandlerFunc {
 			Username string `json:"username"`
 			Password string `json:"password"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 		req.Username = strings.TrimSpace(req.Username)
@@ -150,8 +149,7 @@ func LoginHandler(database *db.DB) http.HandlerFunc {
 			Username string `json:"username"`
 			Password string `json:"password"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 		req.Username = strings.TrimSpace(req.Username)
@@ -181,8 +179,7 @@ func RefreshHandler(database *db.DB) http.HandlerFunc {
 		var req struct {
 			RefreshToken string `json:"refresh_token"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 		if req.RefreshToken == "" {

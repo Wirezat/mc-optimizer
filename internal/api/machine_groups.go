@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -34,8 +33,7 @@ func UpdateMachineGroupStatusHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			Status string `json:"status"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		switch body.Status {
@@ -82,8 +80,7 @@ func UpdateMachineGroupUpgradesHandler(database *db.DB, svc *service.PLService) 
 			UpgradeTierID *string `json:"upgrade_tier_id"`
 			UpgradeCount  int     `json:"upgrade_count"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		var tierID *uuid.UUID

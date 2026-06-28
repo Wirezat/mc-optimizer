@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"maps"
 	"net/http"
@@ -229,8 +228,7 @@ func CreateFactoryHandler(database *db.DB) http.HandlerFunc {
 			Name string `json:"name"`
 			Src  bool   `json:"src"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		body.Name = strings.TrimSpace(body.Name)
@@ -300,8 +298,7 @@ func UpdateFactoryHandler(database *db.DB) http.HandlerFunc {
 			Name *string `json:"name"`
 			Src  *bool   `json:"src"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		if body.Name != nil {

@@ -1,5 +1,9 @@
 export * from '/static/ui/js/i18n.js';
 
+export function esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 let _mi = {};
 
 export async function loadMI(lang) {

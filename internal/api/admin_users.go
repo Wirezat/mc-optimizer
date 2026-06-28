@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -70,8 +69,7 @@ func UpdateUserHandler(database *db.DB) http.HandlerFunc {
 			Username *string `json:"username"`
 			IsAdmin  *bool   `json:"is_admin"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 

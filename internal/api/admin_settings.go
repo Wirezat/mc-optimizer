@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/Wirezat/production-optimizer/internal/db"
@@ -29,8 +28,7 @@ func UpdateAdminSettingsHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			RegistrationEnabled *bool `json:"registration_enabled"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		if body.RegistrationEnabled != nil {

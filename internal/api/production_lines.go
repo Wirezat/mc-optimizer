@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -74,8 +73,7 @@ func DiscoverHandler(database *db.DB) http.HandlerFunc {
 			TagOverrides    map[string]string `json:"TagOverrides"`
 			StopPoints      map[string]bool   `json:"StopPoints"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 		if req.TargetItem.TagRef == "" && (req.TargetItem.ModID == "" || req.TargetItem.ItemID == "") {
@@ -157,8 +155,7 @@ func SolveHandler(database *db.DB, svc *service.PLService) http.HandlerFunc {
 		}
 
 		var req solver.SolveRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &req) {
 			return
 		}
 		if req.TargetItem.TagRef == "" && (req.TargetItem.ModID == "" || req.TargetItem.ItemID == "") {
@@ -281,8 +278,7 @@ func ConfirmProductionLineHandler(database *db.DB, svc *service.PLService) http.
 			DraftID string `json:"draft_id"`
 			Name    string `json:"name"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		draftID, err := uuid.Parse(strings.TrimSpace(body.DraftID))
@@ -396,8 +392,7 @@ func UpdateProductionLineStatusHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			Status string `json:"status"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		if body.Status != "archived" && body.Status != "active" {
@@ -436,8 +431,7 @@ func ResolveProductionLineHandler(database *db.DB, svc *service.PLService) http.
 			UpgradeTier  string           `json:"upgrade_tier"`
 			UpgradeCount int              `json:"upgrade_count"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		detail, err := svc.Resolve(r.Context(), plID, service.ResolveInput{
@@ -528,8 +522,7 @@ func RenamePLHandler(database *db.DB) http.HandlerFunc {
 		var body struct {
 			Name string `json:"name"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		body.Name = strings.TrimSpace(body.Name)

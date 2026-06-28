@@ -242,8 +242,8 @@
 
 <script type="module">
   import { guard, apiFetch } from '/static/ui/js/auth.js';
-  import { load, applyI18n, getLang, t } from '/static/js/i18n.js';
-  import { machine as machineName, loadMI } from '/static/js/i18n.js';
+  import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
+  import { machine as machineName, loadMI , esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
 
   const _lang = getLang();
@@ -559,9 +559,6 @@
     return [n / g, d / g];
   }
 
-  function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
 
   init();
 </script>

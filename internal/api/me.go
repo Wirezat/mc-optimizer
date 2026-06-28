@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -41,8 +40,7 @@ func ChangeUsernameHandler(database *db.DB) http.HandlerFunc {
 		uid := userIDFromContext(r.Context())
 
 		var body req
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		if len(body.NewUsername) < 3 {
@@ -76,8 +74,7 @@ func ChangePasswordHandler(database *db.DB) http.HandlerFunc {
 		uid := userIDFromContext(r.Context())
 
 		var body req
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			errBadRequest(w, "invalid JSON")
+		if !decodeJSON(w, r, &body) {
 			return
 		}
 		if len(body.NewPassword) < 8 {

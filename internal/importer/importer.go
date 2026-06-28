@@ -79,6 +79,24 @@ func New(db ImporterDB, assetsDir string) *Importer {
 func (imp *Importer) Run(ctx context.Context, jarPaths []string) (Result, error) {
 	res := Result{JARs: jarPaths}
 
+	// Determine which mods are present in this import set before importing any
+	// recipes. Conditional recipe-type mappings (e.g. vanilla smelting also
+	// running in the MI furnace) must only apply when the target mod is
+	// actually being imported — otherwise we'd create recipes for machines
+	// that don't exist. minecraft is always considered present.
+	presentMods := map[string]bool{"minecraft": true}
+	for _, jarPath := range jarPaths {
+		_ = WalkJAR(jarPath, func(e WalkEntry) error {
+			if e.Category != "mod_meta" {
+				return nil
+			}
+			if mid, _, _, err := ReadModMeta(e); err == nil && mid != "" {
+				presentMods[mid] = true
+			}
+			return nil
+		})
+	}
+
 	rawTags := make(map[string]*TagFileData)
 
 	// langData accumulates ALL language entries keyed by lang code.
@@ -107,7 +125,7 @@ func (imp *Importer) Run(ctx context.Context, jarPaths []string) (Result, error)
 		err := WalkJAR(jarPath, func(e WalkEntry) error {
 			switch e.Category {
 			case "recipe":
-				imported, skip, fw, w := imp.importRecipe(ctx, e)
+				imported, skip, fw, w := imp.importRecipe(ctx, e, presentMods)
 				if fw != nil {
 					res.FieldWarnings = append(res.FieldWarnings, *fw)
 				}
@@ -363,7 +381,7 @@ func (imp *Importer) Run(ctx context.Context, jarPaths []string) (Result, error)
 
 // importRecipe parses and imports one recipe entry.
 // Returns (imported, skipped, fieldWarning, warning).
-func (imp *Importer) importRecipe(ctx context.Context, e WalkEntry) (imported, skipped bool, fw *FieldWarning, warn string) {
+func (imp *Importer) importRecipe(ctx context.Context, e WalkEntry, presentMods map[string]bool) (imported, skipped bool, fw *FieldWarning, warn string) {
 	rc, err := e.Open()
 	if err != nil {
 		return false, false, nil, fmt.Sprintf("open %s: %v", e.FullPath, err)
@@ -387,17 +405,30 @@ func (imp *Importer) importRecipe(ctx context.Context, e WalkEntry) (imported, s
 		if !parser.Accepts(recipeType) {
 			continue
 		}
-		modID, machineID, ok := ResolveRecipeType(recipeType)
+		mappings, ok := ResolveRecipeType(recipeType)
 		if !ok {
 			return false, false, nil, fmt.Sprintf("no machine mapping for %q in %s", recipeType, e.FullPath)
 		}
-		norm, err := parser.Decode(data, modID, machineID, e.FullPath)
-		if err != nil {
-			return false, false, nil, fmt.Sprintf("decode %s: %v", e.FullPath, err)
-		}
-		didImport, err := imp.db.ImportRecipe(ctx, norm)
-		if err != nil {
-			return false, false, nil, fmt.Sprintf("db error for %s: %v", e.FullPath, err)
+		// A recipe type can belong to several machines (e.g. vanilla smelting
+		// is consumed by both the furnace and the MI furnace). Emit one recipe
+		// per mapping; the recipe counts as imported if any mapping imported it.
+		// Skip cross-mod mappings whose target mod isn't part of this import set;
+		// the recipe's own namespace is always kept as the primary resolution.
+		for _, m := range mappings {
+			if m.modID != e.Namespace && !presentMods[m.modID] {
+				continue
+			}
+			norm, err := parser.Decode(data, m.modID, m.machineID, e.FullPath)
+			if err != nil {
+				return false, false, nil, fmt.Sprintf("decode %s: %v", e.FullPath, err)
+			}
+			didImport, err := imp.db.ImportRecipe(ctx, norm)
+			if err != nil {
+				return false, false, nil, fmt.Sprintf("db error for %s: %v", e.FullPath, err)
+			}
+			if didImport {
+				imported = true
+			}
 		}
 		if unknown := unknownFields(data, parser); len(unknown) > 0 {
 			var pretty []byte
@@ -413,7 +444,7 @@ func (imp *Importer) importRecipe(ctx context.Context, e WalkEntry) (imported, s
 				RawJSON:       string(pretty),
 			}
 		}
-		return didImport, false, fw, ""
+		return imported, false, fw, ""
 	}
 
 	return false, false, nil, fmt.Sprintf("unknown type %q in %s", recipeType, e.FullPath)

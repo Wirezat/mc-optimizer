@@ -9,6 +9,7 @@
   <style>
     .tile-src { border-style: dashed; }
     .tile-src:hover { border-style: solid; }
+
   </style>
   <script>
     (function(){
@@ -92,13 +93,11 @@
             data-i18n-placeholder="save.modal.name_placeholder"
             autocomplete="off" />
         </div>
-        <label class="field" style="flex-direction:row;align-items:center;gap:var(--gap-control);cursor:pointer;">
-          <input type="checkbox" id="factory-src" />
+        <div class="field" style="flex-direction:row;align-items:center;gap:var(--gap-control);">
           <span class="field-label" style="margin:0" data-i18n="save.modal.src_label"></span>
-          <span class="badge badge-accent" style="margin-left:auto" data-i18n="save.src_label"></span>
-        </label>
-        <div id="src-hint" class="field-caption" style="display:none;padding-left:20px"
-          data-i18n="save.modal.src_hint"></div>
+          <button class="btn btn-ghost btn-sm" id="mode-btn" style="margin-left:auto;"></button>
+        </div>
+        <div id="src-hint" class="field-caption"></div>
         <span class="status-msg" id="status-create"></span>
       </div>
       <div class="modal-footer">
@@ -127,9 +126,16 @@
   document.getElementById('new-factory-btn-empty').addEventListener('click', openModal);
   document.getElementById('modal-ok-btn').addEventListener('click', doCreate);
   document.getElementById('factory-name').addEventListener('keydown', e => { if (e.key === 'Enter') doCreate(); });
-  document.getElementById('factory-src').addEventListener('change', function() {
-    document.getElementById('src-hint').style.display = this.checked ? '' : 'none';
-  });
+  let _srcMode = false;
+
+  function setSrcMode(src) {
+    _srcMode = src;
+    const btn = document.getElementById('mode-btn');
+    btn.textContent = src ? t('factory.mode.manual') : t('factory.mode.auto');
+    document.getElementById('src-hint').textContent = src ? t('save.modal.src_hint') : t('save.modal.auto_hint');
+  }
+
+  document.getElementById('mode-btn').addEventListener('click', () => setSrcMode(!_srcMode));
 
   // ── Load save metadata ────────────────────────────────────────────────────
   async function loadSave() {
@@ -188,8 +194,7 @@
   // ── Create factory ────────────────────────────────────────────────────────
   function openModal() {
     document.getElementById('factory-name').value = '';
-    document.getElementById('factory-src').checked = false;
-    document.getElementById('src-hint').style.display = 'none';
+    setSrcMode(false);
     document.getElementById('status-create').className = 'status-msg';
     document.getElementById('status-create').textContent = '';
     document.querySelector('[data-wui-modal]').classList.add('open');
@@ -198,7 +203,7 @@
 
   async function doCreate() {
     const name = document.getElementById('factory-name').value.trim();
-    const src  = document.getElementById('factory-src').checked;
+    const src  = _srcMode;
     if (!name) { showStatus('err', t('msg.name_required')); return; }
     const res = await apiFetch('/api/saves/' + _saveID + '/factories', {
       method: 'POST',

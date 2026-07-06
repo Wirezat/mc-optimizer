@@ -1,0 +1,3 @@
+[submodule "web/static/ui"]
+	path = web/static/ui
+	url = git@github.com:Wirezat/wirezatui.git

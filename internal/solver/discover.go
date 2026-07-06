@@ -7,18 +7,25 @@ type RecipeOption struct {
 	RecipeID   string
 	MachineMod string
 	MachineID  string
-	Inputs     []string // "item_id", "#tag_name", or "~fluid_id", first 4
-	Outputs    []string // same format, first 4
+	// Key uniquely identifies this (recipe, machine) choice — use this, not
+	// RecipeID, as the override value sent back to the server. RecipeID alone
+	// is ambiguous when a recipe is reachable via multiple machine tiers
+	// (bronze/steel/electric all implementing the same base recipe).
+	Key     string
+	Inputs  []string // "item_id", "#tag_name", or "~fluid_id", first 4
+	Outputs []string // same format, first 4
 }
 
 // ChainItem is one node in the discovered production chain.
 type ChainItem struct {
-	Item           ItemRef
-	Level          int            // depth from root (root = 0)
-	Options        []RecipeOption // empty = raw material
-	ChosenRecipeID string         // selected recipe (first or user override)
-	IsStop         bool
-	IsRawMaterial  bool
+	Item             ItemRef
+	Level            int            // depth from root (root = 0)
+	Options          []RecipeOption // empty = raw material
+	ChosenRecipeID   string         // selected recipe (first or user override)
+	ChosenMachineMod string         // machine actually chosen to run it (may be a tier variant)
+	ChosenMachineID  string
+	IsStop           bool
+	IsRawMaterial    bool
 }
 
 // DiscoverResult is the output of Discover.
@@ -123,6 +130,7 @@ func (s *Solver) Discover(
 				RecipeID:   r.ID,
 				MachineMod: r.MachineMod,
 				MachineID:  r.MachineID,
+				Key:        RecipeOptionKey(r.ID, r.MachineMod, r.MachineID),
 			}
 			for _, in := range r.ItemInputs {
 				if len(opt.Inputs) >= 4 {
@@ -159,7 +167,7 @@ func (s *Solver) Discover(
 
 		// Only follow a recipe if the user explicitly chose one.
 		// No override → stop here by default.
-		overrideID, hasOverride := recipeOverrides[key]
+		overrideKey, hasOverride := recipeOverrides[key]
 		if !hasOverride {
 			ci.IsStop = true
 			res.Items = append(res.Items, ci)
@@ -167,8 +175,10 @@ func (s *Solver) Discover(
 		}
 
 		for _, r := range recipes {
-			if r.ID == overrideID {
+			if RecipeOptionKey(r.ID, r.MachineMod, r.MachineID) == overrideKey {
 				ci.ChosenRecipeID = r.ID
+				ci.ChosenMachineMod = r.MachineMod
+				ci.ChosenMachineID = r.MachineID
 				for _, in := range r.ItemInputs {
 					var ref ItemRef
 					if in.TagName != nil {

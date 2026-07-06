@@ -3,6 +3,7 @@ package solver
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // Edge represents a directed connection between a recipe node and an item or fluid.
@@ -28,6 +29,35 @@ type RecipeNode struct {
 	IsStopPoint       bool
 	IsRawMaterial     bool
 	IsFactoryProvided bool
+}
+
+// RateKey identifies this node's (recipe, machine) pair for rate-tracking purposes.
+// A bare RecipeID is NOT enough: tier variants (e.g. a bronze machine implementing
+// an electric base type via machine_interfaces) share the same RecipeID but must be
+// tracked — and later costed — as distinct machine choices.
+func (n *RecipeNode) RateKey() string {
+	return RecipeOptionKey(n.RecipeID, n.MachineMod, n.MachineID)
+}
+
+// RecipeOptionKey uniquely identifies a (recipe, machine) choice. Recipes may be
+// reachable via more than one machine (tier variants sharing a recipe row through
+// machine_interfaces), so the recipe ID alone cannot disambiguate which machine
+// was actually chosen to run it.
+func RecipeOptionKey(recipeID, machineMod, machineID string) string {
+	return recipeID + "@" + machineMod + ":" + machineID
+}
+
+// ParseRecipeOptionKey splits a RecipeOptionKey back into its parts.
+func ParseRecipeOptionKey(key string) (recipeID, machineMod, machineID string, ok bool) {
+	recipeID, rest, ok := strings.Cut(key, "@")
+	if !ok {
+		return "", "", "", false
+	}
+	machineMod, machineID, ok = strings.Cut(rest, ":")
+	if !ok {
+		return "", "", "", false
+	}
+	return recipeID, machineMod, machineID, true
 }
 
 // RecipeGraph maps item keys to RecipeNode and stores the root item.
@@ -120,7 +150,7 @@ func (s *Solver) BuildRecipeGraph(
 			}
 			selected := (*RecipeRow)(nil)
 			for _, r := range recipes {
-				if r.ID == overrideID {
+				if RecipeOptionKey(r.ID, r.MachineMod, r.MachineID) == overrideID {
 					selected = r
 					break
 				}
@@ -156,7 +186,7 @@ func (s *Solver) BuildRecipeGraph(
 		selected := recipes[0]
 		if overrideID, ok := overrides[key]; ok {
 			for _, r := range recipes {
-				if r.ID == overrideID {
+				if RecipeOptionKey(r.ID, r.MachineMod, r.MachineID) == overrideID {
 					selected = r
 					break
 				}
@@ -275,4 +305,3 @@ func outputAmountForFluid(r *RecipeRow, item ItemRef) (Rational, bool) {
 	}
 	return Rational{}, false
 }
-

@@ -107,6 +107,7 @@
   let modNames    = {};
   let filtered    = [];
   let rendered    = 0;
+  let groupCounts = {};
 
 
   function applyCollapseState() {
@@ -129,18 +130,17 @@
       if (m.mod_id !== lastMod) {
         lastMod = m.mod_id;
         const modName = modNames[m.mod_id] || m.mod_id;
-        html += `<tr class="table-group-hd"><td colspan="5"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a></td></tr>`;
+        html += `<tr class="table-group-hd collapsed"><td colspan="5"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${groupCounts[m.mod_id] || 0}</span></td></tr>`;
       }
       const energyVal  = m.max_eu_per_tick || '';
       const recipesUrl = `/catalog/recipes?mod=${encodeURIComponent(m.mod_id)}&machine=${encodeURIComponent(m.machine_id)}`;
-      const itemsUrl   = `/catalog/items?mod=${encodeURIComponent(m.mod_id)}`;
       const energyCell = admin
         ? `<span class="energy-edit td-muted" contenteditable="false"
              data-mod-id="${esc(m.mod_id)}" data-machine-id="${esc(m.machine_id)}"
              data-placeholder="—">${esc(energyVal)}</span>`
         : `<span class="td-muted">${energyVal || '—'}</span>`;
       html += `<tr>
-        <td><a href="${esc(itemsUrl)}" class="row-name-link">${esc(m.name || m.machine_id)}</a></td>
+        <td><a href="${esc(recipesUrl)}" class="row-name-link">${esc(m.name || m.machine_id)}</a></td>
         <td class="td-mono td-muted">${esc(m.machine_id)}</td>
         <td>${energyCell}</td>
         <td><span class="badge badge-neutral">${esc(m.energy_type || '—')}</span></td>
@@ -159,6 +159,8 @@
     filtered = urlMod ? allMachines.filter(m => m.mod_id === urlMod) : allMachines;
     if (q) filtered = filtered.filter(m => wuiFilter(m, q, ['name', 'machine_id', 'mod_name', 'energy_type', 'max_eu_per_tick']));
     countEl.textContent = filtered.length + ' machine' + (filtered.length !== 1 ? 's' : '');
+    groupCounts = {};
+    for (const m of filtered) groupCounts[m.mod_id] = (groupCounts[m.mod_id] || 0) + 1;
     rendered = 0;
     tbody.innerHTML = '';
     if (!filtered.length) {

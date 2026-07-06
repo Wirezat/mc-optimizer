@@ -13,6 +13,7 @@ type Mod struct {
 	URLIssues    *string `json:"url_issues,omitempty"`
 	URLDiscord   *string `json:"url_discord,omitempty"`
 	ModrinthSlug *string `json:"modrinth_slug,omitempty"`
+	RecipeCount  int     `json:"recipe_count"`
 }
 
 // ModUpdate carries the fields an admin may overwrite on a mod.

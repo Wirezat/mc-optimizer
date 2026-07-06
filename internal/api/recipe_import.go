@@ -2,120 +2,95 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/importer"
 )
 
-// ImportJARHandler accepts one or more JAR file uploads and imports all recipes,
-// translations, tags, textures, block loot tables, and villager trades from them.
-// Content-Type: multipart/form-data; field name "jar" (repeatable)
-func ImportJARHandler(database *db.DB, assetsDir string) http.HandlerFunc {
+// ImportModFileHandler accepts one or more modfile ZIP uploads and imports them.
+// Content-Type: multipart/form-data; field name "modfile" (repeatable)
+func ImportModFileHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// JAR imports can be large and slow — extend per-request deadlines.
 		rc := http.NewResponseController(w)
-		_ = rc.SetReadDeadline(time.Now().Add(30 * time.Minute))
-		_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Minute))
+		_ = rc.SetReadDeadline(time.Now().Add(10 * time.Minute))
+		_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Minute))
 
-		// Allow up to 512 MiB total for multi-JAR uploads.
-		if err := r.ParseMultipartForm(512 << 20); err != nil {
-			errBadRequest(w, "invalid multipart form (max 512 MiB)")
+		if err := r.ParseMultipartForm(64 << 20); err != nil {
+			errBadRequest(w, "invalid multipart form (max 64 MiB)")
 			return
 		}
-
-		headers := r.MultipartForm.File["jar"]
+		headers := r.MultipartForm.File["modfile"]
 		if len(headers) == 0 {
-			errBadRequest(w, "missing 'jar' file field")
+			errBadRequest(w, "missing 'modfile' file field")
 			return
 		}
 
-		var tmpPaths []string
-		var origNames []string
-		defer func() {
-			for _, p := range tmpPaths {
-				os.Remove(p)
-			}
-		}()
-
+		var results []importer.ModFileResult
 		for _, h := range headers {
 			f, err := h.Open()
 			if err != nil {
 				errInternal(w, fmt.Errorf("open upload %s: %w", h.Filename, err))
 				return
 			}
-			tmp, err := os.CreateTemp("", "mc-jar-*.jar")
+			tmp, err := os.CreateTemp("", "mc-modfile-*.zip")
 			if err != nil {
 				f.Close()
 				errInternal(w, fmt.Errorf("create temp file: %w", err))
 				return
 			}
+			tmpName := tmp.Name()
 			_, copyErr := tmp.ReadFrom(f)
 			f.Close()
 			tmp.Close()
+			defer os.Remove(tmpName)
+
+			// Archive the uploaded ZIP in assetsDir/uploads/ for operator reference.
+			base := strings.TrimSuffix(filepath.Base(h.Filename), ".zip")
+			archiveName := fmt.Sprintf("%s_%d.zip", base, time.Now().Unix())
+			archiveDir := filepath.Join(assetsDir, "uploads")
+			_ = os.MkdirAll(archiveDir, 0o755)
+			if src, err2 := os.Open(tmpName); err2 == nil {
+				if dst, err3 := os.Create(filepath.Join(archiveDir, archiveName)); err3 == nil {
+					_, _ = io.Copy(dst, src)
+					dst.Close()
+				}
+				src.Close()
+			}
 			if copyErr != nil {
-				errInternal(w, fmt.Errorf("write temp file for %s: %w", h.Filename, copyErr))
+				errInternal(w, fmt.Errorf("write temp file %s: %w", h.Filename, copyErr))
 				return
 			}
-			tmpPaths = append(tmpPaths, tmp.Name())
-			origNames = append(origNames, h.Filename)
-		}
 
-		imp := importer.New(database, assetsDir)
-		result, err := imp.Run(r.Context(), tmpPaths)
-		if err != nil {
-			errInternal(w, fmt.Errorf("import: %w", err))
-			return
+			imp := importer.New(database, assetsDir)
+			result, err := imp.RunModFile(r.Context(), tmpName)
+			if err != nil {
+				errInternal(w, fmt.Errorf("modfile import %s: %w", h.Filename, err))
+				return
+			}
+			results = append(results, result)
 		}
-
-		result.JARs = origNames
-		writeJSON(w, http.StatusOK, result)
+		writeJSON(w, http.StatusOK, results)
 	}
 }
 
-// ImportStatusHandler returns which root mod namespaces are present in the catalog.
+// ImportStatusHandler returns total mod count and presence of core namespaces.
 func ImportStatusHandler(database *db.DB) http.HandlerFunc {
 	type status struct {
-		Minecraft bool `json:"minecraft"`
-		Forge     bool `json:"forge"`
-		NeoForge  bool `json:"neoforge"`
-		Fabric    bool `json:"fabric"` // "c" namespace
-		TotalMods int  `json:"total_mods"`
+		TotalMods int `json:"total_mods"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		rows, err := database.Pool.Query(r.Context(), `SELECT mod_id FROM mods`)
+		var n int
+		err := database.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM mods`).Scan(&n)
 		if err != nil {
 			errInternal(w, err)
 			return
 		}
-		defer rows.Close()
-
-		s := status{}
-		for rows.Next() {
-			var modID string
-			if err := rows.Scan(&modID); err != nil {
-				errInternal(w, err)
-				return
-			}
-			s.TotalMods++
-			switch modID {
-			case "minecraft":
-				s.Minecraft = true
-			case "forge":
-				s.Forge = true
-			case "neoforge":
-				s.NeoForge = true
-			case "c":
-				s.Fabric = true
-			}
-		}
-		if err := rows.Err(); err != nil {
-			errInternal(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, s)
+		writeJSON(w, http.StatusOK, status{TotalMods: n})
 	}
 }
-

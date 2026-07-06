@@ -1,19 +1,6 @@
 package importer
 
-import (
-	"fmt"
-	"math"
-	"strings"
-)
-
-// SplitTypeField splits "mod_id:machine_id" into its two components.
-func SplitTypeField(s string) (modID, machineID string, err error) {
-	parts := strings.SplitN(s, ":", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("invalid type %q: expected mod_id:machine_id", s)
-	}
-	return parts[0], parts[1], nil
-}
+import "math"
 
 // ProbToRational converts a float64 probability to an exact integer rational (num/den).
 // Tries denominators up to 10 000 for an exact match; falls back to rounding.

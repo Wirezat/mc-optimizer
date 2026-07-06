@@ -97,6 +97,7 @@
   function itemCell(modID, itemID, name, count) {
     const label = esc(name || itemID);
     const countPrefix = count > 1 ? `<span class="td-mono td-muted" style="font-size:var(--text-sm);margin-right:4px;">${count}×</span>` : '';
+    const recipesUrl = `/catalog/recipes?item=${encodeURIComponent(modID + ':' + itemID)}`;
     return `${countPrefix}<span class="infocard-trigger" data-infocard-inline>${label}</span>
       <div class="infocard-def" hidden>
         <div class="infocard-header"><div class="infocard-heading">
@@ -104,7 +105,7 @@
           <span class="infocard-subtitle">${esc(modID)}:${esc(itemID)}</span>
         </div></div>
         <div class="infocard-section">
-          <a href="/catalog/items" class="catalog-link" data-i18n="catalog.trades.detail.catalog_link"></a>
+          <a href="${esc(recipesUrl)}" class="catalog-link" data-i18n="catalog.trades.detail.catalog_link"></a>
         </div>
       </div>`;
   }
@@ -121,12 +122,15 @@
       return;
     }
 
+    const groupCounts = {};
+    for (const tr of trades) groupCounts[tr.profession] = (groupCounts[tr.profession] || 0) + 1;
+
     let html = '';
     let lastProf = null;
     for (const tr of trades) {
       if (tr.profession !== lastProf) {
         lastProf = tr.profession;
-        html += `<tr class="table-group-hd"><td colspan="6"><span class="group-toggle"></span>${esc(tr.profession)}</td></tr>`;
+        html += `<tr class="table-group-hd collapsed"><td colspan="6"><span class="group-toggle"></span>${esc(tr.profession)}<span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${groupCounts[tr.profession]}</span></td></tr>`;
       }
       const enchanted = tr.result_modified ? ' ✨' : '';
       html += `<tr>
@@ -141,6 +145,7 @@
     tbody.innerHTML = html;
     applyI18n(tbody);
     initInfocards();
+    applyCollapseState();
   }
 
   function applyCollapseState() {

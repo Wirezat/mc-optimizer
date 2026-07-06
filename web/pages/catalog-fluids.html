@@ -96,6 +96,7 @@
   let modNames  = {};
   let filtered  = [];
   let rendered  = 0;
+  let groupCounts = {};
 
 
   function renderChunk() {
@@ -107,7 +108,7 @@
       if (fluid.mod_id !== lastMod) {
         lastMod = fluid.mod_id;
         const modName = modNames[fluid.mod_id] || fluid.mod_id;
-        html += `<tr class="table-group-hd"><td colspan="2"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a></td></tr>`;
+        html += `<tr class="table-group-hd collapsed"><td colspan="2"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${groupCounts[fluid.mod_id] || 0}</span></td></tr>`;
       }
       html += `<tr>
         <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>
@@ -127,6 +128,8 @@
     filtered = urlMod ? allFluids.filter(f => f.mod_id === urlMod) : allFluids;
     if (q) filtered = filtered.filter(f => wuiFilter(f, q, ['name', 'fluid_id', 'mod_name']));
     countEl.textContent = filtered.length + ' fluid' + (filtered.length !== 1 ? 's' : '');
+    groupCounts = {};
+    for (const f of filtered) groupCounts[f.mod_id] = (groupCounts[f.mod_id] || 0) + 1;
     rendered = 0;
     tbody.innerHTML = '';
     if (!filtered.length) {

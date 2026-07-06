@@ -23,6 +23,7 @@ const LABELS = () => ({
   logout:   t('header.logout'),
   admin:    t('header.role_admin'),
   user:     t('header.role_user'),
+  demo:     t('header.demo'),
 });
 
 export function init() {

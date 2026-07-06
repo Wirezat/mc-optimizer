@@ -36,7 +36,11 @@ CREATE TABLE production_lines (
     time_unit      TEXT    NOT NULL CHECK (time_unit IN ('t', 's', 'min', 'h')),
     optimize_mode  TEXT    NOT NULL CHECK (optimize_mode IN ('TARGET', 'AUTO')),
     status         TEXT    NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')),
-    position       TEXT    NOT NULL DEFAULT 'V'
+    position       TEXT    NOT NULL DEFAULT 'V',
+    -- The original SolveRequest, persisted so the PL can be re-solved later (e.g.
+    -- "more output": re-run the solver at a higher target rate, reusing the same
+    -- recipe choices). Stop points etc. are implied by the stored request.
+    solve_request  JSONB
 );
 
 CREATE INDEX ON production_lines (factory_id, status);
@@ -56,15 +60,20 @@ CREATE TABLE pl_io (
 CREATE INDEX ON pl_io (pl_id, direction);
 
 CREATE TABLE machine_groups (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    pl_id           UUID NOT NULL REFERENCES production_lines(id) ON DELETE CASCADE,
-    machine_mod_id  TEXT NOT NULL,
-    machine_id      TEXT NOT NULL,
-    recipe_id       UUID NOT NULL REFERENCES recipes(id),
-    count           INT  NOT NULL,
-    upgrade_tier_id UUID REFERENCES upgrade_tiers(id),
-    upgrade_count   INT  NOT NULL DEFAULT 0,
-    status          TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'planned', 'built', 'archived')),
+    id              UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
+    pl_id           UUID   NOT NULL REFERENCES production_lines(id) ON DELETE CASCADE,
+    machine_mod_id  TEXT   NOT NULL,
+    machine_id      TEXT   NOT NULL,
+    recipe_id       UUID   NOT NULL REFERENCES recipes(id),
+    count           INT    NOT NULL,
+    upgrade_tier_id UUID   REFERENCES upgrade_tiers(id),
+    upgrade_count   INT    NOT NULL DEFAULT 0,
+    status          TEXT   NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'planned', 'built', 'archived')),
+    -- Fractional exact machine count (rational num/den), mirroring
+    -- solver.MachineGroupDraft.ExactCount — lets upgrade edits recompute the count
+    -- from the true required rate (lossless) instead of from the rounded count.
+    exact_count_num BIGINT NOT NULL DEFAULT 0,
+    exact_count_den BIGINT NOT NULL DEFAULT 1,
     FOREIGN KEY (machine_mod_id, machine_id) REFERENCES machine_types(mod_id, machine_id)
 );
 

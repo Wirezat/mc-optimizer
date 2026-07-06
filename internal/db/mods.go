@@ -131,12 +131,13 @@ func (d *DB) LookupMachineNames(ctx context.Context, machines []solver.MachineRe
 // ListMods returns all mods ordered by name, including optional Modrinth metadata.
 func (d *DB) ListMods(ctx context.Context) ([]*model.Mod, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT mod_id, name, energy_type,
-		       description, author, license,
-		       url_source, url_modrinth, url_wiki, url_issues, url_discord,
-		       modrinth_slug
-		FROM mods
-		ORDER BY name
+		SELECT m.mod_id, m.name, m.energy_type,
+		       m.description, m.author, m.license,
+		       m.url_source, m.url_modrinth, m.url_wiki, m.url_issues, m.url_discord,
+		       m.modrinth_slug,
+		       (SELECT COUNT(*) FROM recipes r WHERE r.machine_mod_id = m.mod_id) AS recipe_count
+		FROM mods m
+		ORDER BY m.name
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("db: list mods: %w", err)
@@ -150,7 +151,7 @@ func (d *DB) ListMods(ctx context.Context) ([]*model.Mod, error) {
 			&m.ModID, &m.Name, &m.EnergyType,
 			&m.Description, &m.Author, &m.License,
 			&m.URLSource, &m.URLModrinth, &m.URLWiki, &m.URLIssues, &m.URLDiscord,
-			&m.ModrinthSlug,
+			&m.ModrinthSlug, &m.RecipeCount,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan mod: %w", err)
 		}
@@ -425,10 +426,23 @@ func (d *DB) ListAllItems(ctx context.Context) ([]*model.Item, error) {
 // ListAllFluids returns all fluids across all mods with translated names, ordered by mod then name.
 func (d *DB) ListAllFluids(ctx context.Context) ([]*model.Fluid, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT f.mod_id, f.fluid_id, COALESCE(t.name, '')
-		FROM fluids f
-		LEFT JOIN translations t ON t.lang = 'en_us' AND t.lang_key = 'fluid.' || f.mod_id || '.' || f.fluid_id
-		ORDER BY f.mod_id, COALESCE(t.name, f.fluid_id)
+		SELECT mod_id, fluid_id, name FROM (
+			SELECT f.mod_id, f.fluid_id,
+			       -- fluid_id sometimes carries its own "mod:id" namespace (e.g. a
+			       -- cross-mod vanilla fluid registered under another mod's fluids:
+			       -- list, like "minecraft:water" under modern_industrialization) —
+			       -- look up translations under THAT namespace, not mod_id+fluid_id.
+			       COALESCE((SELECT t.name FROM translations t WHERE t.lang = 'en_us' AND t.lang_key IN (
+			           'fluid.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END,
+			           'block.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END,
+			           'item.'  || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END
+			       ) LIMIT 1), '') AS name
+			FROM fluids f
+		) sub
+		ORDER BY mod_id, COALESCE(NULLIF(name, ''), fluid_id)
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("db: list all fluids: %w", err)
@@ -449,11 +463,20 @@ func (d *DB) ListAllFluids(ctx context.Context) ([]*model.Fluid, error) {
 // ListFluidsByMod returns all fluids for modID ordered by fluid_id.
 func (d *DB) ListFluidsByMod(ctx context.Context, modID string) ([]*model.Fluid, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT f.mod_id, f.fluid_id, COALESCE(t.name, '')
-		FROM fluids f
-		LEFT JOIN translations t ON t.lang = 'en_us' AND t.lang_key = 'fluid.' || f.mod_id || '.' || f.fluid_id
-		WHERE f.mod_id = $1
-		ORDER BY COALESCE(t.name, f.fluid_id)
+		SELECT mod_id, fluid_id, name FROM (
+			SELECT f.mod_id, f.fluid_id,
+			       COALESCE((SELECT t.name FROM translations t WHERE t.lang = 'en_us' AND t.lang_key IN (
+			           'fluid.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END,
+			           'block.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END,
+			           'item.'  || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END
+			       ) LIMIT 1), '') AS name
+			FROM fluids f
+			WHERE f.mod_id = $1
+		) sub
+		ORDER BY COALESCE(NULLIF(name, ''), fluid_id)
 	`, modID)
 	if err != nil {
 		return nil, fmt.Errorf("db: list fluids by mod: %w", err)
@@ -474,11 +497,20 @@ func (d *DB) ListFluidsByMod(ctx context.Context, modID string) ([]*model.Fluid,
 // offset is used for pagination (ring-buffer / infinite scroll on the frontend).
 func (d *DB) SearchFluids(ctx context.Context, q string, offset int) ([]*model.Fluid, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT f.mod_id, f.fluid_id, COALESCE(t.name, '')
-		FROM fluids f
-		LEFT JOIN translations t ON t.lang = 'en_us' AND t.lang_key = 'fluid.' || f.mod_id || '.' || f.fluid_id
-		WHERE $1 = '' OR t.name ILIKE '%' || $1 || '%' OR f.fluid_id ILIKE '%' || $1 || '%'
-		ORDER BY COALESCE(t.name, f.fluid_id), f.mod_id
+		SELECT mod_id, fluid_id, name FROM (
+			SELECT f.mod_id, f.fluid_id,
+			       COALESCE((SELECT t.name FROM translations t WHERE t.lang = 'en_us' AND t.lang_key IN (
+			           'fluid.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END,
+			           'block.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END,
+			           'item.'  || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END
+			       ) LIMIT 1), '') AS name
+			FROM fluids f
+		) sub
+		WHERE $1 = '' OR name ILIKE '%' || $1 || '%' OR fluid_id ILIKE '%' || $1 || '%'
+		ORDER BY COALESCE(NULLIF(name, ''), fluid_id), mod_id
 		LIMIT 50 OFFSET $2
 	`, q, offset)
 	if err != nil {
@@ -627,7 +659,11 @@ func (d *DB) UpdateRecipeName(ctx context.Context, recipeID string, name *string
 // Includes interface-compatible recipes: recipes belonging to a base machine that modID implements.
 // ListRecipesCatalog returns all recipes with optional mod/machine filter, without IO hydration.
 // Used by the catalog page; IO details are fetched on expand.
-func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID string) ([]*model.Recipe, error) {
+// ListRecipesCatalog lists recipes for the catalog page, optionally filtered by
+// machine mod/id and/or by an item or fluid that must appear among the recipe's
+// OUTPUTS (not inputs) — "how is this item/fluid produced", matching the
+// items/fluids/trades catalog pages' "name → recipes producing this" link convention.
+func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID, itemID, fluidModID, fluidID string) ([]*model.Recipe, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT r.id::text, r.machine_mod_id, r.machine_id,
 		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
@@ -637,8 +673,16 @@ func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID string) ([
 		LEFT JOIN machine_types mt ON mt.mod_id = r.machine_mod_id AND mt.machine_id = r.machine_id
 		WHERE ($1 = '' OR r.machine_mod_id = $1)
 		  AND ($2 = '' OR r.machine_id = $2)
+		  AND ($3 = '' OR EXISTS (
+		        SELECT 1 FROM recipe_item_outputs rio
+		        WHERE rio.recipe_id = r.id AND rio.item_mod_id = $3 AND rio.item_id = $4
+		      ))
+		  AND ($5 = '' OR EXISTS (
+		        SELECT 1 FROM recipe_fluid_outputs rfo
+		        WHERE rfo.recipe_id = r.id AND rfo.fluid_mod_id = $5 AND rfo.fluid_id = $6
+		      ))
 		ORDER BY r.machine_mod_id, r.machine_id
-	`, modID, machineID)
+	`, modID, machineID, itemModID, itemID, fluidModID, fluidID)
 	if err != nil {
 		return nil, fmt.Errorf("db: list recipes catalog: %w", err)
 	}
@@ -882,11 +926,14 @@ func (d *DB) hydrateRecipeIO(ctx context.Context, rec *model.Recipe) error {
 	rows3, err := d.Pool.Query(ctx, `
 		SELECT rfi.id::text, rfi.recipe_id::text,
 		       COALESCE(rfi.fluid_mod_id, ''), COALESCE(rfi.fluid_id, ''),
-		       COALESCE(t.name, ''),
+		       COALESCE(
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='fluid.'||rfi.fluid_mod_id||'.'||rfi.fluid_id),
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||rfi.fluid_mod_id||'.'||rfi.fluid_id),
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='item.'||rfi.fluid_mod_id||'.'||rfi.fluid_id),
+		           ''
+		       ),
 		       rfi.amount_mb, rfi.probability_num, rfi.probability_den
 		FROM recipe_fluid_inputs rfi
-		LEFT JOIN translations t ON t.lang = 'en_us'
-		                        AND t.lang_key = 'fluid.' || rfi.fluid_mod_id || '.' || rfi.fluid_id
 		WHERE rfi.recipe_id = $1
 	`, rec.ID)
 	if err != nil {
@@ -912,11 +959,14 @@ func (d *DB) hydrateRecipeIO(ctx context.Context, rec *model.Recipe) error {
 	// Fluid outputs.
 	rows4, err := d.Pool.Query(ctx, `
 		SELECT rfo.id::text, rfo.recipe_id::text, rfo.fluid_mod_id, rfo.fluid_id,
-		       COALESCE(t.name, ''),
+		       COALESCE(
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='fluid.'||rfo.fluid_mod_id||'.'||rfo.fluid_id),
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||rfo.fluid_mod_id||'.'||rfo.fluid_id),
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='item.'||rfo.fluid_mod_id||'.'||rfo.fluid_id),
+		           ''
+		       ),
 		       rfo.amount_mb, rfo.probability_num, rfo.probability_den
 		FROM recipe_fluid_outputs rfo
-		LEFT JOIN translations t ON t.lang = 'en_us'
-		                        AND t.lang_key = 'fluid.' || rfo.fluid_mod_id || '.' || rfo.fluid_id
 		WHERE rfo.recipe_id = $1
 	`, rec.ID)
 	if err != nil {

@@ -28,9 +28,10 @@ func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ItemRef, []string
 	}
 	for _, node := range g.Nodes {
 		if node.RecipeID != "" {
-			if _, ok := recipeIdx[node.RecipeID]; !ok {
-				recipeIdx[node.RecipeID] = len(recipeIDs)
-				recipeIDs = append(recipeIDs, node.RecipeID)
+			rk := node.RateKey()
+			if _, ok := recipeIdx[rk]; !ok {
+				recipeIdx[rk] = len(recipeIDs)
+				recipeIDs = append(recipeIDs, rk)
 			}
 		}
 	}
@@ -48,7 +49,7 @@ func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ItemRef, []string
 		if node.RecipeID == "" {
 			continue
 		}
-		j := recipeIdx[node.RecipeID]
+		j := recipeIdx[node.RateKey()]
 		if i, ok := itemIdx[node.Item.Key()]; ok {
 			S[i][j] = S[i][j].Add(node.OutputAmount)
 		}

@@ -9,33 +9,68 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// maxAchievableEUExpr is the highest EU/t a machine (mt) could ever supply a
+// recipe, i.e. its tier cap plus the best possible upgrade bonus. Mirrors MI's
+// own CrafterComponent.banRecipe default (recipe.eu > getMaxRecipeEu()) — a
+// recipe that no amount of upgrading could ever satisfy must never be offered
+// as an option, not just run slowly.
+//
+// Upgrade capacity is per UPGRADE ITEM (MI's UpgradeComponent holds a single
+// ItemStack; bonus = itemStack.getCount() * extraMaxEu), not per machine —
+// machine_types.max_slots has no bearing on how many upgrade items fit. The
+// item's own max_stack (items table) is the real cap, so the best-case bonus
+// is MAX(tier.eu_bonus_per_slot * item.max_stack) across all tiers for this
+// mod, not machine.max_slots * best single-tier bonus.
+const maxAchievableEUExpr = `
+	COALESCE(NULLIF(mt.max_eu_per_tick, 0), mt.base_eu_per_tick, r.eu_per_tick)
+	+ CASE WHEN mt.upgradable THEN
+		COALESCE((
+			SELECT MAX(ut.eu_bonus_per_slot * COALESCE(i.max_stack, 64))
+			FROM upgrade_tiers ut
+			LEFT JOIN items i
+			     ON i.mod_id = split_part(ut.item_ref, ':', 1) AND i.item_id = split_part(ut.item_ref, ':', 2)
+			WHERE ut.mod_id = mt.mod_id
+		), 0)
+	ELSE 0 END`
+
 // GetRecipesForItem returns all recipes that output this item.
 // Includes interface-compatible recipes: if machine A implements machine B,
-// recipes of B are also returned as if they belong to A.
+// recipes of B are also returned as if they belong to A — but only if A can
+// actually supply enough EU/t for the recipe, even at max upgrades (a bronze
+// machine capped at 2 EU/t cannot run a recipe that needs 8 EU/t, even though
+// it "implements" the base machine for lower-EU recipes).
 func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([]*solver.RecipeRow, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT id, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu
 		FROM (
 			SELECT DISTINCT r.id, r.machine_mod_id, r.machine_id,
-			                r.duration_ticks, r.eu_per_tick, r.total_eu
+			                r.duration_ticks, r.eu_per_tick, r.total_eu, 0 AS is_direct
 			FROM recipes r
+			JOIN machine_types mt
+			     ON mt.mod_id = r.machine_mod_id AND mt.machine_id = r.machine_id
 			JOIN recipe_item_outputs rio ON rio.recipe_id = r.id
 			WHERE rio.item_mod_id = $1 AND rio.item_id = $2
 			  AND r.machine_id NOT IN ('crafting_table', 'unpacker')
+			  AND (mt.energy_type <> 'eu' OR r.eu_per_tick <= `+maxAchievableEUExpr+`)
+			  AND (mt.fixed_recipe_eu_cap IS NULL OR mt.fixed_recipe_eu_cap = 0 OR r.eu_per_tick <= mt.fixed_recipe_eu_cap)
 
 			UNION
 
 			SELECT DISTINCT r.id, mi.machine_mod_id, mi.machine_id,
-			                r.duration_ticks, r.eu_per_tick, r.total_eu
+			                r.duration_ticks, r.eu_per_tick, r.total_eu, 1 AS is_direct
 			FROM recipes r
 			JOIN recipe_item_outputs rio ON rio.recipe_id = r.id
 			JOIN machine_interfaces mi
 			     ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
+			JOIN machine_types mt
+			     ON mt.mod_id = mi.machine_mod_id AND mt.machine_id = mi.machine_id
 			WHERE rio.item_mod_id = $1 AND rio.item_id = $2
 			  AND r.machine_id NOT IN ('crafting_table', 'unpacker')
+			  AND (mt.energy_type <> 'eu' OR r.eu_per_tick <= `+maxAchievableEUExpr+`)
+			  AND (mt.fixed_recipe_eu_cap IS NULL OR mt.fixed_recipe_eu_cap = 0 OR r.eu_per_tick <= mt.fixed_recipe_eu_cap)
 		) sub
 		ORDER BY CASE machine_id WHEN 'packer' THEN 0 ELSE 1 END DESC,
-		         machine_id
+		         is_direct, machine_id
 	`, itemModID, itemID)
 	if err != nil {
 		return nil, fmt.Errorf("db: get recipes for item: %w", err)
@@ -50,22 +85,30 @@ func (d *DB) GetRecipesForFluid(ctx context.Context, fluidModID, fluidID string)
 		SELECT id, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu
 		FROM (
 			SELECT DISTINCT r.id, r.machine_mod_id, r.machine_id,
-			                r.duration_ticks, r.eu_per_tick, r.total_eu
+			                r.duration_ticks, r.eu_per_tick, r.total_eu, 0 AS is_direct
 			FROM recipes r
+			JOIN machine_types mt
+			     ON mt.mod_id = r.machine_mod_id AND mt.machine_id = r.machine_id
 			JOIN recipe_fluid_outputs rfo ON rfo.recipe_id = r.id
 			WHERE rfo.fluid_mod_id = $1 AND rfo.fluid_id = $2
+			  AND (mt.energy_type <> 'eu' OR r.eu_per_tick <= `+maxAchievableEUExpr+`)
+			  AND (mt.fixed_recipe_eu_cap IS NULL OR mt.fixed_recipe_eu_cap = 0 OR r.eu_per_tick <= mt.fixed_recipe_eu_cap)
 
 			UNION
 
 			SELECT DISTINCT r.id, mi.machine_mod_id, mi.machine_id,
-			                r.duration_ticks, r.eu_per_tick, r.total_eu
+			                r.duration_ticks, r.eu_per_tick, r.total_eu, 1 AS is_direct
 			FROM recipes r
 			JOIN recipe_fluid_outputs rfo ON rfo.recipe_id = r.id
 			JOIN machine_interfaces mi
 			     ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
+			JOIN machine_types mt
+			     ON mt.mod_id = mi.machine_mod_id AND mt.machine_id = mi.machine_id
 			WHERE rfo.fluid_mod_id = $1 AND rfo.fluid_id = $2
+			  AND (mt.energy_type <> 'eu' OR r.eu_per_tick <= `+maxAchievableEUExpr+`)
+			  AND (mt.fixed_recipe_eu_cap IS NULL OR mt.fixed_recipe_eu_cap = 0 OR r.eu_per_tick <= mt.fixed_recipe_eu_cap)
 		) sub
-		ORDER BY machine_id
+		ORDER BY is_direct, machine_id
 	`, fluidModID, fluidID)
 	if err != nil {
 		return nil, fmt.Errorf("db: get recipes for fluid: %w", err)
@@ -125,13 +168,14 @@ func (d *DB) GetMachineType(ctx context.Context, modID, machineID string) (*solv
 		       COALESCE(base_eu_per_tick, 0),
 		       COALESCE(max_eu_per_tick, 0),
 		       COALESCE(max_slots, 0),
-		       COALESCE(upgradable, false)
+		       COALESCE(upgradable, false),
+		       COALESCE(fixed_recipe_eu_cap, 0)
 		FROM machine_types
 		WHERE mod_id = $1 AND machine_id = $2
 	`, modID, machineID).Scan(
 		&m.ModID, &m.MachineID,
 		&m.EnergyType, &m.BaseEUPerTick, &m.MaxEUPerTick, &m.MaxSlots,
-		&m.Upgradable,
+		&m.Upgradable, &m.FixedRecipeEUCap,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -143,12 +187,17 @@ func (d *DB) GetMachineType(ctx context.Context, modID, machineID string) (*solv
 }
 
 // GetUpgradeTiers returns all upgrade tiers for a mod, cheapest (lowest EU bonus) first.
+// The upgrade count cap (MaxStackSize) is read from the referenced item's own max_stack
+// (items table) — not duplicated on upgrade_tiers — since MI's UpgradeComponent holds a
+// single ItemStack of the upgrade item, so the item's real stack size IS the cap.
 func (d *DB) GetUpgradeTiers(ctx context.Context, modID string) ([]*solver.UpgradeTierSpec, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT id, eu_bonus_per_slot
-		FROM upgrade_tiers
-		WHERE mod_id = $1
-		ORDER BY eu_bonus_per_slot ASC
+		SELECT ut.id, ut.eu_bonus_per_slot, COALESCE(i.max_stack, 64)
+		FROM upgrade_tiers ut
+		LEFT JOIN items i
+		     ON i.mod_id = split_part(ut.item_ref, ':', 1) AND i.item_id = split_part(ut.item_ref, ':', 2)
+		WHERE ut.mod_id = $1
+		ORDER BY ut.eu_bonus_per_slot ASC
 	`, modID)
 	if err != nil {
 		return nil, fmt.Errorf("db: get upgrade tiers: %w", err)
@@ -158,7 +207,7 @@ func (d *DB) GetUpgradeTiers(ctx context.Context, modID string) ([]*solver.Upgra
 	var tiers []*solver.UpgradeTierSpec
 	for rows.Next() {
 		t := &solver.UpgradeTierSpec{}
-		if err := rows.Scan(&t.ID, &t.EUBonusPerSlot); err != nil {
+		if err := rows.Scan(&t.ID, &t.EUBonusPerSlot, &t.MaxStackSize); err != nil {
 			return nil, fmt.Errorf("db: get upgrade tiers: %w", err)
 		}
 		tiers = append(tiers, t)

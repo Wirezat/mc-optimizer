@@ -11,32 +11,39 @@ import (
 func (s *Solver) CalculateMachineGroups(ctx context.Context, g *RecipeGraph, rv RateVector) ([]MachineGroupDraft, error) {
 	var groups []MachineGroupDraft
 
-	// build reverse map: recipeID → produced item
-	recipeToItem := make(map[string]ItemRef, len(g.Nodes))
+	// build reverse map: RateKey(recipe, machine) → produced item
+	rateKeyToItem := make(map[string]ItemRef, len(g.Nodes))
 	for _, node := range g.Nodes {
 		if node.RecipeID != "" {
-			recipeToItem[node.RecipeID] = node.Item
+			rateKeyToItem[node.RateKey()] = node.Item
 		}
 	}
 
-	for recipeID, recipeRate := range rv.RecipeRates {
+	for rateKey, recipeRate := range rv.RecipeRates {
 		if recipeRate.IsZero() {
 			continue
+		}
+		recipeID, machineMod, machineID, ok := ParseRecipeOptionKey(rateKey)
+		if !ok {
+			return nil, fmt.Errorf("solver: malformed rate key %q", rateKey)
 		}
 		recipe, err := s.DB.GetRecipe(ctx, recipeID)
 		if err != nil {
 			return nil, fmt.Errorf("solver: get recipe %s: %w", recipeID, err)
 		}
-		machine, err := s.DB.GetMachineType(ctx, recipe.MachineMod, recipe.MachineID)
+		// Use the CHOSEN machine (may be a tier variant reached via machine_interfaces),
+		// not recipe.MachineMod/MachineID — that always points at the recipe's own
+		// canonical (base) machine, which would silently discard the user's tier choice.
+		machine, err := s.DB.GetMachineType(ctx, machineMod, machineID)
 		if err != nil {
-			return nil, fmt.Errorf("solver: get machine %s:%s: %w", recipe.MachineMod, recipe.MachineID, err)
+			return nil, fmt.Errorf("solver: get machine %s:%s: %w", machineMod, machineID, err)
 		}
 
 		group := MachineGroupDraft{
 			MachineMod:   machine.ModID,
 			MachineID:    machine.MachineID,
 			RecipeID:     recipeID,
-			RecipeOutput: recipeToItem[recipeID],
+			RecipeOutput: rateKeyToItem[rateKey],
 			Status:       StatusDraft,
 		}
 		// Base case (no upgrades): electric machines already overclock to their base
@@ -55,9 +62,16 @@ func EffectiveTicks(recipe *RecipeRow, machine *MachineSpec, euBonusPerSlot int6
 	return effectiveTicks(recipe, machine, euBonusPerSlot, n)
 }
 
+// effectiveTicks applies the standard MI overclock ratio (ceil(totalEU / suppliedEU/t))
+// to ANY "eu"-energy machine, upgradable or not — a machine's own base/max EU/t already
+// determines throughput even with zero upgrade items (e.g. a steel machine at 4 EU/t vs
+// a bronze machine at 2 EU/t process the same 2-EU/t-nominal recipe at different speeds
+// purely from their built-in tier). Only the EXTRA bonus from upgrade-slot items
+// (euBonusPerSlot × n) requires machine.Upgradable — non-upgradable machines (steam
+// tiers, fixed multiblocks) cannot accept those items in-game.
 func effectiveTicks(recipe *RecipeRow, machine *MachineSpec, euBonusPerSlot int64, n int) int64 {
 	duration := int64(max(recipe.DurationTicks, 1))
-	if machine == nil || !machine.Upgradable || machine.EnergyType != "eu" {
+	if machine == nil || machine.EnergyType != "eu" {
 		return duration
 	}
 	total := recipe.TotalEU
@@ -69,32 +83,75 @@ func effectiveTicks(recipe *RecipeRow, machine *MachineSpec, euBonusPerSlot int6
 	}
 	baseMax := machine.MaxEUPerTick
 	if baseMax <= 0 {
+		baseMax = machine.BaseEUPerTick
+	}
+	if baseMax <= 0 {
 		baseMax = defaultBaseMaxEU
 	}
-	effectiveEU := min(baseMax+int64(n)*euBonusPerSlot, total)
+	bonus := int64(0)
+	if machine.Upgradable {
+		bonus = int64(n) * euBonusPerSlot
+	}
+	effectiveEU := min(baseMax+bonus, total)
 	if effectiveEU <= 0 {
 		return duration
 	}
 	return ceilDiv(total, effectiveEU)
 }
 
-// upgradeSlotCap returns the maximum number of upgrade slots allowed for a machine.
-func upgradeSlotCap(machine *MachineSpec) int {
-	if machine != nil && machine.MaxSlots > 0 {
-		return int(machine.MaxSlots)
+// recipeBanned reports whether an EU-energy machine cannot run this recipe at all with the
+// given upgrade configuration. Two independent gates, both mirroring real MI behavior:
+//  1. CrafterComponent.banRecipe's default (recipe.eu > getMaxRecipeEu()): a recipe whose
+//     declared eu/t demand exceeds the machine's current cap (base + upgrade bonus) never
+//     starts craft at all, it doesn't just run slower.
+//  2. ElectricBlastFurnaceBlockEntity's extra coil check (recipe.eu > tiers[index].maxBaseEu):
+//     some machine variants (e.g. a specific EBF coil tier) have an ADDITIONAL ceiling that
+//     upgrades never raise — modeled here as MachineSpec.FixedRecipeEUCap.
+func recipeBanned(recipe *RecipeRow, machine *MachineSpec, euBonusPerSlot int64, n int) bool {
+	if recipe == nil || machine == nil || machine.EnergyType != "eu" {
+		return false
+	}
+	if machine.FixedRecipeEUCap > 0 && recipe.EUPerTick > machine.FixedRecipeEUCap {
+		return true
+	}
+	baseMax := machine.MaxEUPerTick
+	if baseMax <= 0 {
+		baseMax = machine.BaseEUPerTick
+	}
+	if baseMax <= 0 {
+		baseMax = defaultBaseMaxEU
+	}
+	bonus := int64(0)
+	if machine.Upgradable {
+		bonus = int64(n) * euBonusPerSlot
+	}
+	return recipe.EUPerTick > baseMax+bonus
+}
+
+// upgradeSlotCap returns the maximum number of this upgrade item that fit in a
+// machine's single upgrade slot. MI's UpgradeComponent holds exactly one
+// ItemStack per machine (bonus = itemStack.getCount() * extraMaxEu) — the cap
+// is a property of the upgrade ITEM's own max stack size (64 for a standard
+// stack, 1 for quantum_upgrade which is stacksTo(1) in MI source), never of
+// the machine. machine_types.max_slots has no bearing on this at all.
+func upgradeSlotCap(tier *UpgradeTierSpec) int {
+	if tier != nil && tier.MaxStackSize > 0 {
+		return int(tier.MaxStackSize)
 	}
 	return maxUpgradeSlots
 }
 
 // applyUpgrade recomputes a group's machine count for the given tier bonus and slot count
-// and records the chosen upgrade on the group. n is clamped to the machine's slot cap; a
-// zero bonus or zero count clears the upgrade fields. recipeRate is in recipes/tick.
+// and records the chosen upgrade on the group. n is clamped to maxUpgradeSlots as a last-resort
+// sanity bound only — callers are expected to already clamp n to the chosen tier's real
+// upgradeSlotCap before calling. A zero bonus or zero count clears the upgrade fields.
+// recipeRate is in recipes/tick.
 func applyUpgrade(g MachineGroupDraft, recipe *RecipeRow, machine *MachineSpec, euBonusPerSlot int64, n int, recipeRate Rational) MachineGroupDraft {
 	if euBonusPerSlot <= 0 || n <= 0 {
 		euBonusPerSlot, n = 0, 0
 	}
-	if cap := upgradeSlotCap(machine); n > cap {
-		n = cap
+	if n > maxUpgradeSlots {
+		n = maxUpgradeSlots
 	}
 	ticks := effectiveTicks(recipe, machine, euBonusPerSlot, n)
 	exact := recipeRate.Mul(NewRational(ticks, 1))
@@ -116,10 +173,6 @@ func applyUpgrade(g MachineGroupDraft, recipe *RecipeRow, machine *MachineSpec, 
 // recipe rate is derived from each group's current ExactCount, so it is scaling-independent.
 // Returns updated groups and warnings; caller must authorize ownership if needed.
 func (s *Solver) OptimizeUpgrades(ctx context.Context, groups []MachineGroupDraft, req SolveRequest) ([]MachineGroupDraft, []Warning, error) {
-	if req.UpgradeMode != UpgradeModeFixed && req.UpgradeMode != UpgradeModeAuto {
-		return groups, nil, nil
-	}
-
 	var warnings []Warning
 	tiersByMod := map[string][]*UpgradeTierSpec{}
 
@@ -129,7 +182,7 @@ func (s *Solver) OptimizeUpgrades(ctx context.Context, groups []MachineGroupDraf
 		if err != nil {
 			return nil, nil, fmt.Errorf("solver: get machine %s:%s: %w", g.MachineMod, g.MachineID, err)
 		}
-		if machine == nil || !machine.Upgradable || machine.EnergyType != "eu" {
+		if machine == nil || machine.EnergyType != "eu" {
 			continue
 		}
 		recipe, err := s.DB.GetRecipe(ctx, g.RecipeID)
@@ -139,6 +192,20 @@ func (s *Solver) OptimizeUpgrades(ctx context.Context, groups []MachineGroupDraf
 		if recipe == nil {
 			continue
 		}
+
+		// No upgrades requested (or machine can't take them) — the group stands as computed
+		// by CalculateMachineGroups at n=0. Still verify the recipe can actually run at all
+		// on this machine's base cap; if not, it's not "slow", it's impossible in-game.
+		if req.UpgradeMode != UpgradeModeFixed && req.UpgradeMode != UpgradeModeAuto || !machine.Upgradable {
+			if recipeBanned(recipe, machine, 0, 0) {
+				warnings = append(warnings, Warning{
+					Code:   "recipe_energy_insufficient",
+					Params: map[string]string{"recipe": g.RecipeID, "machine": g.MachineID},
+				})
+			}
+			continue
+		}
+
 		// Derive the group's recipe rate (recipes/tick) from its current exact count, which
 		// reflects any AUTO scaling already applied: rate = ExactCount / currentBaseTicks.
 		baseTicks := effectiveTicks(recipe, machine, 0, 0)
@@ -163,10 +230,32 @@ func (s *Solver) OptimizeUpgrades(ctx context.Context, groups []MachineGroupDraf
 				})
 				continue
 			}
-			*g = applyUpgrade(*g, recipe, machine, tier.EUBonusPerSlot, req.UpgradeCount, recipeRate)
+			n := req.UpgradeCount
+			if cap := upgradeSlotCap(tier); n > cap {
+				n = cap
+			}
+			*g = applyUpgrade(*g, recipe, machine, tier.EUBonusPerSlot, n, recipeRate)
 			g.UpgradeTier = tier.ID
+			if recipeBanned(recipe, machine, tier.EUBonusPerSlot, n) {
+				warnings = append(warnings, Warning{
+					Code:   "recipe_energy_insufficient",
+					Params: map[string]string{"recipe": g.RecipeID, "machine": g.MachineID},
+				})
+			}
 		case UpgradeModeAuto:
 			*g = autoUpgrade(*g, recipe, machine, filterTiers(tiers, req.AllowedTiers), recipeRate)
+			finalBonus := int64(0)
+			if g.UpgradeCount > 0 {
+				if t := findTier(tiers, g.UpgradeTier); t != nil {
+					finalBonus = t.EUBonusPerSlot
+				}
+			}
+			if recipeBanned(recipe, machine, finalBonus, g.UpgradeCount) {
+				warnings = append(warnings, Warning{
+					Code:   "recipe_energy_insufficient",
+					Params: map[string]string{"recipe": g.RecipeID, "machine": g.MachineID},
+				})
+			}
 		}
 	}
 
@@ -208,18 +297,25 @@ func autoUpgrade(g MachineGroupDraft, recipe *RecipeRow, machine *MachineSpec, t
 	best := g // base case (no upgrade) already computed in CalculateMachineGroups
 	bestCount := g.Count
 	bestN := 0
-	cap := upgradeSlotCap(machine)
+	bestValid := !recipeBanned(recipe, machine, 0, 0)
 	for _, t := range tiers {
 		if t.EUBonusPerSlot <= 0 {
 			continue
 		}
+		cap := upgradeSlotCap(t)
 		for n := 1; n <= cap; n++ {
+			valid := !recipeBanned(recipe, machine, t.EUBonusPerSlot, n)
+			if !valid && bestValid {
+				continue // never trade a runnable config for one the recipe can't even start on
+			}
 			cand := applyUpgrade(g, recipe, machine, t.EUBonusPerSlot, n, recipeRate)
 			cand.UpgradeTier = t.ID
-			// Prefer fewer machines; on ties prefer fewer upgrade slots. The base case
-			// (bestN==0) wins any tie because no candidate has n < 1.
-			if cand.Count < bestCount || (cand.Count == bestCount && bestN > 0 && n < bestN) {
-				best, bestCount, bestN = cand, cand.Count, n
+			// A config that makes the recipe runnable always beats one that doesn't; among
+			// equally (in)valid configs, prefer fewer machines, then fewer upgrade slots.
+			better := valid && !bestValid ||
+				valid == bestValid && (cand.Count < bestCount || (cand.Count == bestCount && bestN > 0 && n < bestN))
+			if better {
+				best, bestCount, bestN, bestValid = cand, cand.Count, n, valid
 			}
 		}
 	}
@@ -499,4 +595,3 @@ func ceilDiv(a, b int64) int64 {
 	}
 	return (a + b - 1) / b
 }
-

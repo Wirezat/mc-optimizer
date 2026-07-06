@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
@@ -54,6 +55,83 @@ func resolveTagResolutions(trs map[string]solver.TagResolution, names map[string
 	return out
 }
 
+// discoverRequest is the shared wire format for both the real (factory-scoped)
+// and demo discover endpoints.
+type discoverRequest struct {
+	TargetItem      solver.ItemRef    `json:"TargetItem"`
+	RecipeOverrides map[string]string `json:"RecipeOverrides"`
+	TagOverrides    map[string]string `json:"TagOverrides"`
+	StopPoints      map[string]bool   `json:"StopPoints"`
+}
+
+func decodeDiscoverRequest(w http.ResponseWriter, r *http.Request) (discoverRequest, bool) {
+	var req discoverRequest
+	if !decodeJSON(w, r, &req) {
+		return req, false
+	}
+	if req.TargetItem.TagRef == "" && (req.TargetItem.ModID == "" || req.TargetItem.ItemID == "") {
+		errBadRequest(w, "target_item requires mod_id+item_id or tag_ref")
+		return req, false
+	}
+	if req.RecipeOverrides == nil {
+		req.RecipeOverrides = map[string]string{}
+	}
+	if req.TagOverrides == nil {
+		req.TagOverrides = map[string]string{}
+	}
+	if req.StopPoints == nil {
+		req.StopPoints = map[string]bool{}
+	}
+	return req, true
+}
+
+// respondDiscover resolves display names for a DiscoverResult and writes the
+// JSON response. Shared by the factory-scoped and demo discover handlers so
+// the wire format can't drift between them.
+func respondDiscover(w http.ResponseWriter, r *http.Request, database *db.DB, result solver.DiscoverResult) {
+	var allRefs []solver.ItemRef
+	for _, ci := range result.Items {
+		allRefs = append(allRefs, ci.Item)
+	}
+	for _, tr := range result.TagResolutions {
+		allRefs = append(allRefs, tr.Chosen)
+		allRefs = append(allRefs, tr.Options...)
+	}
+	names, err := database.LookupItemNames(r.Context(), allRefs)
+	if err != nil {
+		errInternal(w, err)
+		return
+	}
+
+	seen := map[string]bool{}
+	var machineRefs []solver.MachineRef
+	for _, ci := range result.Items {
+		for _, opt := range ci.Options {
+			k := opt.MachineMod + ":" + opt.MachineID
+			if !seen[k] {
+				seen[k] = true
+				machineRefs = append(machineRefs, solver.MachineRef{ModID: opt.MachineMod, MachineID: opt.MachineID})
+			}
+		}
+	}
+	machineNames, err := database.LookupMachineNames(r.Context(), machineRefs)
+	if err != nil {
+		errInternal(w, err)
+		return
+	}
+
+	namedItems := make([]namedChainItem, len(result.Items))
+	for i, ci := range result.Items {
+		namedItems[i] = namedChainItem{ChainItem: ci, Name: names[ci.Item.Key()]}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"Items":          namedItems,
+		"TagResolutions": resolveTagResolutions(result.TagResolutions, names),
+		"Names":          names,
+		"MachineNames":   machineNames,
+	})
+}
+
 // DiscoverHandler runs a BFS to enumerate all items in the production chain
 // with their recipe options, without computing rates.
 func DiscoverHandler(database *db.DB) http.HandlerFunc {
@@ -67,27 +145,9 @@ func DiscoverHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 
-		var req struct {
-			TargetItem      solver.ItemRef    `json:"TargetItem"`
-			RecipeOverrides map[string]string `json:"RecipeOverrides"`
-			TagOverrides    map[string]string `json:"TagOverrides"`
-			StopPoints      map[string]bool   `json:"StopPoints"`
-		}
-		if !decodeJSON(w, r, &req) {
+		req, ok := decodeDiscoverRequest(w, r)
+		if !ok {
 			return
-		}
-		if req.TargetItem.TagRef == "" && (req.TargetItem.ModID == "" || req.TargetItem.ItemID == "") {
-			errBadRequest(w, "target_item requires mod_id+item_id or tag_ref")
-			return
-		}
-		if req.RecipeOverrides == nil {
-			req.RecipeOverrides = map[string]string{}
-		}
-		if req.TagOverrides == nil {
-			req.TagOverrides = map[string]string{}
-		}
-		if req.StopPoints == nil {
-			req.StopPoints = map[string]bool{}
 		}
 
 		s := solver.NewSolver(database, 0)
@@ -97,52 +157,163 @@ func DiscoverHandler(database *db.DB) http.HandlerFunc {
 			errInternal(w, err)
 			return
 		}
+		respondDiscover(w, r, database, result)
+	}
+}
 
-		var allRefs []solver.ItemRef
-		for _, ci := range result.Items {
-			allRefs = append(allRefs, ci.Item)
+// DemoDiscoverHandler is the factory-less counterpart to DiscoverHandler, used
+// by the /demo/solve page. No factory backs it, so FactoryState is always
+// empty here — deliberately, not just "not filled in yet": there is no
+// factory to draw state from, by construction, regardless of how much richer
+// FactoryState usage in the real (factory-scoped) path becomes over time.
+// Kept as its own handler (not a thin wrapper around DiscoverHandler) so
+// future changes to the real path's factory-state derivation don't leak into
+// demo behaviour by accident.
+func DemoDiscoverHandler(database *db.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		req, ok := decodeDiscoverRequest(w, r)
+		if !ok {
+			return
 		}
-		for _, tr := range result.TagResolutions {
-			allRefs = append(allRefs, tr.Chosen)
-			allRefs = append(allRefs, tr.Options...)
-		}
-		names, err := database.LookupItemNames(r.Context(), allRefs)
+
+		s := solver.NewSolver(database, 0)
+		result, err := s.Discover(r.Context(), req.TargetItem, req.StopPoints,
+			solver.FactoryState{}, req.RecipeOverrides, req.TagOverrides)
 		if err != nil {
 			errInternal(w, err)
 			return
 		}
-
-		seen := map[string]bool{}
-		var machineRefs []solver.MachineRef
-		for _, ci := range result.Items {
-			for _, opt := range ci.Options {
-				k := opt.MachineMod + ":" + opt.MachineID
-				if !seen[k] {
-					seen[k] = true
-					machineRefs = append(machineRefs, solver.MachineRef{ModID: opt.MachineMod, MachineID: opt.MachineID})
-				}
-			}
-		}
-		machineNames, err := database.LookupMachineNames(r.Context(), machineRefs)
-		if err != nil {
-			errInternal(w, err)
-			return
-		}
-
-		namedItems := make([]namedChainItem, len(result.Items))
-		for i, ci := range result.Items {
-			namedItems[i] = namedChainItem{ChainItem: ci, Name: names[ci.Item.Key()]}
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"Items":          namedItems,
-			"TagResolutions": resolveTagResolutions(result.TagResolutions, names),
-			"Names":          names,
-			"MachineNames":   machineNames,
-		})
+		respondDiscover(w, r, database, result)
 	}
 }
 
 // SolveHandler runs the solver for a factory and stores a solver_draft.
+// decodeSolveRequest validates the common SolveRequest fields shared by the
+// factory-scoped and demo solve endpoints.
+func decodeSolveRequest(w http.ResponseWriter, r *http.Request) (solver.SolveRequest, bool) {
+	var req solver.SolveRequest
+	if !decodeJSON(w, r, &req) {
+		return req, false
+	}
+	if req.TargetItem.TagRef == "" && (req.TargetItem.ModID == "" || req.TargetItem.ItemID == "") {
+		errBadRequest(w, "target_item requires mod_id+item_id or tag_ref")
+		return req, false
+	}
+	if req.TimeUnit == "" {
+		errBadRequest(w, "time_unit is required")
+		return req, false
+	}
+	if req.TargetRate.Den == 0 {
+		errBadRequest(w, "target_rate is required")
+		return req, false
+	}
+	return req, true
+}
+
+// writeSolveError maps solver errors to their HTTP responses. Returns true if
+// it wrote a response (caller should stop), false if err was nil.
+func writeSolveError(w http.ResponseWriter, err error) bool {
+	if err == nil {
+		return false
+	}
+	var cycleErr *solver.ErrCycleBreakNeeded
+	if errors.As(err, &cycleErr) {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":       "CYCLE_BREAK_NEEDED",
+			"cycle_nodes": cycleErr.CycleNodes,
+		})
+		return true
+	}
+	if errors.Is(err, solver.ErrNoSolution) || errors.Is(err, solver.ErrUnderDetermined) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+			"error":   "NO_SOLUTION",
+			"message": "No valid production chain found. Check that the target item has recipes and that stop points don't cut all paths.",
+		})
+		return true
+	}
+	errInternal(w, err)
+	return true
+}
+
+// respondSolve resolves display names for a SolveResult and writes the JSON
+// response. draftID/expiresAt are omitted (nil) for the demo endpoint, which
+// persists nothing. Shared with SolveHandler so the wire format can't drift.
+func respondSolve(w http.ResponseWriter, r *http.Request, database *db.DB, result solver.SolveResult, draftID *uuid.UUID, expiresAt *time.Time) {
+	var allRefs []solver.ItemRef
+	for _, mg := range result.MachineGroups {
+		allRefs = append(allRefs, mg.RecipeOutput)
+	}
+	for _, e := range result.IOProfile.Inputs {
+		allRefs = append(allRefs, e.Item)
+	}
+	for _, e := range result.IOProfile.Outputs {
+		allRefs = append(allRefs, e.Item)
+	}
+	for _, tr := range result.TagResolutions {
+		allRefs = append(allRefs, tr.Chosen)
+		allRefs = append(allRefs, tr.Options...)
+	}
+	names, err := database.LookupItemNames(r.Context(), allRefs)
+	if err != nil {
+		errInternal(w, err)
+		return
+	}
+
+	machineRefs := make([]solver.MachineRef, 0, len(result.MachineGroups))
+	seen := make(map[string]bool)
+	for _, mg := range result.MachineGroups {
+		k := mg.MachineMod + ":" + mg.MachineID
+		if !seen[k] {
+			seen[k] = true
+			machineRefs = append(machineRefs, solver.MachineRef{ModID: mg.MachineMod, MachineID: mg.MachineID})
+		}
+	}
+	machineNames, err := database.LookupMachineNames(r.Context(), machineRefs)
+	if err != nil {
+		errInternal(w, err)
+		return
+	}
+
+	namedGroups := make([]namedMachineGroup, len(result.MachineGroups))
+	for i, mg := range result.MachineGroups {
+		namedGroups[i] = namedMachineGroup{
+			MachineGroupDraft: mg,
+			RecipeOutputName:  names[mg.RecipeOutput.Key()],
+			MachineName:       machineNames[mg.MachineMod+":"+mg.MachineID],
+		}
+	}
+	namedInputs := make([]namedIOEntry, len(result.IOProfile.Inputs))
+	for i, e := range result.IOProfile.Inputs {
+		namedInputs[i] = namedIOEntry{IOEntry: e, Name: names[e.Item.Key()]}
+	}
+	namedOutputs := make([]namedIOEntry, len(result.IOProfile.Outputs))
+	for i, e := range result.IOProfile.Outputs {
+		namedOutputs[i] = namedIOEntry{IOEntry: e, Name: names[e.Item.Key()]}
+	}
+	resp := map[string]any{
+		"Names": names,
+		"result": map[string]any{
+			"MachineGroups": namedGroups,
+			"IOProfile": map[string]any{
+				"Inputs":  namedInputs,
+				"Outputs": namedOutputs,
+			},
+			"ActualRate":     result.ActualRate,
+			"HadCycles":      result.HadCycles,
+			"ModeUsed":       result.ModeUsed,
+			"Warnings":       result.Warnings,
+			"TagResolutions": resolveTagResolutions(result.TagResolutions, names),
+		},
+	}
+	if draftID != nil {
+		resp["draft_id"] = *draftID
+	}
+	if expiresAt != nil {
+		resp["expires_at"] = *expiresAt
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func SolveHandler(database *db.DB, svc *service.PLService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())
@@ -154,111 +325,38 @@ func SolveHandler(database *db.DB, svc *service.PLService) http.HandlerFunc {
 			return
 		}
 
-		var req solver.SolveRequest
-		if !decodeJSON(w, r, &req) {
-			return
-		}
-		if req.TargetItem.TagRef == "" && (req.TargetItem.ModID == "" || req.TargetItem.ItemID == "") {
-			errBadRequest(w, "target_item requires mod_id+item_id or tag_ref")
-			return
-		}
-		if req.TimeUnit == "" {
-			errBadRequest(w, "time_unit is required")
-			return
-		}
-		if req.TargetRate.Den == 0 {
-			errBadRequest(w, "target_rate is required")
+		req, ok := decodeSolveRequest(w, r)
+		if !ok {
 			return
 		}
 
 		out, err := svc.Solve(r.Context(), factoryID, userID, req)
-		if err != nil {
-			var cycleErr *solver.ErrCycleBreakNeeded
-			if errors.As(err, &cycleErr) {
-				writeJSON(w, http.StatusConflict, map[string]any{
-					"error":       "CYCLE_BREAK_NEEDED",
-					"cycle_nodes": cycleErr.CycleNodes,
-				})
-				return
-			}
-			if errors.Is(err, solver.ErrNoSolution) || errors.Is(err, solver.ErrUnderDetermined) {
-				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
-					"error":   "NO_SOLUTION",
-					"message": "No valid production chain found. Check that the target item has recipes and that stop points don't cut all paths.",
-				})
-				return
-			}
-			errInternal(w, err)
+		if writeSolveError(w, err) {
 			return
 		}
-		var allRefs []solver.ItemRef
-		for _, mg := range out.Result.MachineGroups {
-			allRefs = append(allRefs, mg.RecipeOutput)
-		}
-		for _, e := range out.Result.IOProfile.Inputs {
-			allRefs = append(allRefs, e.Item)
-		}
-		for _, e := range out.Result.IOProfile.Outputs {
-			allRefs = append(allRefs, e.Item)
-		}
-		for _, tr := range out.Result.TagResolutions {
-			allRefs = append(allRefs, tr.Chosen)
-			allRefs = append(allRefs, tr.Options...)
-		}
-		names, err := database.LookupItemNames(r.Context(), allRefs)
-		if err != nil {
-			errInternal(w, err)
-			return
-		}
+		respondSolve(w, r, database, out.Result, &out.DraftID, &out.ExpiresAt)
+	}
+}
 
-		machineRefs := make([]solver.MachineRef, 0, len(out.Result.MachineGroups))
-		seen := make(map[string]bool)
-		for _, mg := range out.Result.MachineGroups {
-			k := mg.MachineMod + ":" + mg.MachineID
-			if !seen[k] {
-				seen[k] = true
-				machineRefs = append(machineRefs, solver.MachineRef{ModID: mg.MachineMod, MachineID: mg.MachineID})
-			}
-		}
-		machineNames, err := database.LookupMachineNames(r.Context(), machineRefs)
-		if err != nil {
-			errInternal(w, err)
+// DemoSolveHandler is the factory-less counterpart to SolveHandler, used by
+// the /demo/solve page. Calls the solver directly and persists nothing (no
+// solver_draft row — there is no production line to later confirm into, by
+// construction). Kept as its own handler, not a wrapper around SolveHandler/
+// PLService.Solve, for the same reason as DemoDiscoverHandler: real-path
+// factory-state usage may grow over time and must not leak into demo mode.
+func DemoSolveHandler(database *db.DB, autoScaleMax int64) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		req, ok := decodeSolveRequest(w, r)
+		if !ok {
 			return
 		}
+		req.FactoryState = solver.FactoryState{}
 
-		namedGroups := make([]namedMachineGroup, len(out.Result.MachineGroups))
-		for i, mg := range out.Result.MachineGroups {
-			namedGroups[i] = namedMachineGroup{
-				MachineGroupDraft: mg,
-				RecipeOutputName:  names[mg.RecipeOutput.Key()],
-				MachineName:       machineNames[mg.MachineMod+":"+mg.MachineID],
-			}
+		result, err := solver.NewSolver(database, autoScaleMax).Solve(r.Context(), req)
+		if writeSolveError(w, err) {
+			return
 		}
-		namedInputs := make([]namedIOEntry, len(out.Result.IOProfile.Inputs))
-		for i, e := range out.Result.IOProfile.Inputs {
-			namedInputs[i] = namedIOEntry{IOEntry: e, Name: names[e.Item.Key()]}
-		}
-		namedOutputs := make([]namedIOEntry, len(out.Result.IOProfile.Outputs))
-		for i, e := range out.Result.IOProfile.Outputs {
-			namedOutputs[i] = namedIOEntry{IOEntry: e, Name: names[e.Item.Key()]}
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"draft_id":   out.DraftID,
-			"expires_at": out.ExpiresAt,
-			"Names":      names,
-			"result": map[string]any{
-				"MachineGroups": namedGroups,
-				"IOProfile": map[string]any{
-					"Inputs":  namedInputs,
-					"Outputs": namedOutputs,
-				},
-				"ActualRate":     out.Result.ActualRate,
-				"HadCycles":      out.Result.HadCycles,
-				"ModeUsed":       out.Result.ModeUsed,
-				"Warnings":       out.Result.Warnings,
-				"TagResolutions": resolveTagResolutions(out.Result.TagResolutions, names),
-			},
-		})
+		respondSolve(w, r, database, result, nil, nil)
 	}
 }
 

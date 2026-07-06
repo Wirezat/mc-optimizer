@@ -156,13 +156,13 @@ func run() error {
 	mux.Handle("POST /api/factories/{factory_id}/source-inputs", protected(api.UpsertFactorySourceInputHandler(database)))
 	mux.Handle("DELETE /api/source-inputs/{input_id}", protected(api.DeleteFactorySourceInputHandler(database)))
 
-	mux.Handle("GET /api/mods", protected(api.ListModsHandler(database)))
+	mux.Handle("GET /api/mods", api.ListModsHandler(database)) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("POST /api/mods", adminOnly(api.CreateModHandler(database)))
 	mux.Handle("PUT /api/mods/{mod_id}", adminOnly(api.UpdateModHandler(database)))
 	mux.Handle("GET /api/mods/{mod_id}/modrinth-preview", adminOnly(api.ModrinthPreviewHandler(database)))
 	mux.Handle("DELETE /api/mods/{mod_id}", adminOnly(api.DeleteModHandler(database)))
 	mux.Handle("GET /api/machines", protected(api.ListAllMachinesHandler(database)))
-	mux.Handle("GET /api/upgrade-tiers", protected(api.ListUpgradeTiersHandler(database)))
+	mux.Handle("GET /api/upgrade-tiers", api.ListUpgradeTiersHandler(database)) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/mods/{mod_id}/machines", protected(api.ListMachinesHandler(database)))
 	mux.Handle("PATCH /api/mods/{mod_id}/machines/{machine_id}", adminOnly(api.UpdateMachineHandler(database)))
 	mux.Handle("GET /api/mods/{mod_id}/machines/{machine_id}/interfaces", protected(api.ListMachineInterfacesHandler(database)))
@@ -178,20 +178,22 @@ func run() error {
 	mux.Handle("PATCH /api/recipes/{recipe_id}", adminOnly(api.UpdateRecipeNameHandler(database)))
 	mux.Handle("DELETE /api/recipes/{recipe_id}", adminOnly(api.DeleteRecipeHandler(database)))
 
-	mux.Handle("GET /api/items", protected(api.SearchItemsHandler(database)))
+	mux.Handle("GET /api/items", api.SearchItemsHandler(database)) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/items/{mod_id}/{item_id}/recipes", protected(api.GetItemRecipesHandler(database)))
-	mux.Handle("GET /api/fluids", protected(api.SearchFluidsHandler(database)))
+	mux.Handle("GET /api/fluids", api.SearchFluidsHandler(database)) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/tags", protected(api.SearchTagsHandler(database)))
 	mux.Handle("GET /api/trades", protected(api.ListVillagerTradesHandler(database)))
 
 	mux.Handle("GET /api/import/status", adminOnly(api.ImportStatusHandler(database)))
-	mux.Handle("POST /api/import/jar", adminOnly(api.ImportJARHandler(database, "assets")))
+	mux.Handle("POST /api/import/modfile", adminOnly(api.ImportModFileHandler(database, "assets")))
 
 	mux.Handle("PATCH /api/machine-groups/{group_id}/status", protected(api.UpdateMachineGroupStatusHandler(database)))
 	mux.Handle("PATCH /api/machine-groups/{group_id}/upgrades", protected(api.UpdateMachineGroupUpgradesHandler(database, plSvc)))
 
 	mux.Handle("POST /api/factories/{factory_id}/discover", protected(api.DiscoverHandler(database)))
 	mux.Handle("POST /api/factories/{factory_id}/solve", protected(api.SolveHandler(database, plSvc)))
+	mux.Handle("POST /api/demo/discover", api.DemoDiscoverHandler(database)) // public: no factory/save behind this, safe to expose pre-login
+	mux.Handle("POST /api/demo/solve", api.DemoSolveHandler(database, autoScaleMax))    // public: no factory/save behind this, safe to expose pre-login
 	mux.Handle("POST /api/factories/{factory_id}/production-line/confirm", protected(api.ConfirmProductionLineHandler(database, plSvc)))
 	mux.Handle("GET /api/factories/{factory_id}/production-lines", protected(api.ListProductionLinesHandler(database)))
 
@@ -216,6 +218,7 @@ func run() error {
 	mux.HandleFunc("GET /saves/{save_id}", page("save.html"))
 	mux.HandleFunc("GET /factories/{factory_id}", page("factory.html"))
 	mux.HandleFunc("GET /factories/{factory_id}/solve", page("solve.html"))
+	mux.HandleFunc("GET /demo/solve", page("solve.html")) // same file — see demo-mode branch inside solve.html
 	mux.HandleFunc("GET /production-lines/{line_id}", page("production-line.html"))
 	mux.HandleFunc("GET /catalog/mods", page("catalog-mods.html"))
 	mux.HandleFunc("GET /catalog/items", page("catalog-items.html"))

@@ -1,11 +1,9 @@
 package importer
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -170,37 +168,3 @@ func FetchModrinthMetadata(modID, displayName, slugOverride string) (*model.ModM
 	return meta, nil
 }
 
-// EnrichModsFromModrinth fetches Modrinth metadata for each mod and stores it.
-// modNames maps mod_id → display name (may be empty if not found in JAR).
-// Errors per-mod are logged as warnings, not fatal.
-func (imp *Importer) EnrichModsFromModrinth(ctx context.Context, modNames map[string]string) {
-	for modID, displayName := range modNames {
-		proj, err := lookupProject(modID, displayName)
-		if err != nil {
-			log.Printf("modrinth: lookup %s: %v", modID, err)
-			continue
-		}
-		if proj == nil {
-			continue
-		}
-
-		author := teamOwner(proj.Team)
-
-		meta := model.ModMetadata{
-			ModID:        modID,
-			Description:  proj.Description,
-			Author:       author,
-			License:      proj.License.ID,
-			URLSource:    proj.SourceURL,
-			URLModrinth:  fmt.Sprintf("https://modrinth.com/mod/%s", proj.Slug),
-			URLWiki:      proj.WikiURL,
-			URLIssues:    proj.IssuesURL,
-			URLDiscord:   proj.DiscordURL,
-			ModrinthSlug: proj.Slug,
-		}
-
-		if err := imp.db.UpdateModMetadata(ctx, meta); err != nil {
-			log.Printf("modrinth: save metadata %s: %v", modID, err)
-		}
-	}
-}

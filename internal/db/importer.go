@@ -383,21 +383,30 @@ func (d *DB) UpdateModDisplayNames(ctx context.Context, names map[string]string)
 	return nil
 }
 
-// BulkUpsertItems inserts items extracted from translation files.
+// BulkUpsertItems inserts (or updates) items extracted from a mod definition, with
+// each item's own curated max_stack (yaml `max_stack`, default 64 if unspecified —
+// NOT hardcoded 64 regardless of curation, that was a bug: any yaml-curated max_stack
+// was silently discarded and reimports never updated an already-existing row).
 // The mod must already exist; items for unknown mods are silently skipped.
 // IDs that already exist in the fluids table are also skipped — block.* lang keys
 // are used for both items and fluids, so without this check fluids would be double-registered.
-func (d *DB) BulkUpsertItems(ctx context.Context, modID string, itemIDs []string) error {
-	if len(itemIDs) == 0 {
+func (d *DB) BulkUpsertItems(ctx context.Context, modID string, items []model.ItemDef) error {
+	if len(items) == 0 {
 		return nil
+	}
+	ids := make([]string, len(items))
+	maxStacks := make([]int, len(items))
+	for i, it := range items {
+		ids[i] = it.ItemID
+		maxStacks[i] = it.MaxStack
 	}
 	_, err := d.Pool.Exec(ctx, `
 		INSERT INTO items (mod_id, item_id, max_stack)
-		SELECT $1, id, 64 FROM unnest($2::text[]) AS id
+		SELECT $1, t.id, t.max_stack FROM unnest($2::text[], $3::int[]) AS t(id, max_stack)
 		WHERE EXISTS (SELECT 1 FROM mods WHERE mod_id = $1)
-		  AND NOT EXISTS (SELECT 1 FROM fluids WHERE mod_id = $1 AND fluid_id = id)
-		ON CONFLICT (mod_id, item_id) DO NOTHING
-	`, modID, itemIDs)
+		  AND NOT EXISTS (SELECT 1 FROM fluids WHERE mod_id = $1 AND fluid_id = t.id)
+		ON CONFLICT (mod_id, item_id) DO UPDATE SET max_stack = EXCLUDED.max_stack
+	`, modID, ids, maxStacks)
 	if err != nil {
 		return fmt.Errorf("db: bulk upsert items for mod %s: %w", modID, err)
 	}
@@ -559,17 +568,10 @@ var vanillaSlots = []struct {
 	x, y         *int16
 	label        *string
 }{
-	// crafting_table: 3×3 inputs + 1 output
-	{"minecraft", "crafting_table", 0, "item_input", int16p(0), int16p(0), nil},
-	{"minecraft", "crafting_table", 1, "item_input", int16p(1), int16p(0), nil},
-	{"minecraft", "crafting_table", 2, "item_input", int16p(2), int16p(0), nil},
-	{"minecraft", "crafting_table", 3, "item_input", int16p(0), int16p(1), nil},
-	{"minecraft", "crafting_table", 4, "item_input", int16p(1), int16p(1), nil},
-	{"minecraft", "crafting_table", 5, "item_input", int16p(2), int16p(1), nil},
-	{"minecraft", "crafting_table", 6, "item_input", int16p(0), int16p(2), nil},
-	{"minecraft", "crafting_table", 7, "item_input", int16p(1), int16p(2), nil},
-	{"minecraft", "crafting_table", 8, "item_input", int16p(2), int16p(2), nil},
-	{"minecraft", "crafting_table", 9, "item_output", nil, nil, nil},
+	// NOTE: crafting_table intentionally has no slots here — hand-crafting
+	// recipes (crafting_shaped/shapeless) are out of scope for this tool (see
+	// generate_mi_yml.py/generate_vanilla_yml.py doc comments) and no
+	// "crafting_table" machine_types row exists to hang slots off of.
 	// furnace / blast_furnace / smoker: input + fuel + output
 	{"minecraft", "furnace", 0, "item_input", nil, nil, nil},
 	{"minecraft", "furnace", 1, "item_input", nil, nil, strp("fuel")},
@@ -589,11 +591,9 @@ var vanillaSlots = []struct {
 	// stonecutter: 1 input + 1 output
 	{"minecraft", "stonecutter", 0, "item_input", nil, nil, nil},
 	{"minecraft", "stonecutter", 1, "item_output", nil, nil, nil},
-	// smithing_table: template + base + addition + output
-	{"minecraft", "smithing_table", 0, "item_input", int16p(0), int16p(0), strp("template")},
-	{"minecraft", "smithing_table", 1, "item_input", int16p(1), int16p(0), strp("base")},
-	{"minecraft", "smithing_table", 2, "item_input", int16p(2), int16p(0), strp("addition")},
-	{"minecraft", "smithing_table", 3, "item_output", nil, nil, nil},
+	// NOTE: smithing_table intentionally has no slots — not curated as a
+	// machine_types row (see vanilla.yml's machines: list), same reasoning as
+	// crafting_table above.
 }
 
 // LocalizeMachineNames resolves a translation key for each machine_type and stores it in

@@ -300,8 +300,6 @@
           </div>
         </div>
 
-        <div class="info-banner" data-i18n="solve.warning.electric_only"></div>
-
         <!-- ── Step 1: Target + Mode ───────────────────────────────────────── -->
         <div class="step-label"><span>1 — </span><span data-i18n="solve.step.target">What do you want to produce?</span></div>
         <div class="container container-config" style="margin-bottom:var(--gap-section);">
@@ -353,7 +351,33 @@
                 </div>
               </div>
 
-              <div class="field" id="upgrade-field">
+            </div>
+
+            <div style="display:flex;gap:var(--gap-section);flex-wrap:wrap;margin-top:var(--gap-container);">
+
+              <div class="field" id="tier-field" style="width:auto;">
+                <label class="field-label" data-i18n="solve.tier.label">Tier</label>
+                <div class="mode-toggle" style="flex-shrink:0;">
+                  <button class="mode-btn"        id="btn-tier-bronze"   data-i18n="solve.tier.bronze">Bronze</button>
+                  <button class="mode-btn"        id="btn-tier-steel"    data-i18n="solve.tier.steel">Steel</button>
+                  <button class="mode-btn active" id="btn-tier-electric" data-i18n="solve.tier.electric">Electric</button>
+                </div>
+              </div>
+
+              <!-- EBF's own tier (steam/cupronickel/kanthal) is an independent axis from
+                   the main Bronze/Steel/Electric tier above — it only ever affects blast
+                   furnace family recipes and never overrides the main tier for anything
+                   else, so both selections stay active simultaneously. -->
+              <div class="field" id="ebf-tier-field" style="width:auto;">
+                <label class="field-label" data-i18n="solve.tier.ebf_label">EBF</label>
+                <div class="mode-toggle" style="flex-shrink:0;">
+                  <button class="mode-btn"        id="btn-ebf-steam"       data-i18n="solve.tier.ebf_steam">Steam</button>
+                  <button class="mode-btn"        id="btn-ebf-cupronickel" data-i18n="solve.tier.ebf_cupronickel">Cupronickel</button>
+                  <button class="mode-btn active" id="btn-ebf-kanthal"     data-i18n="solve.tier.ebf_kanthal">Kanthal</button>
+                </div>
+              </div>
+
+              <div class="field" id="upgrade-field" style="width:auto;">
                 <label class="field-label" data-i18n="solve.upgrade.label">Upgrades</label>
                 <div style="display:flex;gap:var(--gap-inline);align-items:center;flex-wrap:wrap;">
                   <div class="mode-toggle" style="flex-shrink:0;">
@@ -452,11 +476,21 @@
   document.getElementById('btn-upg-fixed').textContent = t('solve.upgrade.fixed');
   document.getElementById('solve-btn').textContent    = t('solve.discover_btn');
   document.getElementById('confirm-btn').textContent  = t('solve.confirm_btn');
-  guard();
+  // Demo mode: /demo/solve — same page, no factory/save backing it, no login
+  // required. Discover and solve go through factory-less, unauthenticated
+  // API endpoints and nothing gets persisted (no draft, no confirm step).
+  const _isDemo    = window.location.pathname.startsWith('/demo/');
+  const _factoryID = _isDemo ? null : window.location.pathname.split('/')[2];
+  if (!_isDemo) guard();
   initHeader();
-
-  const _factoryID = window.location.pathname.split('/')[2];
+  const _discoverURL = _isDemo ? '/api/demo/discover' : '/api/factories/' + _factoryID + '/discover';
+  const _solveURL    = _isDemo ? '/api/demo/solve'    : '/api/factories/' + _factoryID + '/solve';
   let _mode           = 'AUTO';
+  let _machineTier    = 'electric'; // 'bronze' | 'steel' | 'electric' — applies to all non-EBF machine families
+  // EBF's own tier is a fully independent axis (steam/cupronickel/kanthal) — it only
+  // ever affects blast-furnace-family recipes and is chosen alongside _machineTier,
+  // never instead of it (a chain can use Steel macerators AND Kanthal EBF at once).
+  let _ebfTier        = 'kanthal'; // 'steam' | 'cupronickel' | 'kanthal'
   let _upgradeMode    = 'off'; // 'off' | 'auto' | 'fixed'
   let _tiers          = [];
   let _draftID        = null;
@@ -478,34 +512,49 @@
   function modName(modID) { return _modNames[modID] || modID; }
 
   async function init() {
-    const factRes = await apiFetch('/api/factories/' + _factoryID);
-    if (!factRes?.ok) { window.location.href = '/saves'; return; }
-    const { factory } = await factRes.json();
+    let modsRes, itemsRes, fluidsRes;
 
-    document.title = 'MC Optimizer — ' + t('solve.title') + ' — ' + factory.name;
-    document.getElementById('bc-factory').textContent = factory.name;
-    document.getElementById('bc-factory').href        = '/factories/' + _factoryID;
+    if (_isDemo) {
+      document.title = 'MC Optimizer — ' + t('solve.title') + ' — Demo';
+      document.querySelector('.breadcrumb').style.display = 'none';
+      document.querySelector('.confirm-bar').style.display = 'none';
+      [modsRes, itemsRes, fluidsRes] = await Promise.all([
+        apiFetch('/api/mods'),
+        apiFetch('/api/items?all=true'),
+        apiFetch('/api/fluids?all=true'),
+      ]);
+    } else {
+      const factRes = await apiFetch('/api/factories/' + _factoryID);
+      if (!factRes?.ok) { window.location.href = '/saves'; return; }
+      const { factory } = await factRes.json();
 
-    const [saveRes, plRes, modsRes, itemsRes, fluidsRes] = await Promise.all([
-      apiFetch('/api/saves/' + factory.save_id),
-      apiFetch('/api/factories/' + _factoryID + '/production-lines'),
-      apiFetch('/api/mods'),
-      apiFetch('/api/items?all=true'),
-      apiFetch('/api/fluids?all=true'),
-    ]);
-    if (saveRes?.ok) {
-      const save = await saveRes.json();
-      document.getElementById('bc-save').textContent = save.name;
-      document.getElementById('bc-save').href        = '/saves/' + factory.save_id;
-    }
-    if (plRes?.ok) {
-      const pls = await plRes.json();
-      for (const pl of pls) {
-        const key = (pl.target_is_fluid ? 'fluid:' : '') + pl.target_mod_id + ':' + pl.target_item_id;
-        _autoStopKeys.add(key);
-        _stopPoints.add(key);
+      document.title = 'MC Optimizer — ' + t('solve.title') + ' — ' + factory.name;
+      document.getElementById('bc-factory').textContent = factory.name;
+      document.getElementById('bc-factory').href        = '/factories/' + _factoryID;
+
+      let saveRes, plRes;
+      [saveRes, plRes, modsRes, itemsRes, fluidsRes] = await Promise.all([
+        apiFetch('/api/saves/' + factory.save_id),
+        apiFetch('/api/factories/' + _factoryID + '/production-lines'),
+        apiFetch('/api/mods'),
+        apiFetch('/api/items?all=true'),
+        apiFetch('/api/fluids?all=true'),
+      ]);
+      if (saveRes?.ok) {
+        const save = await saveRes.json();
+        document.getElementById('bc-save').textContent = save.name;
+        document.getElementById('bc-save').href        = '/saves/' + factory.save_id;
+      }
+      if (plRes?.ok) {
+        const pls = await plRes.json();
+        for (const pl of pls) {
+          const key = (pl.target_is_fluid ? 'fluid:' : '') + pl.target_mod_id + ':' + pl.target_item_id;
+          _autoStopKeys.add(key);
+          _stopPoints.add(key);
+        }
       }
     }
+
     if (modsRes?.ok) {
       const mods = await modsRes.json();
       for (const m of mods) _modNames[m.mod_id] = m.name;
@@ -589,6 +638,96 @@
     document.getElementById('upg-auto-controls').style.display  = m === 'auto'  ? 'flex' : 'none';
     reSolveIfShown();
   }
+
+  // Machine-tier prefix convention, matching the MI addon-machine naming pattern
+  // (see markdown/modern_industrialization.yml): bronze_/steel_ tiers implement
+  // their electric base type via machine_interfaces.
+  // The Electric Blast Furnace family is its OWN independent axis — steam (no
+  // upgrades), cupronickel and kanthal coils (both upgradable, but with different
+  // structural EU caps) — modeled as 'ebf-steam'/'ebf-cupronickel'/'ebf-kanthal'
+  // buckets, entirely separate from bronze/steel/electric so picking a main tier
+  // never affects which EBF coil is used, and vice versa.
+  function machineTierOf(machineID) {
+    if (machineID.startsWith('bronze_')) return 'bronze';
+    if (machineID.startsWith('steel_'))  return 'steel';
+    if (machineID === 'steam_blast_furnace') return 'ebf-steam';
+    if (machineID === 'electric_blast_furnace_cupronickel') return 'ebf-cupronickel';
+    if (machineID === 'electric_blast_furnace') return 'ebf-kanthal';
+    return 'electric';
+  }
+
+  // Resolve which RecipeOption.Key to use for a given RecipeID. Two independent
+  // axes: if this recipe belongs to the EBF family (any option classifies as an
+  // 'ebf-*' bucket), the EBF tier alone decides — the main Bronze/Steel/Electric
+  // tier is irrelevant to blast-furnace recipes and never overrides it. Otherwise
+  // the main tier applies as before, falling back to Electric if this family has
+  // no bronze/steel variant.
+  function resolveOptionKeyForTier(options, recipeID, tier, ebfTier) {
+    const group = (options || []).filter(o => o.RecipeID === recipeID);
+    if (!group.length) return null;
+
+    const ebfOptions = group.filter(o => machineTierOf(o.MachineID).startsWith('ebf-'));
+    if (ebfOptions.length) {
+      const wanted = ebfOptions.find(o => machineTierOf(o.MachineID) === 'ebf-' + (ebfTier || _ebfTier));
+      if (wanted) return wanted.Key;
+      const kanthal = ebfOptions.find(o => machineTierOf(o.MachineID) === 'ebf-kanthal');
+      return (kanthal || ebfOptions[0]).Key;
+    }
+
+    const wanted = group.find(o => machineTierOf(o.MachineID) === tier);
+    if (wanted) return wanted.Key;
+    const electric = group.find(o => machineTierOf(o.MachineID) === 'electric');
+    return (electric || group[0]).Key;
+  }
+
+  function setMachineTier(tier) {
+    _machineTier = tier;
+    document.getElementById('btn-tier-bronze').classList.toggle('active',   tier === 'bronze');
+    document.getElementById('btn-tier-steel').classList.toggle('active',    tier === 'steel');
+    document.getElementById('btn-tier-electric').classList.toggle('active', tier === 'electric');
+
+    // Re-resolve any already-chosen recipes to the new tier (same RecipeID,
+    // different machine variant) — a manual per-item pick stays a pick, it just
+    // follows the global tier like everything else unless the user picks a
+    // genuinely different recipe. EBF-family recipes are untouched here — they
+    // only ever follow _ebfTier (see setEbfTier), never the main tier.
+    let changed = false;
+    for (const item of _chainItems) {
+      if (!item.ChosenRecipeID) continue;
+      const key = itemKey(item.Item);
+      const newOptKey = resolveOptionKeyForTier(item.Options, item.ChosenRecipeID, tier, _ebfTier);
+      if (newOptKey && _overrides[key] !== newOptKey) {
+        _overrides[key] = newOptKey;
+        changed = true;
+      }
+    }
+    if (changed && _chainItems.length) doDiscover();
+  }
+
+  function setEbfTier(tier) {
+    _ebfTier = tier;
+    document.getElementById('btn-ebf-steam').classList.toggle('active',       tier === 'steam');
+    document.getElementById('btn-ebf-cupronickel').classList.toggle('active', tier === 'cupronickel');
+    document.getElementById('btn-ebf-kanthal').classList.toggle('active',     tier === 'kanthal');
+
+    let changed = false;
+    for (const item of _chainItems) {
+      if (!item.ChosenRecipeID) continue;
+      const key = itemKey(item.Item);
+      const newOptKey = resolveOptionKeyForTier(item.Options, item.ChosenRecipeID, _machineTier, tier);
+      if (newOptKey && _overrides[key] !== newOptKey) {
+        _overrides[key] = newOptKey;
+        changed = true;
+      }
+    }
+    if (changed && _chainItems.length) doDiscover();
+  }
+  document.getElementById('btn-tier-bronze').addEventListener('click',   () => setMachineTier('bronze'));
+  document.getElementById('btn-tier-steel').addEventListener('click',    () => setMachineTier('steel'));
+  document.getElementById('btn-tier-electric').addEventListener('click', () => setMachineTier('electric'));
+  document.getElementById('btn-ebf-steam').addEventListener('click',       () => setEbfTier('steam'));
+  document.getElementById('btn-ebf-cupronickel').addEventListener('click', () => setEbfTier('cupronickel'));
+  document.getElementById('btn-ebf-kanthal').addEventListener('click',     () => setEbfTier('kanthal'));
 
   function fillTierSelect(sel) {
     sel.innerHTML = '';
@@ -706,7 +845,7 @@
     document.getElementById('solve-btn').disabled = true;
 
     const stops = Object.fromEntries([..._stopPoints].map(k => [k, true]));
-    const res = await apiFetch('/api/factories/' + _factoryID + '/discover', {
+    const res = await apiFetch(_discoverURL, {
       method: 'POST',
       body: JSON.stringify({
         TargetItem:      targetItem,
@@ -737,7 +876,12 @@
     }
     const inCycle = _cycleNodes.has(key);
     const warnIcon = `<span class="cycle-warn${inCycle ? '' : ' cycle-warn-hidden'}"${inCycle ? ` title="${esc(t('solve.cycle_error.item_warn'))}"` : ''}>⚠</span>`;
-    const chosen = opts.find(o => o.RecipeID === item.ChosenRecipeID);
+    // Prefer the machine the backend actually chose (item.ChosenMachineID) over
+    // re-deriving via RecipeID, which would just grab whichever tier variant
+    // happens to appear first in Options — not necessarily the one in use.
+    const chosen = item.ChosenMachineID
+      ? opts.find(o => o.RecipeID === item.ChosenRecipeID && o.MachineID === item.ChosenMachineID)
+      : opts.find(o => o.RecipeID === item.ChosenRecipeID);
     const chosenInputs = chosen ? (chosen.Inputs || []) : [];
     const resolvedInputs = chosenInputs.map(k => _names[k]).filter(Boolean);
     const inputs = resolvedInputs.length ? resolvedInputs.join(', ') : '';
@@ -817,14 +961,29 @@
           </div>`
       : '';
 
-    portalEl.innerHTML = stopRow + (item.Options || []).map(opt => {
+    // Dedupe by RecipeID — bronze/steel/electric variants of the same recipe
+    // (reachable via machine_interfaces) are ONE choice here; the global Tier
+    // selector decides which machine actually runs it, not this per-item picker.
+    const seenRecipes = new Set();
+    const distinctOptions = (item.Options || []).filter(opt => {
+      if (seenRecipes.has(opt.RecipeID)) return false;
+      seenRecipes.add(opt.RecipeID);
+      return true;
+    });
+
+    portalEl.innerHTML = stopRow + distinctOptions.map(opt => {
       const ins  = (opt.Inputs  || []).join(', ');
       const outs = (opt.Outputs || []).join(', ');
       const isCurrent = opt.RecipeID === item.ChosenRecipeID;
+      // Show the machine name matching the currently active tier (EBF-family recipes
+      // use the independent EBF tier instead of the main Bronze/Steel/Electric one).
+      const isEbfFamily = (item.Options || []).some(o => o.RecipeID === opt.RecipeID && machineTierOf(o.MachineID).startsWith('ebf-'));
+      const wantedBucket = isEbfFamily ? ('ebf-' + _ebfTier) : _machineTier;
+      const tierOpt = (item.Options || []).find(o => o.RecipeID === opt.RecipeID && machineTierOf(o.MachineID) === wantedBucket) || opt;
       return `<div class="dropdown-item${isCurrent ? ' active' : ''}"
           data-action="selectChainOverride" data-key="${esc(key)}" data-recipeid="${esc(opt.RecipeID)}">
           <div style="flex:1;min-width:0;">
-            <div>${esc(_machineNames[opt.MachineMod + ':' + opt.MachineID] || opt.MachineID)}</div>
+            <div>${esc(_machineNames[tierOpt.MachineMod + ':' + tierOpt.MachineID] || tierOpt.MachineID)}</div>
             ${ins  ? `<div class="rp-io">← ${esc(ins)}</div>`  : ''}
             ${outs ? `<div class="rp-io">→ ${esc(outs)}</div>` : ''}
           </div>
@@ -842,7 +1001,9 @@
     if (recipeID === 'STOP') {
       delete _overrides[key];
     } else {
-      _overrides[key] = recipeID;
+      const item = _chainItems.find(ci => itemKey(ci.Item) === key);
+      const optKey = resolveOptionKeyForTier(item?.Options, recipeID, _machineTier, _ebfTier);
+      _overrides[key] = optKey || recipeID;
     }
     closeAllPickers();
     doDiscover();
@@ -876,7 +1037,7 @@
     showStatus('solve-status', '', t('solve.status.solving'));
     document.getElementById('solve-btn').disabled = true;
 
-    const res = await apiFetch('/api/factories/' + _factoryID + '/solve', {
+    const res = await apiFetch(_solveURL, {
       method: 'POST',
       body: JSON.stringify({
         TargetItem:           targetItem,

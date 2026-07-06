@@ -116,6 +116,8 @@
   const params = new URLSearchParams(location.search);
   const urlMod     = params.get('mod')     || '';
   const urlMachine = params.get('machine') || '';
+  const urlItem    = params.get('item')    || '';
+  const urlFluid   = params.get('fluid')   || '';
 
   // modId → { name, recipe_count } (from /api/mods)
   let allMods = [];
@@ -227,6 +229,8 @@
   }
 
   // Load and render recipes for a mod group; inserts rows after the group header.
+  // Browse mode only — machine/item/fluid filters never reach this path (see
+  // "Filtered mode" below), so no per-call filter merging is needed here.
   async function loadModGroup(modId, hdRow) {
     if (modRecipeCache.has(modId)) {
       return modRecipeCache.get(modId);
@@ -285,7 +289,7 @@
       html += `<tr class="table-group-hd collapsed" data-mod-group="${esc(m.mod_id)}">
         <td colspan="6"><span class="group-toggle"></span>
           <a href="/catalog/mods" class="catalog-link">${esc(m.name || m.mod_id)}</a>
-          <span class="td-muted mod-recipe-count" style="font-size:var(--text-xs);margin-left:6px;"></span>
+          <span class="td-muted mod-recipe-count" style="font-size:var(--text-xs);margin-left:6px;">${m.recipe_count || 0}</span>
         </td>
       </tr>
       <tr data-placeholder="${esc(m.mod_id)}" hidden><td colspan="6"></td></tr>`;
@@ -393,19 +397,74 @@
     }
   });
 
+  // Filtered mode — arriving with a machine/item/fluid filter (the "I already
+  // know what I want" signal). Single unified fetch carrying every active URL
+  // filter dimension, so no dimension can be silently dropped the way the
+  // two-parallel-code-paths version did (see 2026-07-04 session notes).
+  // Renders matching recipes directly, grouped + auto-expanded.
+  async function renderFilteredRecipes() {
+    const qs = new URLSearchParams();
+    if (urlMod)     qs.set('mod', urlMod);
+    if (urlMachine) qs.set('machine', urlMachine);
+    if (urlItem)    qs.set('item', urlItem);
+    if (urlFluid)   qs.set('fluid', urlFluid);
+    const res = await apiFetch(`/api/recipes?${qs.toString()}`);
+    const recipes = res?.ok ? await res.json() : [];
+    countEl.textContent = recipes.length + ' recipe' + (recipes.length !== 1 ? 's' : '');
+
+    if (!recipes.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_recipes')}</td></tr>`;
+      return;
+    }
+
+    const byMod = new Map();
+    for (const r of recipes) {
+      if (!byMod.has(r.machine_mod_id)) byMod.set(r.machine_mod_id, []);
+      byMod.get(r.machine_mod_id).push(r);
+    }
+
+    let html = '';
+    for (const [modId, modRecipes] of byMod) {
+      modRecipeCache.set(modId, modRecipes);
+      const modInfo = allMods.find(m => m.mod_id === modId);
+      html += `<tr class="table-group-hd" data-mod-group="${esc(modId)}" data-loaded="1">
+        <td colspan="6"><span class="group-toggle"></span>
+          <a href="/catalog/mods" class="catalog-link">${esc(modInfo?.name || modId)}</a>
+          <span class="td-muted mod-recipe-count" style="font-size:var(--text-xs);margin-left:6px;">${modRecipes.length}</span>
+        </td>
+      </tr>`;
+      html += recipeRows(modRecipes);
+    }
+    tbody.innerHTML = html;
+    initCellClampScroll(tbody);
+
+    const machines = [...new Set(recipes.map(r => r.machine_mod_id + ':' + r.machine_id))];
+    for (const key of machines) {
+      const [mId, machId] = key.split(':');
+      ensureMachineLoaded(mId, machId);
+    }
+  }
+
   // Initial load: mod list only
   const modsRes = await apiFetch('/api/mods');
   if (modsRes?.ok) {
     allMods = await modsRes.json();
-    // filter to mods that might have recipes (if urlMod set, only that mod)
-    const visibleMods = urlMod ? allMods.filter(m => m.mod_id === urlMod) : allMods;
-    renderModGroups(visibleMods);
-    countEl.textContent = visibleMods.length + ' mod' + (visibleMods.length !== 1 ? 's' : '');
 
-    // if urlMod is set, auto-expand it
-    if (urlMod) {
-      const hd = tbody.querySelector(`.table-group-hd[data-mod-group="${CSS.escape(urlMod)}"]`);
-      if (hd) { hd.classList.remove('collapsed'); await expandModGroup(hd); }
+    if (urlMachine || urlItem || urlFluid) {
+      // Filtered mode: any specific-recipe-set filter beyond plain mod-browsing.
+      await renderFilteredRecipes();
+    } else {
+      // Browse mode: no machine/item/fluid — just optionally mod.
+      // filter to mods that might have recipes (if urlMod set, only that mod)
+      const visibleMods = urlMod ? allMods.filter(m => m.mod_id === urlMod) : allMods;
+      renderModGroups(visibleMods);
+      countEl.textContent = visibleMods.length + ' mod' + (visibleMods.length !== 1 ? 's' : '');
+
+      // if urlMod is set, auto-expand it
+      if (urlMod) {
+        const hd = tbody.querySelector(`.table-group-hd[data-mod-group="${CSS.escape(urlMod)}"]`);
+        if (hd) { hd.classList.remove('collapsed'); await expandModGroup(hd); }
+      }
     }
 
     new WuiAutocomplete({

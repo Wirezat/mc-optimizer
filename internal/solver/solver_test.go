@@ -24,6 +24,18 @@ func solveBoth(t *testing.T, g *RecipeGraph, target Rational) (dag RateVector, l
 	return dag, lin
 }
 
+// rateFor looks up a rate by bare recipe ID, ignoring which machine it landed
+// on — RateVector is keyed by RecipeOptionKey(recipe, machine) now, but these
+// fixture tests only ever attach one machine per synthetic recipe id.
+func rateFor(rv RateVector, recipeID string) Rational {
+	for k, v := range rv.RecipeRates {
+		if id, _, _, ok := ParseRecipeOptionKey(k); ok && id == recipeID {
+			return v
+		}
+	}
+	return Rational{}
+}
+
 func assertRate(t *testing.T, label string, got Rational, wantNum, wantDen int64) {
 	t.Helper()
 	want := float64(wantNum) / float64(wantDen)
@@ -34,8 +46,8 @@ func assertRate(t *testing.T, label string, got Rational, wantNum, wantDen int64
 
 func assertDagLinMatch(t *testing.T, label string, dag, lin RateVector, recipeID string) {
 	t.Helper()
-	d := dag.RecipeRates[recipeID]
-	l := lin.RecipeRates[recipeID]
+	d := rateFor(dag, recipeID)
+	l := rateFor(lin, recipeID)
 	if !approxEq(ratF(d), ratF(l), 1e-9) {
 		t.Errorf("%s DAG vs linalg mismatch for %s: dag=%v lin=%v", label, recipeID, d, l)
 	}
@@ -88,10 +100,10 @@ func TestChain_linear(t *testing.T) {
 	dag, lin := solveBoth(t, g, target)
 
 	// Recipe rates must agree for both solvers.
-	assertRate(t, "dag assembler", dag.RecipeRates["r:assembler"], 4, 1)
-	assertRate(t, "dag furnace", dag.RecipeRates["r:furnace"], 2, 1)
-	assertRate(t, "lin assembler", lin.RecipeRates["r:assembler"], 4, 1)
-	assertRate(t, "lin furnace", lin.RecipeRates["r:furnace"], 2, 1)
+	assertRate(t, "dag assembler", rateFor(dag, "r:assembler"), 4, 1)
+	assertRate(t, "dag furnace", rateFor(dag, "r:furnace"), 2, 1)
+	assertRate(t, "lin assembler", rateFor(lin, "r:assembler"), 4, 1)
+	assertRate(t, "lin furnace", rateFor(lin, "r:furnace"), 2, 1)
 	assertDagLinMatch(t, "linear chain", dag, lin, "r:assembler")
 	assertDagLinMatch(t, "linear chain", dag, lin, "r:furnace")
 
@@ -159,10 +171,10 @@ func TestChain_sharedIntermediate(t *testing.T) {
 		if label == "lin" {
 			rv = lin
 		}
-		assertRate(t, label+" r:root", rv.RecipeRates["r:root"], 1, 1)
-		assertRate(t, label+" r:a", rv.RecipeRates["r:a"], 1, 1)
-		assertRate(t, label+" r:b", rv.RecipeRates["r:b"], 1, 1)
-		assertRate(t, label+" r:c", rv.RecipeRates["r:c"], 1, 1)
+		assertRate(t, label+" r:root", rateFor(rv, "r:root"), 1, 1)
+		assertRate(t, label+" r:a", rateFor(rv, "r:a"), 1, 1)
+		assertRate(t, label+" r:b", rateFor(rv, "r:b"), 1, 1)
+		assertRate(t, label+" r:c", rateFor(rv, "r:c"), 1, 1)
 	}
 	for _, id := range []string{"r:root", "r:a", "r:b", "r:c"} {
 		assertDagLinMatch(t, "sharedIntermediate", dag, lin, id)
@@ -219,7 +231,7 @@ func TestChain_probabilisticOutput(t *testing.T) {
 		t.Fatalf("SolveDAG: %v", err)
 	}
 
-	assertRate(t, "centrifuge rate", dag.RecipeRates["r:centrifuge"], 2, 1)
+	assertRate(t, "centrifuge rate", rateFor(dag, "r:centrifuge"), 2, 1)
 	assertRate(t, "ore demand", dag.ItemRates["mi:ore"], 2, 1)
 
 	profile := ComputeIOProfile(dag, g, FactoryState{}, "t")
@@ -268,9 +280,9 @@ func TestChain_stopPoint(t *testing.T) {
 		t.Fatalf("SolveDAG: %v", err)
 	}
 
-	assertRate(t, "root recipe", dag.RecipeRates["r:root"], 1, 1)
+	assertRate(t, "root recipe", rateFor(dag, "r:root"), 1, 1)
 	// leaf recipe should not run (mid is stop-point)
-	if r := dag.RecipeRates["r:leaf"]; r.Num != 0 {
+	if r := rateFor(dag, "r:leaf"); r.Num != 0 {
 		t.Errorf("leaf recipe should not run (mid is stop-point), got %v", r)
 	}
 
@@ -318,8 +330,8 @@ func TestChain_factoryProvided(t *testing.T) {
 		t.Fatalf("SolveDAG: %v", err)
 	}
 
-	assertRate(t, "root recipe", dag.RecipeRates["r:root"], 1, 1)
-	if r := dag.RecipeRates["r:provided"]; r.Num != 0 {
+	assertRate(t, "root recipe", rateFor(dag, "r:root"), 1, 1)
+	if r := rateFor(dag, "r:provided"); r.Num != 0 {
 		t.Errorf("provided recipe should not run, got %v", r)
 	}
 
@@ -378,9 +390,9 @@ func TestChain_multipleByproducts_bothConsumed(t *testing.T) {
 		if label == "lin" {
 			rv = lin
 		}
-		assertRate(t, label+" assembler", rv.RecipeRates["r:assembler"], 1, 1)
-		assertRate(t, label+" smelter", rv.RecipeRates["r:smelter"], 1, 1)
-		assertRate(t, label+" slag_press", rv.RecipeRates["r:slag_press"], 1, 1)
+		assertRate(t, label+" assembler", rateFor(rv, "r:assembler"), 1, 1)
+		assertRate(t, label+" smelter", rateFor(rv, "r:smelter"), 1, 1)
+		assertRate(t, label+" slag_press", rateFor(rv, "r:slag_press"), 1, 1)
 	}
 	for _, id := range []string{"r:assembler", "r:smelter", "r:slag_press"} {
 		assertDagLinMatch(t, "multiByproduct", dag, lin, id)
@@ -508,9 +520,9 @@ func TestCycle_linearOnly(t *testing.T) {
 	}
 
 	// packager=1, reactor=centrifuge=1 (cycle balanced)
-	assertRate(t, "packager", rv.RecipeRates["r:packager"], 1, 1)
-	assertRate(t, "reactor", rv.RecipeRates["r:reactor"], 1, 1)
-	assertRate(t, "centrifuge", rv.RecipeRates["r:centrifuge"], 1, 1)
+	assertRate(t, "packager", rateFor(rv, "r:packager"), 1, 1)
+	assertRate(t, "reactor", rateFor(rv, "r:reactor"), 1, 1)
+	assertRate(t, "centrifuge", rateFor(rv, "r:centrifuge"), 1, 1)
 }
 
 // ── 9. DAG and linalg produce identical results (acyclic) ─────────────────
@@ -561,9 +573,9 @@ func TestSolvers_dagLinalgParity(t *testing.T) {
 
 	// machine at 1/t → needs 4 circuits/t → circuit machine at 4/t, needs 8 plastic/t
 	// plastic at 8/t, chem outputs 3/run → chem at 8/3/t
-	assertRate(t, "fabricator", dag.RecipeRates["r:machine"], 1, 1)
-	assertRate(t, "circuit assembler", dag.RecipeRates["r:circuit"], 4, 1)
-	assertRate(t, "chem plant", dag.RecipeRates["r:chem"], 8, 3)
+	assertRate(t, "fabricator", rateFor(dag, "r:machine"), 1, 1)
+	assertRate(t, "circuit assembler", rateFor(dag, "r:circuit"), 4, 1)
+	assertRate(t, "chem plant", rateFor(dag, "r:chem"), 8, 3)
 }
 
 // ── 10. Zero-rate recipe when item is fully stop-pointed ──────────────────
@@ -605,10 +617,10 @@ func TestChain_stopPointZerosRecipe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SolveDAG: %v", err)
 	}
-	if r := dag.RecipeRates["r:a"]; r.Num != 0 {
+	if r := rateFor(dag, "r:a"); r.Num != 0 {
 		t.Errorf("r:a should not run (a is stop-point), got %v", r)
 	}
-	assertRate(t, "root recipe", dag.RecipeRates["r:root"], 1, 1)
+	assertRate(t, "root recipe", rateFor(dag, "r:root"), 1, 1)
 
 	profile := ComputeIOProfile(dag, g, FactoryState{}, "t")
 	aInput := ioHasInput(profile, "a")

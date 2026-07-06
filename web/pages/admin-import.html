@@ -14,43 +14,24 @@
     })();
   </script>
   <style>
-    /* ── Import card ───────────────────────────────────────────────────────── */
-    .import-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      max-width: 600px;
+    /* ── Progress bar (flush, above drop zone) ─────────────────────────────── */
+    .import-progress {
+      height: 3px;
+      background: var(--border);
       overflow: hidden;
+      display: none;
     }
-
-    /* ── Status checklist ──────────────────────────────────────────────────── */
-    .checklist { list-style: none; padding: 0; margin: 0; }
-    .checklist li {
-      display: flex;
-      align-items: center;
-      gap: var(--gap-control);
-      padding: var(--gap-inline) var(--pad-card);
-      border-bottom: 1px solid var(--border);
-      font-size: var(--text-sm);
+    .import-progress.visible { display: block; }
+    .import-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.3s;
     }
-    .checklist li:last-child { border-bottom: none; }
-    .cl-icon { width: 14px; text-align: center; font-size: var(--text-xs); }
-    .cl-icon.ok      { color: var(--accent); }
-    .cl-icon.missing { color: var(--text-faint); }
-    .cl-label { flex: 1; color: var(--text); }
-    .cl-hint  { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono); }
-
-    /* ── Card divider ──────────────────────────────────────────────────────── */
-    .card-divider { border: none; border-top: 1px solid var(--border); margin: 0; }
-
-    /* ── Progress bar (flush, no margin) ──────────────────────────────────── */
-    .progress-bar { height: 3px; background: var(--border); overflow: hidden; display: none; }
-    .progress-bar.visible { display: block; }
-    .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
 
     /* ── Drop zone ─────────────────────────────────────────────────────────── */
-    .drop-zone {
-      margin: var(--pad-card);
+    .import-drop {
+      margin: var(--pad-container);
       border: 2px dashed var(--border);
       border-radius: var(--radius-lg);
       padding: var(--gap-section) var(--pad-card);
@@ -60,119 +41,53 @@
       transition: border-color 0.15s, background 0.15s, color 0.15s;
       background: var(--bg-page);
     }
-    .drop-zone:hover, .drop-zone.drag-over {
+    .import-drop:hover, .import-drop.drag-over {
       border-color: var(--accent);
       background: var(--accent-muted);
       color: var(--text);
     }
-    .drop-zone.disabled { opacity: 0.5; pointer-events: none; }
-    .drop-zone-icon { font-size: 24px; display: block; margin-bottom: var(--gap-inline); opacity: 0.5; }
-    .drop-zone-main { font-size: var(--text-sm); color: var(--text); }
-    .drop-zone-browse {
+    .import-drop.disabled { opacity: 0.5; pointer-events: none; }
+    .import-drop-icon  { font-size: 24px; display: block; margin-bottom: var(--gap-inline); opacity: 0.5; }
+    .import-drop-main  { font-size: var(--text-sm); color: var(--text); }
+    .import-drop-browse {
       color: var(--accent); text-decoration: underline; cursor: pointer;
       background: none; border: none; font-size: inherit; font-family: inherit; padding: 0;
     }
-    .drop-zone-file { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--accent); margin-top: var(--gap-inline); }
-    .drop-zone-sub { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--gap-inline); }
-
-    /* ── Prefix reference ──────────────────────────────────────────────────── */
-    .prefix-ref {
-      font-size: var(--text-xs);
-      color: var(--text-faint);
-      text-align: center;
+    .import-drop-file {
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
+      color: var(--accent);
       margin-top: var(--gap-inline);
-      line-height: 1.7;
     }
-    .prefix-ref code {
-      background: var(--border);
-      border-radius: var(--radius-sm);
-      padding: 1px var(--gap-inline);
-      font-size: 10px;
-      color: var(--text);
-    }
+    .import-drop-sub { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--gap-inline); }
 
-    /* ── Action row ────────────────────────────────────────────────────────── */
-    .card-actions {
+    /* ── Action row (bottom of container) ─────────────────────────────────── */
+    .import-actions {
       display: flex;
       align-items: center;
       gap: var(--gap-control);
-      padding: var(--gap-control) var(--pad-card);
+      padding: var(--gap-inline) var(--pad-container);
       border-top: 1px solid var(--border);
     }
-    .status-msg     { font-size: var(--text-sm); }
-    .status-msg.ok  { color: var(--success); }
-    .status-msg.err { color: var(--danger); }
+    .import-status     { font-size: var(--text-sm); }
+    .import-status.ok  { color: var(--success); }
+    .import-status.err { color: var(--danger); }
 
-    /* ── Import result ─────────────────────────────────────────────────────── */
-    .import-result {
-      display: none;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: var(--gap-control) var(--pad-card);
-      max-width: 600px;
-      margin-top: var(--gap-section);
-      font-size: var(--text-sm);
-    }
-    .import-result.visible { display: block; }
-    .import-result-row { display: flex; gap: var(--pad-card); flex-wrap: wrap; }
+    /* ── Result stats ──────────────────────────────────────────────────────── */
+    .import-stat-row { display: flex; gap: var(--pad-card); flex-wrap: wrap; }
     .import-stat { display: flex; align-items: center; gap: var(--gap-inline); }
-    .import-stat-num { font-size: var(--text-md); font-weight: var(--weight-bold); color: var(--accent); }
-    .import-warnings { margin-top: var(--gap-inline); max-height: 140px; overflow-y: auto; }
-    .import-warn-line {
-      color: var(--text-muted); font-family: var(--mono); font-size: var(--text-xs);
-      padding: 2px 0; word-break: break-all;
-    }
+    .import-stat-num   { font-size: var(--text-md); font-weight: var(--weight-bold); color: var(--accent); }
+    .import-stat-label { font-size: var(--text-sm); color: var(--text-muted); }
 
-    /* ── Field warnings table ──────────────────────────────────────────────── */
-    .fw-section {
-      margin-top: var(--gap-section);
-      border-top: 1px solid var(--border);
-      padding-top: var(--gap-control);
-    }
-    .fw-title {
-      font-size: var(--text-sm);
-      font-weight: var(--weight-semibold);
-      color: var(--text-muted);
-      margin-bottom: var(--gap-inline);
-    }
-    .fw-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
-    .fw-table th {
-      text-align: left;
-      color: var(--text-faint);
-      font-weight: var(--weight-semibold);
-      padding: var(--gap-inline) var(--gap-control);
-      border-bottom: 1px solid var(--border);
-    }
-    .fw-table td {
-      padding: var(--gap-inline) var(--gap-control);
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
-    }
-    .fw-table tr:last-child td { border-bottom: none; }
-    .fw-type { font-family: var(--mono); color: var(--text); }
-    .fw-fields { font-family: var(--mono); color: var(--danger); }
-    .fw-expand-btn {
-      background: none; border: none; cursor: pointer;
-      color: var(--accent); font-size: var(--text-xs); padding: 0;
-      text-decoration: underline;
-    }
-    .fw-raw {
-      display: none;
-      margin-top: var(--gap-inline);
-      background: var(--bg-page);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: var(--gap-inline) var(--gap-control);
+    /* ── Warnings ──────────────────────────────────────────────────────────── */
+    .import-warn-list { margin-top: var(--gap-control); max-height: 160px; overflow-y: auto; }
+    .import-warn-line {
       font-family: var(--mono);
-      font-size: 10px;
-      color: var(--text-faint);
-      white-space: pre;
-      overflow-x: auto;
-      max-height: 200px;
-      overflow-y: auto;
+      font-size: var(--text-xs);
+      color: var(--text-muted);
+      padding: 2px 0;
+      word-break: break-all;
     }
-    .fw-raw.open { display: block; }
   </style>
 </head>
 <body class="app-shell">
@@ -216,60 +131,54 @@
           </div>
         </div>
 
-        <div class="import-card">
+        <!-- Import card -->
+        <div class="container" style="max-width:600px">
 
-          <!-- Status checklist -->
-          <ul class="checklist" id="checklist">
-            <li style="color:var(--text-faint);padding:var(--gap-inline) var(--pad-card);" data-i18n="common.loading"></li>
-          </ul>
+          <div class="container-header">
+            <span class="container-title" data-i18n="admin.import.title"></span>
+            <span class="view-picker-label" id="mod-count"></span>
+          </div>
 
-          <hr class="card-divider" />
+          <!-- Template downloads -->
+          <div class="container-body" style="padding-bottom:0;display:flex;align-items:center;gap:var(--gap-control);flex-wrap:wrap">
+            <a class="btn btn-ghost btn-sm" href="/static/data/mod-template.yml" download data-i18n="admin.import.template.download"></a>
+            <a class="btn btn-ghost btn-sm" href="/static/data/example-iron_furnaces.yml" download data-i18n="admin.import.template.example"></a>
+            <span class="field-caption" data-i18n="admin.import.template.hint"></span>
+          </div>
 
-          <!-- Progress bar (flush above drop zone) -->
-          <div class="progress-bar" id="progress-bar">
-            <div class="progress-fill" id="progress-fill"></div>
+          <!-- Progress bar (flush) -->
+          <div class="import-progress" id="progress-bar">
+            <div class="import-progress-fill" id="progress-fill"></div>
           </div>
 
           <!-- Drop zone -->
-          <div class="drop-zone" id="drop-zone">
-            <span class="drop-zone-icon">📦</span>
-            <div class="drop-zone-main">
+          <div class="import-drop" id="drop-zone">
+            <span class="import-drop-icon">📦</span>
+            <div class="import-drop-main">
               <span data-i18n="admin.import.drop_hint"></span>
-              <button class="drop-zone-browse" id="drop-browse" data-i18n="admin.import.browse"></button>
+              <button class="import-drop-browse" id="drop-browse" data-i18n="admin.import.browse"></button>
             </div>
-            <div class="drop-zone-file" id="drop-file"></div>
-            <div class="drop-zone-sub" data-i18n="admin.import.drop_sub"></div>
-            <div class="prefix-ref">
-              <span data-i18n="admin.import.order_note"></span>
-              &nbsp;·&nbsp; Forge: <code>forge:</code> &nbsp; NeoForge: <code>neoforge:</code> &nbsp; Fabric: <code>c:</code> &nbsp; Vanilla: <code>minecraft:</code>
-            </div>
+            <div class="import-drop-file" id="drop-file"></div>
+            <div class="import-drop-sub" data-i18n="admin.import.drop_sub"></div>
           </div>
-          <input type="file" id="jar-input" accept=".jar" multiple style="display:none" />
+          <input type="file" id="zip-input" accept=".zip" style="display:none" />
 
-          <!-- Action row -->
-          <div class="card-actions">
+          <!-- Actions -->
+          <div class="import-actions">
             <button class="btn btn-primary btn-sm" id="import-btn" disabled data-i18n="admin.import.btn"></button>
-            <span class="status-msg" id="import-status"></span>
+            <span class="import-status" id="import-status"></span>
           </div>
 
         </div>
 
         <!-- Result (shown after successful import) -->
-        <div class="import-result" id="import-result">
-          <div class="import-result-row" id="import-stats"></div>
-          <div class="import-warnings" id="import-warnings"></div>
-          <div class="fw-section" id="fw-section" style="display:none">
-            <div class="fw-title" data-i18n="admin.import.field_warnings.title"></div>
-            <table class="fw-table">
-              <thead>
-                <tr>
-                  <th data-i18n="admin.import.field_warnings.col_type"></th>
-                  <th data-i18n="admin.import.field_warnings.col_fields"></th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="fw-body"></tbody>
-            </table>
+        <div class="container" id="import-result" style="max-width:600px;margin-top:var(--gap-section);display:none">
+          <div class="container-header">
+            <span class="container-title" id="import-result-mod"></span>
+          </div>
+          <div class="container-body">
+            <div class="import-stat-row" id="import-stats"></div>
+            <div class="import-warn-list" id="import-warnings"></div>
           </div>
         </div>
 
@@ -315,69 +224,45 @@
       const res = await apiFetch('/api/import/status');
       if (!res?.ok) return;
       const s = await res.json();
-      const cl = document.getElementById('checklist');
-      cl.innerHTML = '';
-      const checks = [
-        { key: 'minecraft', label: 'Vanilla',   hint: 'minecraft-<v>.jar' },
-        { key: 'forge',     label: 'Forge',      hint: 'forge-<v>-universal.jar' },
-        { key: 'neoforge',  label: 'NeoForge',   hint: 'neoforge-<v>-universal.jar' },
-        { key: 'fabric',    label: 'Fabric API', hint: 'fabric-api-<v>.jar' },
-      ];
-      for (const c of checks) {
-        const ok = s[c.key];
-        const li = document.createElement('li');
-        li.innerHTML =
-          `<span class="cl-icon ${ok ? 'ok' : 'missing'}">${ok ? '✓' : '○'}</span>` +
-          `<span class="cl-label">${c.label}</span>` +
-          `<span class="cl-hint">${ok ? t('admin.import.present') : c.hint}</span>`;
-        cl.appendChild(li);
-      }
-      const li = document.createElement('li');
-      li.innerHTML =
-        `<span class="cl-icon" style="color:var(--text-faint)">Σ</span>` +
-        `<span class="cl-label" style="color:var(--text-faint)">Mods</span>` +
-        `<span class="cl-hint">${s.total_mods}</span>`;
-      cl.appendChild(li);
+      document.getElementById('mod-count').textContent =
+        t('admin.import.total_mods').replace('{n}', s.total_mods);
     } catch(e) { console.warn('status:', e); }
   }
 
-  let _files = [];
+  let _file = null;
 
-  const jarInput = document.getElementById('jar-input');
+  const zipInput = document.getElementById('zip-input');
   const dropZone = document.getElementById('drop-zone');
 
-  dropZone.addEventListener('click', () => jarInput.click());
+  dropZone.addEventListener('click', () => zipInput.click());
   document.getElementById('drop-browse').addEventListener('click', e => {
     e.stopPropagation();
-    jarInput.click();
+    zipInput.click();
   });
   dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
   dropZone.addEventListener('drop', e => {
     e.preventDefault(); dropZone.classList.remove('drag-over');
-    if (e.dataTransfer.files.length) setFiles(Array.from(e.dataTransfer.files));
+    const f = e.dataTransfer.files[0];
+    if (f) setFile(f);
   });
-
-  jarInput.addEventListener('change', () => { if (jarInput.files.length) setFiles(Array.from(jarInput.files)); });
+  zipInput.addEventListener('change', () => { if (zipInput.files[0]) setFile(zipInput.files[0]); });
 
   document.getElementById('import-btn').addEventListener('click', runImport);
 
-  function setFiles(files) {
-    if (!files.length) return;
-    _files = files;
-    document.getElementById('drop-file').textContent = files.length === 1
-      ? files[0].name
-      : `${files.length} JARs selected`;
+  function setFile(f) {
+    _file = f;
+    document.getElementById('drop-file').textContent = f.name;
     document.getElementById('import-btn').disabled = false;
     setStatus('', '');
   }
 
   async function runImport() {
-    if (!_files.length) return;
+    if (!_file) return;
     const btn = document.getElementById('import-btn');
     btn.disabled = true;
     dropZone.classList.add('disabled');
-    document.getElementById('import-result').classList.remove('visible');
+    document.getElementById('import-result').style.display = 'none';
     setStatus('', '');
 
     const pb = document.getElementById('progress-bar');
@@ -387,52 +272,49 @@
 
     try {
       const form = new FormData();
-      for (const f of _files) form.append('jar', f);
-      const res = await apiFetch('/api/import/jar', { method: 'POST', body: form });
+      form.append('modfile', _file);
+      const res = await apiFetch('/api/import/modfile', { method: 'POST', body: form });
       pf.style.width = '85%';
       const data = await res.json();
       pf.style.width = '100%';
       setTimeout(() => { pb.classList.remove('visible'); pf.style.width = '0%'; }, 350);
       dropZone.classList.remove('disabled');
 
+      const result = Array.isArray(data) ? data[0] : data;
+
       if (!res.ok) {
+        document.getElementById('import-result-mod').textContent = '';
         document.getElementById('import-stats').innerHTML =
-          `<div class="import-stat"><span class="import-stat-num" style="color:var(--danger)">${t('common.error')}</span> ${esc(data.message || String(res.status))}</div>`;
+          `<div class="import-stat"><span class="import-stat-num" style="color:var(--danger)">${t('common.error')}</span><span class="import-stat-label">${esc(result?.message || String(res.status))}</span></div>`;
         document.getElementById('import-warnings').innerHTML = '';
-        document.getElementById('import-result').classList.add('visible');
+        document.getElementById('import-result').style.display = '';
         setStatus(t('msg.save_error'), 'err');
         btn.disabled = false;
         return;
       }
 
+      document.getElementById('import-result-mod').textContent = result.mod_id || '';
       document.getElementById('import-stats').innerHTML = [
-        stat(data.recipes_imported, t('admin.import.stat.recipes')),
-        stat(data.recipes_skipped,  t('admin.import.stat.skipped'), true),
-        stat(data.items_seeded,     t('admin.import.stat.items')),
-        stat(data.translations,     t('admin.import.stat.translations')),
-        stat(data.tags,             t('admin.import.stat.tags')),
-        stat(data.tag_members,      t('admin.import.stat.tag_members'), true),
-        stat(data.textures,         t('admin.import.stat.textures')),
-        stat(data.block_drops,      t('admin.import.stat.block_drops')),
-        stat(data.villager_trades,  t('admin.import.stat.villager_trades')),
+        stat(result.machines,         t('admin.import.stat.machines')),
+        stat(result.recipes_imported, t('admin.import.stat.recipes')),
+        stat(result.items,            t('admin.import.stat.items')),
+        stat(result.fluids,           t('admin.import.stat.fluids')),
+        stat(result.translations,     t('admin.import.stat.translations')),
+        stat(result.tags,             t('admin.import.stat.tags')),
+        stat(result.textures,         t('admin.import.stat.textures')),
+        stat(result.block_drops,      t('admin.import.stat.block_drops')),
+        stat(result.villager_trades,  t('admin.import.stat.villager_trades')),
       ].filter(Boolean).join('');
 
-      const warnEl = document.getElementById('import-warnings');
-      const skipLines = (data.skip_warnings || []).map(sw => {
-        const msg = t('admin.import.skip.unsupported_type')
-          .replace('{type}', sw.recipe_type)
-          .replace('{count}', sw.count);
-        return `<div class="import-warn-line">${esc(msg)}</div>`;
-      });
-      const warnLines = (data.warnings || []).map(w => `<div class="import-warn-line">${esc(w)}</div>`);
-      warnEl.innerHTML = [...skipLines, ...warnLines].join('');
+      document.getElementById('import-warnings').innerHTML = (result.warnings || [])
+        .map(w => `<div class="import-warn-line">${esc(w)}</div>`)
+        .join('');
 
-      renderFieldWarnings(data.field_warnings || []);
-      document.getElementById('import-result').classList.add('visible');
-
+      document.getElementById('import-result').style.display = '';
       setStatus(t('msg.saved'), 'ok');
       document.getElementById('drop-file').textContent = '';
-      _files = [];
+      _file = null;
+      btn.disabled = true;
       loadStatus();
 
       openModal({
@@ -446,58 +328,18 @@
       dropZone.classList.remove('disabled');
       setStatus(t('msg.network_error') + ': ' + e.message, 'err');
     }
-    document.getElementById('import-btn').disabled = true;
   }
 
   function setStatus(msg, type) {
     const el = document.getElementById('import-status');
     el.textContent = msg;
-    el.className = 'status-msg' + (type ? ' ' + type : '');
+    el.className = 'import-status' + (type ? ' ' + type : '');
   }
 
-  function stat(n, label, muted) {
-    if (!n && n !== 0) return '';
-    const col = muted ? 'color:var(--text-muted)' : '';
-    return `<div class="import-stat"><span class="import-stat-num" style="${col}">${n}</span> ${label}</div>`;
+  function stat(n, label) {
+    if (!n) return '';
+    return `<div class="import-stat"><span class="import-stat-num">${n}</span><span class="import-stat-label">${label}</span></div>`;
   }
-
-  function renderFieldWarnings(fws) {
-    const section = document.getElementById('fw-section');
-    const tbody   = document.getElementById('fw-body');
-    if (!fws.length) { section.style.display = 'none'; return; }
-    section.style.display = '';
-    tbody.innerHTML = '';
-    for (const fw of fws) {
-      const tr = document.createElement('tr');
-      const tdType   = document.createElement('td');
-      const tdFields = document.createElement('td');
-      const tdAction = document.createElement('td');
-      tdType.className   = 'fw-type';
-      tdFields.className = 'fw-fields';
-      tdType.textContent   = fw.recipe_type;
-      tdFields.textContent = fw.unknown_fields.join(', ');
-
-      const btn = document.createElement('button');
-      btn.className = 'fw-expand-btn';
-      btn.textContent = t('admin.import.field_warnings.expand');
-      const pre = document.createElement('pre');
-      pre.className = 'fw-raw';
-      pre.textContent = fw.raw_json || '';
-      btn.addEventListener('click', () => {
-        const open = pre.classList.toggle('open');
-        btn.textContent = t(open ? 'admin.import.field_warnings.collapse' : 'admin.import.field_warnings.expand');
-      });
-      tdAction.appendChild(btn);
-      tdAction.appendChild(pre);
-
-      tr.appendChild(tdType);
-      tr.appendChild(tdFields);
-      tr.appendChild(tdAction);
-      tbody.appendChild(tr);
-    }
-    applyI18n();
-  }
-
 
   init();
 </script>

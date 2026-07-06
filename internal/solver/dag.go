@@ -4,7 +4,7 @@ import "fmt"
 
 // RateVector holds the computed rates for recipes and items.
 type RateVector struct {
-	RecipeRates map[string]Rational // recipe_uuid → Executions/Tick
+	RecipeRates map[string]Rational // RecipeOptionKey(recipe, machine) → Executions/Tick
 	ItemRates   map[string]Rational // ItemRef.Key() → Net-Flow/Tick
 }
 
@@ -151,7 +151,7 @@ func SolveDAG(g *RecipeGraph, targetRatePerTick Rational) (RateVector, error) {
 		}
 
 		recipeRate := itemRate.Div(node.OutputAmount)
-		rv.RecipeRates[node.RecipeID] = recipeRate
+		rv.RecipeRates[node.RateKey()] = recipeRate
 		rv.ItemRates[key] = itemRate
 
 		for _, edge := range node.Inputs {

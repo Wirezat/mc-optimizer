@@ -132,7 +132,7 @@ func TestByproduct_notNeeded(t *testing.T) {
 	}
 
 	// centrifuge runs at 1/20t (1 run per 20 ticks = 1/s), producing 2 sulfur_dust/s
-	recipeRate := rv.RecipeRates["r:centrifuge"]
+	recipeRate := rateFor(rv, "r:centrifuge")
 	if !approxEq(ratF(recipeRate), 1.0/20, 1e-9) {
 		t.Errorf("centrifuge recipeRate: got %v, want 1/20", recipeRate)
 	}
@@ -200,7 +200,7 @@ func TestByproduct_fullyCoversDemand(t *testing.T) {
 	}
 
 	// Furnace must still run at 1/20t to produce glass — byproduct covers silicon_dust input.
-	furnaceRate := rv.RecipeRates["r:furnace"]
+	furnaceRate := rateFor(rv, "r:furnace")
 	if !approxEq(ratF(furnaceRate), 1.0/20, 1e-9) {
 		t.Errorf("glass furnace recipeRate: got %v, want 1/20", furnaceRate)
 	}
@@ -255,7 +255,7 @@ func TestByproduct_partiallyCoversDemand(t *testing.T) {
 	}
 
 	// Furnace still runs at 1/20t (we need 1 glass per 20 ticks for chemReactor).
-	furnaceRate := rv.RecipeRates["r:furnace"]
+	furnaceRate := rateFor(rv, "r:furnace")
 	if !approxEq(ratF(furnaceRate), 1.0/20, 1e-9) {
 		t.Errorf("glass furnace recipeRate: got %v (%f), want 1/20", furnaceRate, ratF(furnaceRate))
 	}
@@ -372,7 +372,7 @@ func TestByproduct_linearSystem(t *testing.T) {
 	}
 
 	// Furnace must run at 1/20t — it's the only source of glass.
-	furnaceRate := rv.RecipeRates["r:furnace"]
+	furnaceRate := rateFor(rv, "r:furnace")
 	if !approxEq(ratF(furnaceRate), 1.0/20, 1e-9) {
 		t.Errorf("linear: glass furnace rate should be 1/20, got %v (%f)", furnaceRate, ratF(furnaceRate))
 	}

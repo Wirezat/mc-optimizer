@@ -97,6 +97,7 @@
   let modNames  = {};
   let filtered  = [];
   let rendered  = 0;
+  let groupCounts = {};
 
 
   function renderChunk() {
@@ -108,7 +109,7 @@
       if (item.mod_id !== lastMod) {
         lastMod = item.mod_id;
         const modName = modNames[item.mod_id] || item.mod_id;
-        html += `<tr class="table-group-hd"><td colspan="3"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a></td></tr>`;
+        html += `<tr class="table-group-hd collapsed"><td colspan="3"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${groupCounts[item.mod_id] || 0}</span></td></tr>`;
       }
       html += `<tr>
         <td>
@@ -129,6 +130,8 @@
     filtered = urlMod ? allItems.filter(i => i.mod_id === urlMod) : allItems;
     if (q) filtered = filtered.filter(i => wuiFilter(i, q, ['name', 'item_id', 'mod_name']));
     countEl.textContent = filtered.length + ' item' + (filtered.length !== 1 ? 's' : '');
+    groupCounts = {};
+    for (const i of filtered) groupCounts[i.mod_id] = (groupCounts[i.mod_id] || 0) + 1;
     rendered = 0;
     tbody.innerHTML = '';
     if (!filtered.length) {

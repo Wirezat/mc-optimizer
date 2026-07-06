@@ -62,14 +62,21 @@ CREATE TABLE tag_values (
 CREATE INDEX ON tag_values (tag_name);
 
 CREATE TABLE machine_types (
-    mod_id           TEXT     NOT NULL REFERENCES mods(mod_id),
-    machine_id       TEXT     NOT NULL,
-    name             TEXT     NOT NULL,
-    base_eu_per_tick BIGINT,
-    max_eu_per_tick  BIGINT,
-    max_slots        SMALLINT,
-    energy_type      TEXT,
-    upgradable       BOOLEAN  NOT NULL DEFAULT FALSE,
+    mod_id              TEXT     NOT NULL REFERENCES mods(mod_id),
+    machine_id          TEXT     NOT NULL,
+    name                TEXT     NOT NULL,
+    base_eu_per_tick    BIGINT,
+    max_eu_per_tick     BIGINT,
+    max_slots           SMALLINT,
+    energy_type         TEXT,
+    upgradable          BOOLEAN  NOT NULL DEFAULT FALSE,
+    name_lang_key       TEXT,
+    -- Upgrade-immune ceiling on which recipes this machine can run, independent of
+    -- max_eu_per_tick (which upgrades add to). Models MI's Electric Blast Furnace
+    -- coil-tier system: cupronickel_coil caps runnable recipes at 32 EU/t no matter
+    -- how many upgrade items are inserted, even though the machine's normal upgrade
+    -- cap (128 EU/t) is identical to the kanthal_coil variant. NULL = no restriction.
+    fixed_recipe_eu_cap BIGINT,
     PRIMARY KEY (mod_id, machine_id)
 );
 
@@ -127,15 +134,16 @@ CREATE UNIQUE INDEX recipes_content_hash_idx ON recipes (content_hash) WHERE con
 CREATE INDEX ON recipes (machine_mod_id, machine_id);
 
 CREATE TABLE recipe_item_inputs (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    recipe_id       UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+    recipe_id       UUID    NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
     item_mod_id     TEXT,
     item_id         TEXT,
-    tag_id          UUID REFERENCES tags(id),
-    amount_num      INT  NOT NULL,
-    amount_den      INT  NOT NULL,
-    probability_num INT  NOT NULL DEFAULT 1,
-    probability_den INT  NOT NULL DEFAULT 1,
+    tag_id          UUID    REFERENCES tags(id),
+    amount_num      INT     NOT NULL,
+    amount_den      INT     NOT NULL,
+    probability_num INT     NOT NULL DEFAULT 1,
+    probability_den INT     NOT NULL DEFAULT 1,
+    non_consuming   BOOLEAN NOT NULL DEFAULT FALSE, -- reusable tool; not factored into consumption rates
     CONSTRAINT chk_item_or_tag CHECK (
         (item_mod_id IS NOT NULL AND item_id IS NOT NULL AND tag_id IS NULL) OR
         (item_mod_id IS NULL     AND item_id IS NULL     AND tag_id IS NOT NULL)

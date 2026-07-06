@@ -1,0 +1,168 @@
+# MC Optimizer — Mod Definition Template
+#
+# One file per mod. Fill in real values, remove example entries.
+# Any field whose primary key equals "_example_" is ignored by the importer.
+#
+# Cross-mod references use "mod_id:item_id" notation.
+# Items/fluids from this mod use plain "item_id".
+
+# ── Mod metadata ──────────────────────────────────────────────────────────────
+mod_id:        _example_   # required — also used as Modrinth slug fallback if modrinth_slug is not set
+name:          _example_   # fetched from Modrinth if modrinth_slug is set; set manually otherwise
+energy_type:   NONE        # required, not fetchable — EU | FE | SU | NONE | CUSTOM
+
+# Fields below are fetched from Modrinth when modrinth_slug is set and the field is empty.
+# You can also set them manually — manual values take precedence over fetched ones.
+modrinth_slug: _example_   # optional — enables Modrinth fetch
+description:   _example_
+author:        _example_
+license:       _example_   # e.g. "MIT", "ARR"
+url_source:    _example_
+url_modrinth:  _example_
+url_wiki:      _example_
+url_issues:    _example_
+url_discord:   _example_
+
+# ── Translations ──────────────────────────────────────────────────────────────
+# Any Minecraft language code is valid (en_us, de_de, zh_cn, fr_fr, …)
+translations:
+  en_us:
+    _example_.item._example_: Example Item
+
+# ── Items ─────────────────────────────────────────────────────────────────────
+items:
+  - id:        _example_
+    max_stack: 64           # default: 64
+    lang_key:  _example_    # optional — key from translations above
+
+# ── Fluids ────────────────────────────────────────────────────────────────────
+fluids:
+  - id:       _example_
+    lang_key: _example_     # optional — key from translations above
+
+# ── Tags ──────────────────────────────────────────────────────────────────────
+tags:
+  - name: _example_:_example_   # e.g. "forge:ores/iron"
+    members:
+      - _example_:_example_     # mod_id:item_id
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# MACHINE & RECIPE PATTERNS BY ECOSYSTEM
+#
+# ecosystem is required on every machine — it controls which upgrade/overclock
+# rules apply. New addon from a known ecosystem? Copy the matching pattern.
+#
+#   vanilla                — no energy, no upgrades
+#   modern_industrialization — energy_per_tick + upgrades/overclocks
+#   mekanism               — energy_per_tick (FE), no upgrades
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+machines:
+
+  # ── Vanilla (furnace-like) ─────────────────────────────────────────────────
+  # No energy. Item-only. No upgrades.
+  # Examples: Iron Furnaces, any simple processing block.
+  - id:         _example_
+    lang_key:   _example_
+    ecosystem:  vanilla
+    upgradable: false
+    slots:
+      - { index: 0, type: item_input,  x: 0, y: 0 }
+      - { index: 1, type: item_output, x: 2, y: 0 }
+
+  # ── Modern Industrialization (and addons) ──────────────────────────────────
+  # energy_per_tick + duration_ticks. Items and/or fluids. Upgradable.
+  # An MI addon machine looks exactly like this — just different id values.
+  - id:                   _example_
+    lang_key:             _example_
+    ecosystem:            modern_industrialization
+    base_energy_per_tick: 32
+    max_energy_per_tick:  512
+    upgradable:           true
+    slots:
+      - { index: 0, type: item_input,   x: 0, y: 0, label: Ore }
+      - { index: 1, type: item_output,  x: 3, y: 0 }
+      - { index: 2, type: fluid_input,  x: 0, y: 1 }
+      - { index: 3, type: fluid_output, x: 3, y: 1 }
+
+  # ── Mekanism (and addons) ──────────────────────────────────────────────────
+  # energy_per_tick in FE/t. No upgrades. energy_type overrides mod default.
+  - id:                   _example_
+    lang_key:             _example_
+    ecosystem:            mekanism
+    energy_type:          FE          # overrides mod-level energy_type if needed
+    base_energy_per_tick: 100
+    upgradable:           false
+    slots:
+      - { index: 0, type: item_input,  x: 0, y: 0 }
+      - { index: 1, type: item_output, x: 2, y: 0 }
+
+recipes:
+
+  # ── Vanilla recipe ─────────────────────────────────────────────────────────
+  - machine:        _example_
+    duration_ticks: 200
+    inputs:
+      items:
+        - item:   _example_:_example_
+          amount: 1
+    outputs:
+      items:
+        - item:   _example_:_example_
+          amount: 1
+
+  # ── MI / MI-addon recipe ───────────────────────────────────────────────────
+  # Tag inputs: use "tag:" instead of "item:".
+  - machine:          _example_
+    duration_ticks:   100
+    energy_per_tick:  32
+    inputs:
+      items:
+        - tag:    forge:ores/iron
+          amount: 1
+      fluids:
+        - fluid:     modern_industrialization:steam
+          amount_mb: 1000
+    outputs:
+      items:
+        - item:        _example_:_example_
+          amount:      1
+          probability: 0.9          # optional — default 1.0
+      fluids:
+        - fluid:     _example_:_example_
+          amount_mb: 500
+
+  # ── Mekanism recipe ────────────────────────────────────────────────────────
+  - machine:          _example_
+    duration_ticks:   200
+    energy_per_tick:  100           # FE/t
+    inputs:
+      items:
+        - item:   _example_:_example_
+          amount: 1
+    outputs:
+      items:
+        - item:   _example_:_example_
+          amount: 2
+
+# ── Block drops ───────────────────────────────────────────────────────────────
+block_drops:
+  - block: _example_
+    drops:
+      - item:      _example_
+        min_count: 1
+        max_count: 1
+        condition: normal           # normal | silk_touch | fortune
+
+# ── Villager trades ───────────────────────────────────────────────────────────
+villager_trades:
+  - profession: _example_           # e.g. "toolsmith"
+    tier:        1                  # 1–5
+    cost:
+      item:  minecraft:emerald
+      count: 4
+    result:
+      item:  _example_
+      count: 1
+    max_uses: ~                     # null = unlimited
+    xp:       ~                     # null = no XP reward

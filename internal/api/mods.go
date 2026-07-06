@@ -350,13 +350,25 @@ func ListModFluidsHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
+// splitCatalogRef splits a "mod_id:id" query param into its parts. Returns ("", "")
+// if ref is empty or malformed (no colon), which callers treat as "no filter".
+func splitCatalogRef(ref string) (modID, id string) {
+	modID, id, ok := strings.Cut(strings.TrimSpace(ref), ":")
+	if !ok {
+		return "", ""
+	}
+	return modID, id
+}
+
 // ListRecipesCatalogHandler returns recipes for the catalog page with optional ?mod= and ?machine= filters.
 // Returns recipes without IO details (IO is fetched per-recipe on expand).
 func ListRecipesCatalogHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID     := strings.TrimSpace(r.URL.Query().Get("mod"))
 		machineID := strings.TrimSpace(r.URL.Query().Get("machine"))
-		recipes, err := database.ListRecipesCatalog(r.Context(), modID, machineID)
+		itemModID, itemID   := splitCatalogRef(r.URL.Query().Get("item"))
+		fluidModID, fluidID := splitCatalogRef(r.URL.Query().Get("fluid"))
+		recipes, err := database.ListRecipesCatalog(r.Context(), modID, machineID, itemModID, itemID, fluidModID, fluidID)
 		if err != nil {
 			errInternal(w, err)
 			return

@@ -65,7 +65,7 @@
           <button class="btn btn-primary" id="new-factory-btn" data-i18n="save.new_factory"></button>
         </div>
 
-        <div class="tile-grid" id="factories-grid"></div>
+        <div id="factories-container"></div>
 
         <div class="empty-state" id="empty-state" style="display:none;">
           <div class="empty-state-icon">🏭</div>
@@ -111,8 +111,8 @@
   import { guard, apiFetch } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
-  import { initTileScroll } from '/static/ui/js/tile-scroll.js';
   import { initModal, closeModal } from '/static/ui/js/modal.js';
+  import { createListView } from '/static/js/list-view.js';
 
   await load(getLang());
   applyI18n();
@@ -121,6 +121,37 @@
   initModal();
 
   const _saveID = window.location.pathname.split('/')[2];
+
+  const listView = createListView({
+    containerEl: document.getElementById('factories-container'),
+    emptyEl: document.getElementById('empty-state'),
+    storageKey: 'view:save-factories',
+    renderTile: (f) => `
+      <a class="tile${f.src ? ' tile-src' : ''}" href="/factories/${esc(f.id)}">
+        <button class="btn btn-danger-flat btn-sm btn-icon tile-action"
+          data-id="${esc(f.id)}" title="${esc(t('common.delete'))}">🗑</button>
+        <div class="tile-title">${esc(f.name)}</div>
+        ${f.src
+          ? `<div class="tile-subtitle"><span class="badge badge-accent">${esc(t('save.src_label'))}</span></div>`
+          : ''}
+        <div class="tile-meta">
+          ${f.src
+            ? `<span>${esc(t('save.src_meta'))}</span>`
+            : `<span>${fmtPL(f.pl_count)}</span>`}
+        </div>
+      </a>
+    `,
+    tableCols: [
+      { key: 'name', label: t('common.name'), grow: true,
+        render: (v, row) => `<a href="/factories/${esc(row.id)}">${esc(v)}</a>` },
+      { key: 'type', label: t('save.modal.src_label'),
+        render: (_, row) => row.src ? esc(t('save.src_label')) : '' },
+      { key: 'pl',   label: t('save.pl_col'),
+        render: (_, row) => row.src ? esc(t('save.src_meta')) : esc(fmtPL(row.pl_count)) },
+    ],
+    getId: (row) => row.id,
+    onDelete: (id, btn) => deleteFactory(id, btn),
+  });
 
   document.getElementById('new-factory-btn').addEventListener('click', openModal);
   document.getElementById('new-factory-btn-empty').addEventListener('click', openModal);
@@ -152,43 +183,7 @@
     const res = await apiFetch('/api/saves/' + _saveID + '/factories');
     if (!res) return;
     const factories = await res.json();
-    renderFactories(factories);
-  }
-
-  function renderFactories(factories) {
-    const grid  = document.getElementById('factories-grid');
-    const empty = document.getElementById('empty-state');
-    if (!factories || factories.length === 0) {
-      grid.innerHTML = '';
-      empty.style.display = '';
-      return;
-    }
-    empty.style.display = 'none';
-
-    grid.innerHTML = factories.map(f => `
-      <a class="tile${f.src ? ' tile-src' : ''}" href="/factories/${esc(f.id)}">
-        <button class="btn btn-danger-flat btn-sm btn-icon tile-action"
-          data-id="${esc(f.id)}" title="${esc(t('common.delete'))}">🗑</button>
-        <div class="tile-title">${esc(f.name)}</div>
-        ${f.src
-          ? `<div class="tile-subtitle"><span class="badge badge-accent">${esc(t('save.src_label'))}</span></div>`
-          : ''}
-        <div class="tile-meta">
-          ${f.src
-            ? `<span>${esc(t('save.src_meta'))}</span>`
-            : `<span>${fmtPL(f.pl_count)}</span>`}
-        </div>
-      </a>
-    `).join('');
-
-    grid.querySelectorAll('.tile-action').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.preventDefault();
-        deleteFactory(btn.dataset.id, btn);
-      });
-    });
-
-    initTileScroll(grid);
+    listView.render(factories);
   }
 
   // ── Create factory ────────────────────────────────────────────────────────
@@ -217,12 +212,12 @@
   }
 
   // ── Delete factory ────────────────────────────────────────────────────────
-  async function deleteFactory(id, btn) {
+  async function deleteFactory(id, btn = null) {
     if (!confirm(t('save.confirm_delete'))) return;
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
     const res = await apiFetch('/api/factories/' + id, { method: 'DELETE' });
     if (res && (res.ok || res.status === 204)) { loadFactories(); }
-    else btn.disabled = false;
+    else if (btn) btn.disabled = false;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

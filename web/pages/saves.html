@@ -59,7 +59,7 @@
           <button class="btn btn-primary" id="new-save-btn" data-i18n="saves.new"></button>
         </div>
 
-        <div class="tile-grid" id="saves-grid"></div>
+        <div id="saves-container"></div>
 
         <div class="empty-state" id="empty-state" style="display:none;">
           <div class="empty-state-icon">💾</div>
@@ -100,8 +100,8 @@
   import { guard, apiFetch } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
-  import { initTileScroll } from '/static/ui/js/tile-scroll.js';
   import { initModal, closeModal } from '/static/ui/js/modal.js';
+  import { createListView } from '/static/js/list-view.js';
 
   await load(getLang());
   applyI18n();
@@ -109,30 +109,11 @@
   initHeader();
   initModal();
 
-  document.getElementById('new-save-btn').addEventListener('click', openModal);
-  document.getElementById('new-save-btn-empty').addEventListener('click', openModal);
-  document.getElementById('modal-create-btn').addEventListener('click', doCreate);
-  document.getElementById('save-name').addEventListener('keydown', e => { if (e.key === 'Enter') doCreate(); });
-
-  // ── Load saves ────────────────────────────────────────────────────────────
-  async function loadSaves() {
-    const res = await apiFetch('/api/saves');
-    if (!res) return;
-    const saves = await res.json();
-    renderSaves(saves);
-  }
-
-  function renderSaves(saves) {
-    const grid  = document.getElementById('saves-grid');
-    const empty = document.getElementById('empty-state');
-    if (!saves || saves.length === 0) {
-      grid.innerHTML = '';
-      empty.style.display = '';
-      return;
-    }
-    empty.style.display = 'none';
-
-    grid.innerHTML = saves.map(s => `
+  const listView = createListView({
+    containerEl: document.getElementById('saves-container'),
+    emptyEl: document.getElementById('empty-state'),
+    storageKey: 'view:saves',
+    renderTile: (s) => `
       <a class="tile" href="/saves/${esc(s.id)}">
         <button class="btn btn-danger-flat btn-sm btn-icon tile-action"
           data-id="${esc(s.id)}" title="${esc(t('common.delete'))}">🗑</button>
@@ -144,16 +125,30 @@
           <span>${esc(fmtDate(s.created_at))}</span>
         </div>
       </a>
-    `).join('');
+    `,
+    tableCols: [
+      { key: 'name',      label: t('common.name'), grow: true,
+        render: (v, row) => `<a href="/saves/${esc(row.id)}">${esc(v)}</a>` },
+      { key: 'factories', label: t('saves.factories_col'),
+        render: (_, row) => esc(fmtFactories(row.factory_count)) },
+      { key: 'created',   label: t('common.created_at'),
+        render: (_, row) => esc(fmtDate(row.created_at)) },
+    ],
+    getId: (row) => row.id,
+    onDelete: (id, btn) => deleteSave(id, btn),
+  });
 
-    grid.querySelectorAll('.tile-action').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.preventDefault();
-        deleteSave(btn.dataset.id, btn);
-      });
-    });
+  document.getElementById('new-save-btn').addEventListener('click', openModal);
+  document.getElementById('new-save-btn-empty').addEventListener('click', openModal);
+  document.getElementById('modal-create-btn').addEventListener('click', doCreate);
+  document.getElementById('save-name').addEventListener('keydown', e => { if (e.key === 'Enter') doCreate(); });
 
-    initTileScroll(grid);
+  // ── Load saves ────────────────────────────────────────────────────────────
+  async function loadSaves() {
+    const res = await apiFetch('/api/saves');
+    if (!res) return;
+    const saves = await res.json();
+    listView.render(saves);
   }
 
   // ── Create save ───────────────────────────────────────────────────────────
@@ -177,12 +172,12 @@
   }
 
   // ── Delete save ───────────────────────────────────────────────────────────
-  async function deleteSave(id, btn) {
+  async function deleteSave(id, btn = null) {
     if (!confirm(t('saves.confirm_delete'))) return;
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
     const res = await apiFetch('/api/saves/' + id, { method: 'DELETE' });
     if (res && (res.ok || res.status === 204)) { loadSaves(); }
-    else btn.disabled = false;
+    else if (btn) btn.disabled = false;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

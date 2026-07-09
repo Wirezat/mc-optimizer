@@ -151,6 +151,7 @@ type MachineGroupDraft struct {
 	UpgradeTier   string
 	UpgradeCount  int
 	Status        DraftStatus
+	EUPerTick     int64 // effective EU/t drawn by ONE machine in this group; 0 for non-eu machines
 }
 
 type IOProfile struct {

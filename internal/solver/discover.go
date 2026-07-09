@@ -12,8 +12,8 @@ type RecipeOption struct {
 	// is ambiguous when a recipe is reachable via multiple machine tiers
 	// (bronze/steel/electric all implementing the same base recipe).
 	Key     string
-	Inputs  []string // "item_id", "#tag_name", or "~fluid_id", first 4
-	Outputs []string // same format, first 4
+	Inputs  []string // "item_id", "#tag_name", or "~fluid_id" — complete list;
+	Outputs []string // the graph view derives its edges from these, so no cap.
 }
 
 // ChainItem is one node in the discovered production chain.
@@ -133,9 +133,6 @@ func (s *Solver) Discover(
 				Key:        RecipeOptionKey(r.ID, r.MachineMod, r.MachineID),
 			}
 			for _, in := range r.ItemInputs {
-				if len(opt.Inputs) >= 4 {
-					break
-				}
 				if in.TagName != nil {
 					opt.Inputs = append(opt.Inputs, "#"+*in.TagName)
 				} else if in.ItemID != nil {
@@ -143,23 +140,14 @@ func (s *Solver) Discover(
 				}
 			}
 			for _, fi := range r.FluidInputs {
-				if len(opt.Inputs) >= 4 {
-					break
-				}
 				opt.Inputs = append(opt.Inputs, "~"+fi.FluidID)
 			}
 			for _, out := range r.ItemOutputs {
-				if len(opt.Outputs) >= 4 {
-					break
-				}
 				if out.ItemID != nil {
 					opt.Outputs = append(opt.Outputs, *out.ItemID)
 				}
 			}
 			for _, fo := range r.FluidOutputs {
-				if len(opt.Outputs) >= 4 {
-					break
-				}
 				opt.Outputs = append(opt.Outputs, "~"+fo.FluidID)
 			}
 			ci.Options = append(ci.Options, opt)

@@ -81,6 +81,25 @@ func effectiveTicks(recipe *RecipeRow, machine *MachineSpec, euBonusPerSlot int6
 	if total <= 0 {
 		return duration
 	}
+	effectiveEU := effectiveEUPerTick(recipe, machine, euBonusPerSlot, n)
+	if effectiveEU <= 0 {
+		return duration
+	}
+	return ceilDiv(total, effectiveEU)
+}
+
+// effectiveEUPerTick returns the actual EU/t ONE machine draws under the given upgrade
+// configuration — the same effectiveEU value effectiveTicks derives internally, just
+// exposed for display. 0 for non-eu machines (their power draw isn't EU-denominated).
+func effectiveEUPerTick(recipe *RecipeRow, machine *MachineSpec, euBonusPerSlot int64, n int) int64 {
+	if machine == nil || machine.EnergyType != "eu" {
+		return 0
+	}
+	duration := int64(max(recipe.DurationTicks, 1))
+	total := recipe.TotalEU
+	if total <= 0 {
+		total = recipe.EUPerTick * duration
+	}
 	baseMax := machine.MaxEUPerTick
 	if baseMax <= 0 {
 		baseMax = machine.BaseEUPerTick
@@ -92,11 +111,10 @@ func effectiveTicks(recipe *RecipeRow, machine *MachineSpec, euBonusPerSlot int6
 	if machine.Upgradable {
 		bonus = int64(n) * euBonusPerSlot
 	}
-	effectiveEU := min(baseMax+bonus, total)
-	if effectiveEU <= 0 {
-		return duration
+	if total > 0 {
+		return min(baseMax+bonus, total)
 	}
-	return ceilDiv(total, effectiveEU)
+	return baseMax + bonus
 }
 
 // recipeBanned reports whether an EU-energy machine cannot run this recipe at all with the
@@ -163,6 +181,7 @@ func applyUpgrade(g MachineGroupDraft, recipe *RecipeRow, machine *MachineSpec, 
 	if n == 0 {
 		g.UpgradeTier = ""
 	}
+	g.EUPerTick = effectiveEUPerTick(recipe, machine, euBonusPerSlot, n)
 	return g
 }
 

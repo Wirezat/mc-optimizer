@@ -63,12 +63,32 @@
       font-family: var(--font-mono);
     }
 
-    /* ── Machine group table ─────────────────────────────────────────────── */
-    #mg-table { table-layout: fixed; width: 100%; }
-    #mg-table .col-count   { width: 44px; }
-    #mg-table .col-actions { width: 60px; }
-    #mg-table td, #mg-table th { padding: var(--gap-item) var(--gap-card); }
-    #mg-table td { overflow: hidden; }
+    /* ── Machine group row — explicit columns: amount | machine | recipe |
+       upgrades (blank when none) | build toggle. Ported layout/classes from
+       solve.html's result view where they overlap (mg-header/mg-row/mg-count/
+       mg-machine/mg-mod); recipe/upgrade columns are new since a confirmed PL
+       actually has that data via recipe_id / upgrade_tier_id (unlike EU/t or
+       utilization%, which aren't persisted at all). ──────────────────────── */
+    .mg-header {
+      display: flex; align-items: center; gap: var(--gap-control);
+      padding: 2px 0 var(--gap-inline);
+      border-bottom: 1px solid var(--border);
+      font-size: 10px; font-weight: var(--weight-bold); text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-faint);
+    }
+    .mg-header .mg-count { font-size: 10px; }
+    .mg-row {
+      display: flex; align-items: center; gap: var(--gap-control);
+      padding: var(--gap-inline) 0; border-bottom: 1px solid var(--border);
+    }
+    .mg-row:last-child { border-bottom: none; }
+    .mg-count       { font-weight: var(--weight-bold); width: 32px; flex-shrink: 0; }
+    .mg-machine-col { flex: 1; min-width: 0; }
+    .mg-machine     { color: var(--text); font-size: var(--text-sm); }
+    .mg-mod         { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono); }
+    .mg-recipe-col  { width: 140px; flex-shrink: 0; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mg-upgrade-col { width: 120px; flex-shrink: 0; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mg-build-col   { width: 36px; flex-shrink: 0; display: flex; justify-content: flex-end; }
 
     /* ── MG bi-state toggle ──────────────────────────────────────────────── */
     .mg-tog {
@@ -90,44 +110,21 @@
     .mg-tog.planned { --_icon-color: var(--warn); }
     .mg-tog.built   { --_icon-color: var(--success); }
 
-    /* ── IO list ─────────────────────────────────────────────────────────── */
+    /* ── IO list (ported from solve.html's result view) ──────────────────── */
     .io-section-label {
-      font-size: var(--text-xs);
-      font-weight: var(--weight-bold);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-faint);
-      margin: var(--gap-field) 0 var(--gap-inline);
+      font-size: var(--text-xs); font-weight: var(--weight-semibold);
+      text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
+      margin: var(--gap-control) 0 var(--gap-inline);
     }
     .io-section-label:first-child { margin-top: 0; }
     .io-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: var(--gap-control);
-      padding: var(--gap-icon) 0;
-      border-bottom: 1px solid var(--border);
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: var(--gap-control); padding: 3px 0; font-size: var(--text-sm);
     }
-    .io-row:last-child { border-bottom: none; }
-    .io-item {
-      color: var(--text);
-      font-size: var(--text-sm);
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+    .io-item { color: var(--text); }
     .io-item-primary { color: var(--accent); font-weight: var(--weight-semibold); }
-    .io-rate {
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      font-size: var(--text-xs);
-      white-space: nowrap;
-      opacity: 0;
-      transition: opacity .12s;
-    }
-    .io-row:hover .io-rate { opacity: 1; }
+    .io-sublabel { font-size: 10px; color: var(--text-faint); font-style: italic; font-family: var(--mono); }
+    .io-rate { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); flex-shrink: 0; }
   </style>
 </head>
 <body class="app-shell">
@@ -206,17 +203,8 @@
               <div class="container-header">
                 <span class="container-title" data-i18n="production_line.machine_groups"></span>
               </div>
-              <div class="container-body-flush">
-                <table class="table" id="mg-table">
-                  <colgroup>
-                    <col class="col-count" />
-                    <col />
-                    <col class="col-actions" />
-                  </colgroup>
-                  <tbody id="mg-tbody">
-                    <tr><td colspan="3" style="text-align:center;color:var(--text-faint);" data-i18n="common.loading"></td></tr>
-                  </tbody>
-                </table>
+              <div class="container-body" id="mg-list">
+                <span class="td-faint" data-i18n="common.loading"></span>
               </div>
             </div>
 
@@ -243,7 +231,7 @@
 <script type="module">
   import { guard, apiFetch } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
-  import { machine as machineName, loadMI , esc } from '/static/js/i18n.js';
+  import { machine as machineName, loadMI } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
 
   const _lang = getLang();
@@ -255,15 +243,17 @@
 
   const _plID = window.location.pathname.split('/')[2];
   let _pl = null;
-  let _tiers = [];
+  let _tiers = []; // upgrade tiers, for resolving upgrade_tier_id -> name (display only, no editor here)
+  let _recipeOutputs = new Map(); // recipe_id -> display name of what it produces
 
   async function init() {
-    const tRes = await apiFetch('/api/upgrade-tiers');
-    if (tRes?.ok) _tiers = await tRes.json();
-
-    const res = await apiFetch('/api/production-lines/' + _plID);
+    const [res, tRes] = await Promise.all([
+      apiFetch('/api/production-lines/' + _plID),
+      apiFetch('/api/upgrade-tiers'),
+    ]);
     if (!res?.ok) { window.location.href = '/saves'; return; }
     _pl = await res.json();
+    if (tRes?.ok) _tiers = await tRes.json();
 
     document.title = 'MC Optimizer — ' + _pl.name;
     document.getElementById('page-title').textContent = _pl.name;
@@ -284,7 +274,27 @@
       }
     }
 
+    await loadRecipeOutputs();
     render();
+  }
+
+  // machine_groups only stores recipe_id, not what it produces — resolve via
+  // the recipe catalog (one fetch per distinct machine used, since that's the
+  // catalog's own filter granularity) so the machine-group rows can show
+  // "→ output name" like solve.html's draft result does.
+  async function loadRecipeOutputs() {
+    const machines = new Map(); // "mod:machine" -> {mod, machine}
+    for (const g of (_pl.machine_groups || [])) {
+      machines.set(g.machine_mod_id + ':' + g.machine_id, { mod: g.machine_mod_id, machine: g.machine_id });
+    }
+    await Promise.all([...machines.values()].map(async ({ mod, machine }) => {
+      const res = await apiFetch(`/api/mods/${encodeURIComponent(mod)}/recipes?machine_id=${encodeURIComponent(machine)}`);
+      if (!res?.ok) return;
+      for (const r of await res.json()) {
+        const out = r.item_outputs?.[0]?.item_name || r.fluid_outputs?.[0]?.fluid_name;
+        if (out) _recipeOutputs.set(r.id, out);
+      }
+    }));
   }
 
   function render() {
@@ -341,96 +351,57 @@
     }
   }
 
+  // Rate/upgrade editing (formerly "More output" resolve panel + per-group
+  // upgrade editor) is being redone separately — this bar is just status
+  // actions for now: mark machines built, archive the line.
   function renderActionBar() {
-    const bar  = document.getElementById('action-bar');
-    const mgs  = _pl.machine_groups || [];
+    const bar = document.getElementById('action-bar');
+    const mgs = _pl.machine_groups || [];
     const allBuilt = mgs.length > 0 && mgs.every(g => g.status === 'built');
 
     if (_pl.status !== 'active') { bar.innerHTML = ''; return; }
 
-    const curRate = _pl.rate_den ? (_pl.rate_num / _pl.rate_den) : _pl.rate_num;
-    const tierOpts = _tiers.map(tr => `<option value="${esc(tr.id)}">${esc(tr.name)}</option>`).join('');
     bar.innerHTML = `
       ${!allBuilt ? `<button class="btn btn-primary btn-sm" data-action="markAllBuilt">${esc(t('production_line.mark_all_built'))}</button>` : ''}
-      <button class="btn btn-sm" data-action="resolveToggle">${esc(t('production_line.more_output'))}</button>
       <button class="btn btn-ghost btn-sm" data-action="archivePL">${esc(t('production_line.archive'))}</button>
-      <div id="resolve-panel" style="display:none;width:100%;margin-top:var(--gap-item);padding:var(--gap-card);background:var(--surface-sunken,transparent);border:1px solid var(--border);border-radius:var(--radius);">
-        <div style="display:flex;gap:var(--gap-inline);align-items:end;flex-wrap:wrap;">
-          <label class="field-label" style="display:flex;flex-direction:column;gap:2px;">${esc(t('solve.field.rate'))}
-            <input class="input" id="resolve-rate" type="number" min="0.001" step="any" value="${curRate}" style="width:6rem;" />
-          </label>
-          <label class="field-label" style="display:flex;flex-direction:column;gap:2px;">&nbsp;
-            <select class="input" id="resolve-unit">
-              <option value="s"${_pl.time_unit==='s'?' selected':''}>${esc(t('common.per_sec'))}</option>
-              <option value="min"${_pl.time_unit==='min'?' selected':''}>${esc(t('common.per_min'))}</option>
-              <option value="h"${_pl.time_unit==='h'?' selected':''}>${esc(t('common.per_hour'))}</option>
-              <option value="t"${_pl.time_unit==='t'?' selected':''}>${esc(t('common.per_tick'))}</option>
-            </select>
-          </label>
-          <label class="field-label" style="display:flex;flex-direction:column;gap:2px;">${esc(t('solve.upgrade.label'))}
-            <select class="input" id="resolve-upg-mode">
-              <option value="">${esc(t('solve.upgrade.off'))}</option>
-              <option value="auto">${esc(t('solve.upgrade.auto'))}</option>
-              <option value="fixed">${esc(t('solve.upgrade.fixed'))}</option>
-            </select>
-          </label>
-          <select class="input" id="resolve-upg-tier" style="display:none;">${tierOpts}</select>
-          <input class="input" id="resolve-upg-count" type="number" min="0" max="64" step="1" value="0" style="width:4rem;display:none;" />
-          <button class="btn btn-primary btn-sm" data-action="resolveApply">${esc(t('production_line.more_output_apply'))}</button>
-        </div>
-      </div>
     `;
     bar.querySelectorAll('[data-action]').forEach(btn => {
       btn.addEventListener('click', () => {
         if (btn.dataset.action === 'markAllBuilt') markAllBuilt();
         if (btn.dataset.action === 'archivePL')    archivePL();
-        if (btn.dataset.action === 'resolveToggle') {
-          const p = document.getElementById('resolve-panel');
-          p.style.display = p.style.display === 'none' ? 'block' : 'none';
-        }
-        if (btn.dataset.action === 'resolveApply') resolveApply();
       });
     });
-    const upgMode = document.getElementById('resolve-upg-mode');
-    if (upgMode) upgMode.addEventListener('change', () => {
-      const fixed = upgMode.value === 'fixed';
-      document.getElementById('resolve-upg-tier').style.display  = fixed ? 'inline-block' : 'none';
-      document.getElementById('resolve-upg-count').style.display = fixed ? 'inline-block' : 'none';
-    });
   }
 
-  async function resolveApply() {
-    const rate = parseFloat(document.getElementById('resolve-rate').value);
-    if (!rate || rate <= 0) return;
-    const [num, den] = toFraction(rate);
-    const mode = document.getElementById('resolve-upg-mode').value;
-    const body = {
-      target_rate: { Num: num, Den: den },
-      time_unit:   document.getElementById('resolve-unit').value,
-      upgrade_mode: mode,
-      upgrade_tier:  mode === 'fixed' ? (document.getElementById('resolve-upg-tier').value || '') : '',
-      upgrade_count: mode === 'fixed' ? (parseInt(document.getElementById('resolve-upg-count').value, 10) || 0) : 0,
-    };
-    const res = await apiFetch('/api/production-lines/' + _plID + '/resolve', {
-      method: 'POST', body: JSON.stringify(body),
-    });
-    if (res?.ok) reload();
-  }
-
+  // Machine-group row layout ported from solve.html's result view (same
+  // .mg-header/.mg-row classes), showing only what a confirmed PL actually
+  // persists — no EU/t, utilization%, recipe-output name, or upgrade-tier yet
+  // (that data isn't stored per machine_group today; upgrade/rate editing for
+  // this page is being redone separately, not part of this pass).
   function renderMachineGroups() {
-    const mgs      = _pl.machine_groups || [];
+    const mgs       = _pl.machine_groups || [];
     const canToggle = _pl.status === 'active';
-    const tbody    = document.getElementById('mg-tbody');
+    const container = document.getElementById('mg-list');
 
     if (!mgs.length) {
-      tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text-faint);padding:var(--pad-container);">—</td></tr>`;
+      container.innerHTML = `<span class="td-faint">—</span>`;
       return;
     }
 
-    tbody.innerHTML = mgs.map(g => {
-      const name    = machineName(g.machine_mod_id, g.machine_id);
-      const isBuilt = g.status === 'built';
-      const togBtn  = canToggle
+    const hdr = `<div class="mg-header">
+      <div class="mg-count">${esc(t('solve.col.count'))}</div>
+      <div class="mg-machine-col">${esc(t('solve.col.machine'))}</div>
+      <div class="mg-recipe-col">${esc(t('solve.col.recipe'))}</div>
+      <div class="mg-upgrade-col">${esc(t('solve.upgrade.label'))}</div>
+      <div class="mg-build-col"></div>
+    </div>`;
+    container.innerHTML = hdr + mgs.map(g => {
+      const name      = machineName(g.machine_mod_id, g.machine_id);
+      const outName   = _recipeOutputs.get(g.recipe_id) || '—';
+      const tier      = g.upgrade_tier_id ? _tiers.find(tr => tr.id === g.upgrade_tier_id) : null;
+      const upgText   = tier ? `${tier.name} ×${g.upgrade_count}` : '';
+      const isBuilt   = g.status === 'built';
+      const togBtn    = canToggle
         ? `<button class="mg-tog btn-icon-color ${isBuilt ? 'built' : 'planned'}"
              data-mgid="${esc(g.id)}" data-mgstatus="${esc(g.status)}"
              title="${esc(isBuilt ? t('status.planned') : t('status.built'))}">
@@ -438,61 +409,27 @@
              <span class="tog-nxt">${isBuilt ? '✓→⚒' : '⚒→✓'}</span>
            </button>`
         : `<span style="font-size:14px;color:${isBuilt ? 'var(--success)' : 'var(--warn)'};">${isBuilt ? '✓' : '⚒'}</span>`;
-      return `<tr>
-        <td class="col-count td-mono td-muted" style="text-align:right;">${g.count}×</td>
-        <td>
-          <div style="font-weight:var(--weight-medium);font-size:var(--text-sm);">${esc(name)}</div>
-          <div class="td-faint">${esc(g.machine_mod_id)}</div>
-          ${canToggle ? upgradeEditor(g) : upgradeLabel(g)}
-        </td>
-        <td class="col-actions td-actions">${togBtn}</td>
-      </tr>`;
+      return `<div class="mg-row">
+        <div class="mg-count">${g.count}×</div>
+        <div class="mg-machine-col">
+          <div class="mg-machine">${esc(name)}</div>
+          <div class="mg-mod">${esc(g.machine_mod_id)}</div>
+        </div>
+        <div class="mg-recipe-col" title="${esc(outName)}">${esc(outName)}</div>
+        <div class="mg-upgrade-col">${esc(upgText)}</div>
+        <div class="mg-build-col">${togBtn}</div>
+      </div>`;
     }).join('');
 
-    tbody.querySelectorAll('[data-mgid]').forEach(btn => {
+    container.querySelectorAll('[data-mgid]').forEach(btn => {
       btn.addEventListener('click', () => toggleMGStatus(btn.dataset.mgid, btn.dataset.mgstatus));
     });
-    tbody.querySelectorAll('[data-upg-save]').forEach(btn => {
-      btn.addEventListener('click', () => saveMGUpgrade(btn.dataset.upgSave));
-    });
   }
 
-  function tierName(id) {
-    return id ? (_tiers.find(t2 => t2.id === id)?.name || id) : '';
-  }
-
-  // Read-only upgrade label for non-editable PLs.
-  function upgradeLabel(g) {
-    if (!g.upgrade_tier_id || !g.upgrade_count) return '';
-    return `<div class="td-faint" style="font-size:var(--text-xs);">⚙ ${esc(tierName(g.upgrade_tier_id))} ×${g.upgrade_count}</div>`;
-  }
-
-  // Inline upgrade editor: tier picker + slot count + apply (variant A: reduce machines).
-  function upgradeEditor(g) {
-    if (!_tiers.length) return '';
-    const opts = `<option value="">${esc(t('solve.upgrade.off'))}</option>` +
-      _tiers.map(tr => `<option value="${esc(tr.id)}"${tr.id === g.upgrade_tier_id ? ' selected' : ''}>${esc(tr.name)}</option>`).join('');
-    return `<div style="display:flex;gap:var(--gap-inline);align-items:center;margin-top:var(--gap-item);flex-wrap:wrap;">
-      <span class="td-faint" style="font-size:var(--text-xs);">⚙</span>
-      <select class="input" id="upg-tier-${esc(g.id)}" style="font-size:var(--text-xs);padding:2px 4px;">${opts}</select>
-      <input class="input" id="upg-count-${esc(g.id)}" type="number" min="0" max="64" step="1" value="${g.upgrade_count || 0}" style="width:4rem;font-size:var(--text-xs);padding:2px 4px;" />
-      <button class="btn" data-upg-save="${esc(g.id)}" style="font-size:var(--text-xs);padding:2px 8px;">${esc(t('production_line.upgrade_apply'))}</button>
-    </div>`;
-  }
-
-  async function saveMGUpgrade(id) {
-    const tierID = document.getElementById('upg-tier-' + id).value || null;
-    const count  = parseInt(document.getElementById('upg-count-' + id).value, 10) || 0;
-    const res = await apiFetch('/api/machine-groups/' + id + '/upgrades', {
-      method: 'PATCH',
-      body: JSON.stringify({ upgrade_tier_id: tierID, upgrade_count: count }),
-    });
-    if (res?.ok) reload();
-  }
-
+  // IO row layout ported from solve.html's result view (.io-row/.io-item/.io-sublabel).
   function renderIO() {
-    const ioEl   = document.getElementById('io-list');
-    const all    = _pl.io || [];
+    const ioEl    = document.getElementById('io-list');
+    const all     = _pl.io || [];
     const inputs  = all.filter(e => e.direction === 'input');
     const outputs = all.filter(e => e.direction === 'output');
 
@@ -509,11 +446,14 @@
   }
 
   function ioRow(e, isPrimary) {
-    const rate      = fmtFrac(e.rate_num, e.rate_den) + ' /' + (_pl.time_unit || 't');
-    const displayName = e.name || e.item_fluid_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    const rate = fmtFrac(e.rate_num, e.rate_den) + ' /' + (_pl.time_unit || 't');
+    const name = e.name || e.item_fluid_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     return `<div class="io-row">
-      <span class="io-item${isPrimary ? ' io-item-primary' : ''}">${isPrimary ? '★ ' : ''}${esc(displayName)}<span class="td-faint" style="margin-left:4px;">${esc(e.mod_id)}</span></span>
-      <span class="io-rate">${esc(rate)}</span>
+      <div style="flex:1;min-width:0;">
+        <div class="io-item${isPrimary ? ' io-item-primary' : ''}">${isPrimary ? '★ ' : ''}${esc(name)}</div>
+        <div class="io-sublabel">${esc(e.mod_id)}</div>
+      </div>
+      <div class="io-rate">${esc(rate)}</div>
     </div>`;
   }
 
@@ -552,13 +492,6 @@
     const v = num / den;
     return Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/\.?0+$/, '');
   }
-
-  function gcd(a, b) { return b ? gcd(b, a % b) : a; }
-  function toFraction(dec) {
-    const d = 10000, n = Math.round(dec * d), g = gcd(n, d) || 1;
-    return [n / g, d / g];
-  }
-
 
   init();
 </script>

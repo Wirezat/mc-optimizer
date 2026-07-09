@@ -135,6 +135,23 @@
     .chain-override-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
     .chain-override-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
 
+    /* ── "Already/Not enough in Factory" tag — same button (table) or label
+       (graph), tagged instead of the plain "+ Pick Recipe" prompt; still opens
+       the picker to override. info = no demand rate known yet, success/warn/
+       danger = have vs. need comparison once the chain has actually solved. */
+    .chain-override-btn.chain-tag-info    { border-color: var(--accent);  color: var(--accent);  background: var(--accent-muted); }
+    .chain-override-btn.chain-tag-success { border-color: var(--success); color: var(--success); background: var(--success-muted); }
+    .chain-override-btn.chain-tag-warn    { border-color: var(--warn);    color: var(--warn);    background: var(--warn-muted); }
+    .chain-override-btn.chain-tag-danger  { border-color: var(--danger);  color: var(--danger);  background: var(--danger-muted); }
+    .chain-override-btn.chain-tag-info:hover    { background: var(--accent);  color: var(--bg-card); }
+    .chain-override-btn.chain-tag-success:hover { background: var(--success); color: var(--bg-card); }
+    .chain-override-btn.chain-tag-warn:hover    { background: var(--warn);    color: var(--bg-card); }
+    .chain-override-btn.chain-tag-danger:hover  { background: var(--danger);  color: var(--bg-card); }
+    .graph-node-label.clickable.chain-tag-info    { color: var(--accent); }
+    .graph-node-label.clickable.chain-tag-success { color: var(--success); }
+    .graph-node-label.clickable.chain-tag-warn    { color: var(--warn); }
+    .graph-node-label.clickable.chain-tag-danger  { color: var(--danger); }
+
     .partial-btn {
       font-size: var(--text-xs);
       padding: 2px var(--gap-inline);
@@ -148,27 +165,6 @@
     }
     .partial-btn:hover:not(.active) { border-color: var(--border-strong); color: var(--text-muted); }
     .partial-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
-
-    /* ── Recipe picker — portal positioned, uses wirezatUI dropdown classes ── */
-    #chain-picker-portal {
-      position: fixed; z-index: 9999;
-      min-width: 240px; max-width: 380px;
-      max-height: 320px; overflow-y: auto;
-    }
-    /* Sub-text inside dropdown-item (IO lines) */
-    .rp-io {
-      color: var(--text-faint); font-size: var(--text-xs);
-      font-family: var(--mono); margin-top: 2px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    /* Active state for recipe picker items */
-    #chain-picker-portal .dropdown-item.active {
-      color: var(--accent); background: var(--accent-muted);
-    }
-    /* Muted stop-item */
-    #chain-picker-portal .dropdown-item.rp-stop {
-      color: var(--text-faint); font-style: italic;
-    }
 
     /* ── Result stats bar ──────────────────────────────────────────────────── */
     .result-stats {
@@ -216,6 +212,25 @@
       font-family: var(--mono); flex-shrink: 0; display: none;
     }
     .mg-upgrade:not(:empty) { display: inline; }
+    .mg-energy {
+      font-size: var(--text-xs); font-family: var(--mono); color: var(--text-muted);
+      flex-shrink: 0; min-width: 68px; text-align: right;
+    }
+    .mg-energy .unit { color: var(--text-faint); margin-left: 2px; }
+    .mg-energy.is-major { color: var(--text); font-weight: var(--weight-bold); }
+
+    .stat-value.energy { color: var(--accent); }
+
+    .energy-breakdown { margin-top: var(--gap-section); }
+    .energy-breakdown-title {
+      font-size: var(--text-xs); font-weight: var(--weight-bold); text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: var(--gap-inline);
+    }
+    .energy-bar-row { display: flex; align-items: center; gap: var(--gap-inline); padding: 3px 0; }
+    .energy-bar-label { font-size: var(--text-xs); color: var(--text-muted); width: 78px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .energy-bar-track { flex: 1; height: 6px; border-radius: 3px; background: var(--bg-hover); overflow: hidden; }
+    .energy-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+    .energy-bar-value { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint); width: 64px; text-align: right; flex-shrink: 0; }
 
     /* ── IO profile ────────────────────────────────────────────────────────── */
     .io-section-label {
@@ -414,15 +429,7 @@
           <span data-i18n="solve.step.chain">Recipe Selection</span>
           <span class="step-label-desc"> — <span data-i18n="solve.step.chain_desc">review the production chain and change recipes if needed</span></span>
         </div>
-        <div class="container" id="chain-card" style="display:none;overflow:visible;">
-          <table class="table">
-            <thead><tr>
-              <th data-i18n="solve.chain.col.item">Item</th>
-              <th data-i18n="solve.col.recipe">Recipe</th>
-            </tr></thead>
-            <tbody id="chain-tbody"></tbody>
-          </table>
-        </div>
+        <div id="chain-card" style="display:none;"></div>
 
         <!-- ── Step 3: Result ──────────────────────────────────────────────── -->
         <div class="step-label" id="result-step-label" style="display:none;">
@@ -458,13 +465,14 @@
     </main>
   </div>
 
-<div id="chain-picker-portal" class="dropdown-panel" style="display:none;position:fixed;"></div>
-
 <script type="module">
   import { guard, apiFetch } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
+  import { createContainer } from '/static/ui/js/components/container.js';
+  import { openPopover, closePopover } from '/static/ui/js/components/popover.js';
+  import { renderGraph } from '/static/ui/js/components/graph.js';
 
   await load(getLang());
   applyI18n();
@@ -494,13 +502,16 @@
   let _upgradeMode    = 'off'; // 'off' | 'auto' | 'fixed'
   let _tiers          = [];
   let _draftID        = null;
+  let _plNameDirty    = false; // true once the user has typed into pl-name themselves
+  let _reqSeq         = 0; // bumped on every doDiscover/doSolve call; guards against out-of-order responses
   let _overrides      = {};
   let _tagOverrides   = {};
   let _tagResolutions = {};
   let _allowPartial = new Set();
   let _stopPoints   = new Set();
+  let _existingPLRates = new Map(); // itemKey -> {Num,Den} real aggregate output rate/min across this factory's PLs
+  let _neededRates     = new Map(); // itemKey -> {Num,Den,TimeUnit} demand rate from the latest solve's IOProfile.Inputs
   let _cycleNodes   = new Set();
-  let _autoStopKeys = new Set();
   let _targetItem   = null;
   let _chainItems   = [];
   let _names        = {};
@@ -526,16 +537,15 @@
     } else {
       const factRes = await apiFetch('/api/factories/' + _factoryID);
       if (!factRes?.ok) { window.location.href = '/saves'; return; }
-      const { factory } = await factRes.json();
+      const { factory, balance } = await factRes.json();
 
       document.title = 'MC Optimizer — ' + t('solve.title') + ' — ' + factory.name;
       document.getElementById('bc-factory').textContent = factory.name;
       document.getElementById('bc-factory').href        = '/factories/' + _factoryID;
 
-      let saveRes, plRes;
-      [saveRes, plRes, modsRes, itemsRes, fluidsRes] = await Promise.all([
+      let saveRes;
+      [saveRes, modsRes, itemsRes, fluidsRes] = await Promise.all([
         apiFetch('/api/saves/' + factory.save_id),
-        apiFetch('/api/factories/' + _factoryID + '/production-lines'),
         apiFetch('/api/mods'),
         apiFetch('/api/items?all=true'),
         apiFetch('/api/fluids?all=true'),
@@ -545,13 +555,18 @@
         document.getElementById('bc-save').textContent = save.name;
         document.getElementById('bc-save').href        = '/saves/' + factory.save_id;
       }
-      if (plRes?.ok) {
-        const pls = await plRes.json();
-        for (const pl of pls) {
-          const key = (pl.target_is_fluid ? 'fluid:' : '') + pl.target_mod_id + ':' + pl.target_item_id;
-          _autoStopKeys.add(key);
-          _stopPoints.add(key);
-        }
+      // Real aggregate output rate (per minute) per item this factory already
+      // produces, across ALL its production lines — from the factory balance,
+      // not the production_lines row's own rate_num/rate_den (that field is a
+      // meaningless 1/1 placeholder in AUTO mode; pl_io's actual output is the
+      // only place the true achieved rate lives). Used to label the picker
+      // button ("already in factory", with a have/need comparison) for items
+      // with no chosen recipe. Never added to _stopPoints directly: leaving
+      // the recipe unset is already an implicit stop (see _chainRecipeCell),
+      // and picking an explicit recipe here still overrides it like any other item.
+      for (const o of (balance?.outputs || [])) {
+        const key = (o.io_type === 'fluid' ? 'fluid:' : '') + o.mod_id + ':' + o.item_fluid_id;
+        _existingPLRates.set(key, { Num: o.rate_num, Den: o.rate_den });
       }
     }
 
@@ -600,10 +615,26 @@
         });
       },
       onSelect(r) {
+        const isSameItem = _targetItem && !_targetItem.TagRef
+          && _targetItem.ModID === r.mod_id && _targetItem.ItemID === r.item_id && !!_targetItem.IsFluid === !!r._fluid;
         const matches = _nameMap.get(r.name.toLowerCase()) || [r];
         _targetItem = { ModID: r.mod_id, ItemID: r.item_id, IsFluid: r._fluid, name: r.name };
         document.getElementById('target-input').value = r.name;
         setModSelect(matches.map(m => ({ mod_id: m.mod_id, label: modName(m.mod_id) })), r.mod_id);
+        // Actually switching items resets the working chain — re-selecting the
+        // same item (e.g. after just adjusting the mod dropdown) leaves it be.
+        if (!isSameItem) {
+          _overrides    = {};
+          _tagOverrides = {};
+          _allowPartial = new Set();
+          _stopPoints   = new Set();
+          _chainItems   = [];
+          _neededRates  = new Map();
+          _plNameDirty  = false;
+          document.getElementById('pl-name').value = '';
+          hideChain();
+          hideResult();
+        }
       },
     });
   }
@@ -752,18 +783,18 @@
   document.getElementById('upg-count').addEventListener('change', reSolveIfShown);
   document.getElementById('upg-auto-tier').addEventListener('change', reSolveIfShown);
   document.getElementById('pl-name').addEventListener('keydown', e => { if (e.key === 'Enter') doConfirm(); });
+  document.getElementById('pl-name').addEventListener('input', () => { _plNameDirty = true; });
 
+  // Popover.js owns the floating panel itself (positioning + DOM removal on
+  // outside-click/Escape); this listener only keeps the page-local "which
+  // picker button is active" bookkeeping (_openChainPickerKey / .active
+  // class) in sync when the panel closes via an outside click.
   document.addEventListener('click', e => {
-    const chainOverride = e.target.closest('[data-action="selectChainOverride"]');
-    if (chainOverride) {
-      selectChainOverride(chainOverride.dataset.key, chainOverride.dataset.recipeid);
-      return;
-    }
-    if (!e.target.closest('.recipe-picker') &&
-        !e.target.closest('[data-action="openChainPicker"]')) {
+    if (!e.target.closest('[data-action="openChainPicker"]')) {
       closeAllPickers();
     }
   });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAllPickers(); });
 
   document.getElementById('chain-card').addEventListener('click', e => {
     const pickerBtn = e.target.closest('[data-action="openChainPicker"]');
@@ -775,15 +806,13 @@
   // Target input: resolve item from preloaded nameMap on change
   const targetInput = document.getElementById('target-input');
 
+  // Typing alone doesn't touch the chain/graph — it only invalidates the
+  // pending target so Discover/Solve can't fire against stale item data.
+  // The visible chain only resets once the user actually commits to a
+  // different item (onSelect below), so it doesn't flash empty on every
+  // keystroke while they're still searching.
   targetInput.addEventListener('input', () => {
-    _targetItem   = null;
-    _overrides    = {};
-    _tagOverrides = {};
-    _allowPartial = new Set();
-    _stopPoints   = new Set([..._autoStopKeys]);
-    _chainItems   = [];
-    hideChain();
-    hideResult();
+    _targetItem = null;
   });
 
 
@@ -840,6 +869,8 @@
       ? { TagRef: _targetItem.TagRef }
       : { ModID: _targetItem.ModID, ItemID: _targetItem.ItemID, IsFluid: !!_targetItem.IsFluid };
 
+    const seq = ++_reqSeq;
+
     hideCycleError();
     showStatus('solve-status', '', t('solve.status.discovering'));
     document.getElementById('solve-btn').disabled = true;
@@ -855,6 +886,7 @@
       }),
     });
 
+    if (seq !== _reqSeq) return; // a newer discover/solve request has since started
     document.getElementById('solve-btn').disabled = false;
     if (!res?.ok) { showStatus('solve-status', 'err', t('solve.discover_failed')); return; }
 
@@ -867,6 +899,46 @@
     renderChainConfig();
     showChain();
     doSolve();
+  }
+
+  function ticksPerUnit(u) {
+    return u === 't' ? 1 : u === 's' ? 20 : u === 'h' ? 72000 : 1200; // default 'min'
+  }
+
+  // Compares this factory's real existing output rate for `key` (from the
+  // balance, /min) against how much the current chain actually needs (from
+  // the latest solve's IOProfile.Inputs) — exact rational comparison, no
+  // floating point. Returns null if the factory doesn't produce this item at
+  // all; { partial: true } if it does but we don't have a demand figure yet
+  // (before the first solve completes); otherwise { cmp, existingText, neededText }
+  // where cmp > 0 means surplus, 0 means exact match, < 0 means shortfall.
+  function factoryRateInfo(key) {
+    const existing = _existingPLRates.get(key);
+    if (!existing) return null;
+    const needed = _neededRates.get(key);
+    if (!needed) return { partial: true };
+    const tpu = ticksPerUnit(needed.TimeUnit);
+    // existing is per-minute (tpu 1200); convert to needed's TimeUnit before comparing.
+    const existInUnit = { Num: existing.Num * tpu, Den: existing.Den * 1200 };
+    const cmp = existInUnit.Num * needed.Den - needed.Num * existInUnit.Den;
+    return {
+      cmp: cmp > 0 ? 1 : cmp < 0 ? -1 : 0,
+      existingText: fmtR(existInUnit),
+      neededText: fmtR(needed),
+    };
+  }
+
+  // Shared by the table cell and graph node label: label text + CSS modifier
+  // class for an item with no chosen recipe that this factory already produces
+  // elsewhere. Falls back to the plain tag (no numbers) until the first solve
+  // for this chain has actually computed a demand rate for this item.
+  function alreadyInFactoryLabel(key) {
+    const info = factoryRateInfo(key);
+    if (!info) return null;
+    if (info.partial) return { text: t('solve.chain.already_in_factory'), cls: 'chain-tag-info' };
+    if (info.cmp > 0) return { text: `${t('solve.chain.already_in_factory')} ${info.existingText}/${info.neededText}`, cls: 'chain-tag-success' };
+    if (info.cmp === 0) return { text: `${t('solve.chain.already_in_factory')} ${info.existingText}/${info.neededText}`, cls: 'chain-tag-warn' };
+    return { text: `${t('solve.chain.not_enough_in_factory')} ${info.existingText}/${info.neededText}`, cls: 'chain-tag-danger' };
   }
 
   function _chainRecipeCell(item, key, withStop) {
@@ -893,14 +965,26 @@
         `<button class="chain-override-btn" data-action="openChainPicker"
             data-key="${esc(key)}" data-with-stop="${withStop}">${changeLabel}</button>`;
     }
+    // No recipe chosen — this is already an implicit stop point (discover.go:
+    // "no override → stop here by default", and doSolve() builds its stop-point
+    // set straight from that flag), no separate accept action needed. If this
+    // factory already produces the item via another PL, label the picker button
+    // accordingly instead of the generic prompt; clicking it still opens the same
+    // picker, so choosing an explicit recipe here simply overrides the implicit stop.
+    const tag = alreadyInFactoryLabel(key);
+    const label = tag ? tag.text : t('solve.chain.pick_recipe');
     return warnIcon +
-      `<button class="chain-override-btn" data-action="openChainPicker"
-        data-key="${esc(key)}" data-with-stop="${withStop}">${esc(t('solve.chain.pick_recipe'))}</button>`;
+      `<button class="chain-override-btn${tag ? ' ' + tag.cls : ''}" data-action="openChainPicker"
+        data-key="${esc(key)}" data-with-stop="${withStop}"${tag ? ` title="${esc(t('solve.chain.already_in_factory_hint'))}"` : ''}>${esc(label)}</button>`;
   }
 
   function renderChainConfig() {
-    const tbody = document.getElementById('chain-tbody');
-    if (!_chainItems.length) { tbody.innerHTML = ''; return; }
+    if (_chainView === 'graph') renderChainGraph();
+    else renderChainTable();
+  }
+
+  function renderChainTable() {
+    if (!_chainItems.length) { chainContainer.setContent(''); return; }
 
     const rows = [];
 
@@ -941,7 +1025,154 @@
         </tr>`);
       }
     }
-    tbody.innerHTML = rows.join('');
+    chainContainer.setContent(`<table class="table">
+      <thead><tr>
+        <th>${esc(t('solve.chain.col.item'))}</th>
+        <th>${esc(t('solve.col.recipe'))}</th>
+      </tr></thead>
+      <tbody>${rows.join('')}</tbody>
+    </table>`);
+  }
+
+  // ── Graph view of the chain ───────────────────────────────────────────────
+  // The recipe selection is logically a graph, not a list: items are shared
+  // between recipes (multiple in-edges), tags resolve to concrete items, and
+  // fluid recipes can produce back-edges (cycles). Edges are derived from each
+  // chosen recipe's input list; the backend truncates that preview list to 4
+  // entries, so a deep-chain item can occasionally appear without an incoming
+  // edge — it still renders at its correct BFS level.
+  function renderChainGraph() {
+    if (!_chainItems.length) { chainContainer.setContent(''); return; }
+
+    // Index chain items for input-string matching: bare item_id ("iron_ore"),
+    // fluid id ("~water"), or tag ("#c:iron_ores" via TagResolutions).
+    const byItemId  = new Map();
+    const byFluidId = new Map();
+    for (const ci of _chainItems) {
+      if (ci.Item.TagRef) continue;
+      const m = ci.Item.IsFluid ? byFluidId : byItemId;
+      if (!m.has(ci.Item.ItemID)) m.set(ci.Item.ItemID, []);
+      m.get(ci.Item.ItemID).push(ci);
+    }
+    // Prefer the candidate one level deeper than its consumer — that is where
+    // BFS places a fresh input; shared nodes keep their earliest level.
+    function pickCandidate(cands, consumerLevel) {
+      if (!cands || !cands.length) return null;
+      return cands.find(c => c.Level === consumerLevel + 1) || cands[0];
+    }
+
+    const nodes = [];
+    const edges = [];
+    for (const ci of _chainItems) {
+      const key = itemKey(ci.Item);
+
+      const chosen = ci.ChosenMachineID
+        ? (ci.Options || []).find(o => o.RecipeID === ci.ChosenRecipeID && o.MachineID === ci.ChosenMachineID)
+        : (ci.Options || []).find(o => o.RecipeID === ci.ChosenRecipeID);
+
+      // Map chain-specific state to the graph component's generic visual roles:
+      // primary = root, terminal = raw material or no known recipe (both are
+      // dead ends — matches _chainRecipeCell's table-view treatment), muted =
+      // stopped expansion, tagged = fluid (free-form marker, orthogonal to
+      // the others).
+      const noOptions = (ci.Options || []).length === 0;
+      let kind = ci.Level === 0 ? 'primary' : '', badge = '';
+      if (ci.IsRawMaterial || noOptions) {
+        kind = 'terminal';
+        badge = t('solve.chain.raw_material');
+      } else if (_stopPoints.has(key) && !chosen && ci.Level !== 0) {
+        kind = 'muted';
+      }
+      if (ci.Item.IsFluid) kind = (kind ? kind + ' ' : '') + 'tagged';
+
+      const pickable = !ci.IsRawMaterial && !noOptions;
+      // One label, self-describing and clickable: current machine name once a
+      // recipe is chosen, otherwise an explicit prompt — replaces the old
+      // small ⋮ menu icon with actual status text the label itself carries.
+      // No recipe chosen is already an implicit stop point (see _chainRecipeCell's
+      // comment), so a factory that already produces this item elsewhere gets its
+      // own label here instead of a separate accept action — picking an explicit
+      // recipe via this same label's menu simply overrides the implicit stop.
+      const tag = chosen ? null : alreadyInFactoryLabel(key);
+      const labelText = chosen
+        ? (_machineNames[chosen.MachineMod + ':' + chosen.MachineID] || chosen.MachineID)
+        : tag ? tag.text
+        : (_stopPoints.has(key) ? t('solve.chain.stopped') : t('solve.chain.pick_recipe'));
+      nodes.push({
+        id: key,
+        level: ci.Level,
+        title: nameOf(ci.Item),
+        subtitle: ci.Item.TagRef ? '' : modName(ci.Item.ModID),
+        badge,
+        kind,
+        warn: _cycleNodes.has(key),
+        labels: pickable ? [{ text: labelText, cls: tag?.cls, menu: buildRecipeMenu(ci, key, { withStop: ci.Level !== 0 }) }] : null,
+      });
+
+      if (!chosen) continue;
+      for (const inStr of (chosen.Inputs || [])) {
+        let toKey = null, title = '';
+        if (inStr.startsWith('#')) {
+          // Tag input — resolved to a concrete item by the backend. Drawn as a
+          // normal solid edge (tag origin only via tooltip) so every input has
+          // an unbroken line into its consumer.
+          const res = _tagResolutions[inStr];
+          if (res?.Chosen) {
+            toKey = itemKey(res.Chosen);
+            title = inStr;
+          }
+        } else if (inStr.startsWith('~')) {
+          const cand = pickCandidate(byFluidId.get(inStr.slice(1)), ci.Level);
+          if (cand) toKey = itemKey(cand.Item);
+        } else {
+          const cand = pickCandidate(byItemId.get(inStr), ci.Level);
+          if (cand) toKey = itemKey(cand.Item);
+        }
+        if (toKey && toKey !== key) edges.push({ from: key, to: toKey, title });
+      }
+    }
+
+    const holder = document.createElement('div');
+    renderGraph(holder, { nodes, edges }, {
+      fullscreenLabel: t('common.fullscreen'),
+      onMenuAction: (node, action) => selectChainOverride(node.id, action),
+    });
+    chainContainer.setContent(holder.firstChild);
+  }
+
+  // Shared between the table picker (openChainPicker) and the graph view's
+  // node menu: same options, same tier-aware machine label, same action
+  // contract (action === RecipeID, or 'STOP' to clear the item's override
+  // and mark it a manual stop point — see selectChainOverride).
+  function buildRecipeMenu(item, key, { withStop = true } = {}) {
+    const items = [];
+    if (withStop && item.ChosenRecipeID) {
+      items.push({ label: t('solve.chain.stop_action'), action: 'STOP', danger: true });
+    }
+    // Dedupe by RecipeID — bronze/steel/electric variants of the same recipe
+    // (reachable via machine_interfaces) are ONE choice here; the global Tier
+    // selector decides which machine actually runs it, not this per-item picker.
+    const seenRecipes = new Set();
+    const distinctOptions = (item.Options || []).filter(opt => {
+      if (seenRecipes.has(opt.RecipeID)) return false;
+      seenRecipes.add(opt.RecipeID);
+      return true;
+    });
+    for (const opt of distinctOptions) {
+      // Show the machine name matching the currently active tier (EBF-family recipes
+      // use the independent EBF tier instead of the main Bronze/Steel/Electric one).
+      const isEbfFamily = (item.Options || []).some(o => o.RecipeID === opt.RecipeID && machineTierOf(o.MachineID).startsWith('ebf-'));
+      const wantedBucket = isEbfFamily ? ('ebf-' + _ebfTier) : _machineTier;
+      const tierOpt = (item.Options || []).find(o => o.RecipeID === opt.RecipeID && machineTierOf(o.MachineID) === wantedBucket) || opt;
+      const ins = (opt.Inputs || []).join(', ');
+      items.push({
+        label: _machineNames[tierOpt.MachineMod + ':' + tierOpt.MachineID] || tierOpt.MachineID,
+        subtitle: ins ? '← ' + ins : '',
+        action: opt.RecipeID,
+        active: opt.RecipeID === item.ChosenRecipeID,
+      });
+    }
+    return items;
   }
 
   function openChainPicker(btn, key) {
@@ -952,47 +1183,10 @@
     closeAllPickers();
     if (wasOpen) return;
 
-    const portalEl = document.getElementById('chain-picker-portal');
     const withStop = btn.dataset.withStop === 'true';
-    const stopRow  = withStop && item.ChosenRecipeID
-      ? `<div class="dropdown-item rp-stop"
-            data-action="selectChainOverride" data-key="${esc(key)}" data-recipeid="STOP">
-            ${t('solve.chain.stop_action')}
-          </div>`
-      : '';
-
-    // Dedupe by RecipeID — bronze/steel/electric variants of the same recipe
-    // (reachable via machine_interfaces) are ONE choice here; the global Tier
-    // selector decides which machine actually runs it, not this per-item picker.
-    const seenRecipes = new Set();
-    const distinctOptions = (item.Options || []).filter(opt => {
-      if (seenRecipes.has(opt.RecipeID)) return false;
-      seenRecipes.add(opt.RecipeID);
-      return true;
+    openPopover(btn, buildRecipeMenu(item, key, { withStop }), {
+      onSelect: recipeID => selectChainOverride(key, recipeID),
     });
-
-    portalEl.innerHTML = stopRow + distinctOptions.map(opt => {
-      const ins  = (opt.Inputs  || []).join(', ');
-      const outs = (opt.Outputs || []).join(', ');
-      const isCurrent = opt.RecipeID === item.ChosenRecipeID;
-      // Show the machine name matching the currently active tier (EBF-family recipes
-      // use the independent EBF tier instead of the main Bronze/Steel/Electric one).
-      const isEbfFamily = (item.Options || []).some(o => o.RecipeID === opt.RecipeID && machineTierOf(o.MachineID).startsWith('ebf-'));
-      const wantedBucket = isEbfFamily ? ('ebf-' + _ebfTier) : _machineTier;
-      const tierOpt = (item.Options || []).find(o => o.RecipeID === opt.RecipeID && machineTierOf(o.MachineID) === wantedBucket) || opt;
-      return `<div class="dropdown-item${isCurrent ? ' active' : ''}"
-          data-action="selectChainOverride" data-key="${esc(key)}" data-recipeid="${esc(opt.RecipeID)}">
-          <div style="flex:1;min-width:0;">
-            <div>${esc(_machineNames[tierOpt.MachineMod + ':' + tierOpt.MachineID] || tierOpt.MachineID)}</div>
-            ${ins  ? `<div class="rp-io">← ${esc(ins)}</div>`  : ''}
-            ${outs ? `<div class="rp-io">→ ${esc(outs)}</div>` : ''}
-          </div>
-        </div>`;
-    }).join('');
-    const rect = btn.getBoundingClientRect();
-    portalEl.style.top   = (rect.bottom + 2) + 'px';
-    portalEl.style.right = (window.innerWidth - rect.right) + 'px';
-    portalEl.style.display = 'flex';
     _openChainPickerKey = key;
     btn.classList.add('active');
   }
@@ -1000,10 +1194,12 @@
   function selectChainOverride(key, recipeID) {
     if (recipeID === 'STOP') {
       delete _overrides[key];
+      _stopPoints.add(key);
     } else {
       const item = _chainItems.find(ci => itemKey(ci.Item) === key);
       const optKey = resolveOptionKeyForTier(item?.Options, recipeID, _machineTier, _ebfTier);
       _overrides[key] = optKey || recipeID;
+      _stopPoints.delete(key);
     }
     closeAllPickers();
     doDiscover();
@@ -1031,6 +1227,8 @@
       }
     }
 
+    const seq = ++_reqSeq;
+
     hideCycleError();
     const resultCard = document.getElementById('result-card');
     const firstShow  = resultCard.style.display === 'none';
@@ -1056,6 +1254,7 @@
       }),
     });
 
+    if (seq !== _reqSeq) return; // a newer discover/solve request has since started
     document.getElementById('solve-btn').disabled = false;
 
     if (res?.status === 409) {
@@ -1077,20 +1276,30 @@
     Object.assign(_names, data.Names || {});
     showStatus('solve-status', '', '');
 
+    // Refresh the "already in factory" have/need numbers now that the chain has
+    // actual demand rates (only available post-solve, via IOProfile.Inputs) —
+    // re-render so the picker labels pick them up instead of the placeholder tag.
+    _neededRates = new Map();
+    for (const e of (data.result?.IOProfile?.Inputs || [])) {
+      _neededRates.set(itemKey(e.Item), { Num: e.Rate.Num, Den: e.Rate.Den, TimeUnit: e.TimeUnit });
+    }
+    renderChainConfig();
+
     const itemName = _targetItem?.name
       || (_targetItem?.TagRef ? '#' + _targetItem.TagRef : '')
       || _names[_targetItem ? itemKey(_targetItem) : '']
       || _targetItem?.ItemID || '';
     renderResult(data.result, unit, itemName);
 
+    if (!_plNameDirty) {
+      const pretty = /[A-Z\s]/.test(itemName) ? itemName : itemName.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+      const rateStr = document.getElementById('rate-num').value || '?';
+      document.getElementById('pl-name').value = _mode === 'AUTO'
+        ? pretty
+        : `${pretty} × ${rateStr}/${unit}`;
+    }
+
     if (firstShow) {
-      if (!document.getElementById('pl-name').value) {
-        const pretty = /[A-Z\s]/.test(itemName) ? itemName : itemName.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
-        const rateStr = document.getElementById('rate-num').value || '?';
-        document.getElementById('pl-name').value = _mode === 'AUTO'
-          ? pretty
-          : `${pretty} × ${rateStr}/${unit}`;
-      }
       showResult();
       resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       document.getElementById('pl-name').focus();
@@ -1111,6 +1320,7 @@
     document.getElementById('result-card').style.display = '';
 
     const actualRate = fmtR(r.ActualRate);
+    const totalEU = (r.MachineGroups || []).reduce((sum, g) => sum + (g.EUPerTick || 0) * (g.Count || 0), 0);
     document.getElementById('result-stats').innerHTML = `
       <div class="stat">
         <span class="stat-label">${t('solve.stats.actual_rate')}</span>
@@ -1124,6 +1334,10 @@
         <span class="stat-label">${t('solve.stats.machine_groups')}</span>
         <span class="stat-value">${r.MachineGroups?.length ?? 0}</span>
       </div>
+      ${totalEU > 0 ? `<div class="stat">
+        <span class="stat-label">${t('solve.stats.power_draw')}</span>
+        <span class="stat-value energy">${totalEU} EU/t</span>
+      </div>` : ''}
       ${r.HadCycles ? `<div class="stat"><span class="stat-label" style="color:#f59e0b;">${t('solve.cycles_detected')}</span></div>` : ''}
     `;
 
@@ -1143,12 +1357,16 @@
       machEl.innerHTML = `<div style="color:var(--text-faint);font-size:var(--text-sm);">
         ${t('solve.no_machines_prefix')}${esc(itemName)}${t('solve.no_machines_suffix')}</div>`;
     } else {
+      const groupEU = groups.map(g => (g.EUPerTick || 0) * (g.Count || 0));
+      const maxGroupEU = Math.max(0, ...groupEU);
+      const anyEU = maxGroupEU > 0;
       const hdr = `<div class="mg-header">
         <div class="mg-count">${t('solve.col.count')}</div>
         <div style="flex:1">${t('solve.col.machine')}</div>
         <div style="min-width:36px;text-align:right">${t('solve.col.util')}</div>
+        ${anyEU ? `<div class="mg-energy">${t('solve.col.power')}</div>` : ''}
       </div>`;
-      machEl.innerHTML = hdr + groups.map(g => {
+      machEl.innerHTML = hdr + groups.map((g, i) => {
         const util    = g.Utilization?.Den ? Math.round(g.Utilization.Num/g.Utilization.Den*100) + '%' : '';
         const outName = g.RecipeOutput ? nameOf(g.RecipeOutput) : '';
         const outID   = g.RecipeOutput?.ItemID || '';
@@ -1157,6 +1375,8 @@
         const partialTitle = partial ? t('solve.partial.active_title') : t('solve.partial.allow_title');
         const tierName = g.UpgradeTier ? (_tiers.find(t => t.id === g.UpgradeTier)?.name || g.UpgradeTier) : '';
         const upgradeText = tierName ? `${esc(tierName)} ×${g.UpgradeCount}` : '';
+        const groupTotalEU = groupEU[i];
+        const isMajor = anyEU && groupTotalEU > 0 && groupTotalEU === maxGroupEU;
         return `<div class="mg-row">
           <div class="mg-count">${g.Count}×</div>
           <div class="mg-info">
@@ -1166,6 +1386,7 @@
           </div>
           <div class="mg-upgrade">${upgradeText}</div>
           ${util ? `<div class="mg-util" style="${partial && util!=='100%' ? 'color:var(--text-faint);' : ''}">${util}</div>` : ''}
+          ${anyEU ? `<div class="mg-energy${isMajor ? ' is-major' : ''}">${groupTotalEU > 0 ? groupTotalEU + '<span class="unit">EU/t</span>' : '—'}</div>` : ''}
           <button class="partial-btn${partial ? ' active' : ''}"
             data-action="togglePartial" data-recipeid="${esc(g.RecipeID)}"
             title="${esc(partialTitle)}">${esc(partialLabel)}</button>
@@ -1203,10 +1424,41 @@
         <div class="io-rate">${fmtR(e.Rate)} /${e.TimeUnit||unit}</div>
       </div>`).join('');
     }
+    const byMod = new Map();
+    for (const g of (r.MachineGroups || [])) {
+      const eu = (g.EUPerTick || 0) * (g.Count || 0);
+      if (eu <= 0) continue;
+      byMod.set(g.MachineMod, (byMod.get(g.MachineMod) || 0) + eu);
+    }
+    if (byMod.size > 1) {
+      const maxModEU = Math.max(...byMod.values());
+      io += `<div class="energy-breakdown">
+        <div class="energy-breakdown-title">${t('solve.power_by_mod')}</div>
+        ${[...byMod.entries()].sort((a, b) => b[1] - a[1]).map(([mod, eu]) => `
+          <div class="energy-bar-row">
+            <div class="energy-bar-label" title="${esc(modName(mod))}">${esc(modName(mod))}</div>
+            <div class="energy-bar-track"><div class="energy-bar-fill" style="width:${Math.round(eu/maxModEU*100)}%"></div></div>
+            <div class="energy-bar-value">${eu} EU/t</div>
+          </div>`).join('')}
+      </div>`;
+    }
     ioEl.innerHTML = io || `<span style="color:var(--text-faint);font-size:var(--text-sm);">—</span>`;
   }
 
   let _openChainPickerKey = null;
+
+  // ── Chain view container (table ↔ graph) ─────────────────────────────────
+  const chainContainer = createContainer({
+    views: [
+      { key: 'table', icon: '☰', label: t('common.view_table') },
+      { key: 'graph', icon: '⬡', label: t('common.view_graph') },
+    ],
+    storageKey: 'view:solve-chain',
+    flush: true,
+    onViewChange: (v) => { _chainView = v; renderChainConfig(); },
+  });
+  let _chainView = chainContainer.activeView;
+  document.getElementById('chain-card').appendChild(chainContainer.el);
 
   function itemKey(item) {
     if (item.TagRef) return '#' + item.TagRef;
@@ -1220,7 +1472,7 @@
   }
 
   function closeAllPickers() {
-    document.getElementById('chain-picker-portal').style.display = 'none';
+    closePopover();
     document.querySelectorAll('[data-action="openChainPicker"]').forEach(el => el.classList.remove('active'));
     _openChainPickerKey = null;
   }

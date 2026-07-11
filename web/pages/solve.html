@@ -379,19 +379,6 @@
                 </div>
               </div>
 
-              <!-- EBF's own tier (steam/cupronickel/kanthal) is an independent axis from
-                   the main Bronze/Steel/Electric tier above — it only ever affects blast
-                   furnace family recipes and never overrides the main tier for anything
-                   else, so both selections stay active simultaneously. -->
-              <div class="field" id="ebf-tier-field" style="width:auto;">
-                <label class="field-label" data-i18n="solve.tier.ebf_label">EBF</label>
-                <div class="mode-toggle" style="flex-shrink:0;">
-                  <button class="mode-btn"        id="btn-ebf-steam"       data-i18n="solve.tier.ebf_steam">Steam</button>
-                  <button class="mode-btn"        id="btn-ebf-cupronickel" data-i18n="solve.tier.ebf_cupronickel">Cupronickel</button>
-                  <button class="mode-btn active" id="btn-ebf-kanthal"     data-i18n="solve.tier.ebf_kanthal">Kanthal</button>
-                </div>
-              </div>
-
               <div class="field" id="upgrade-field" style="width:auto;">
                 <label class="field-label" data-i18n="solve.upgrade.label">Upgrades</label>
                 <div style="display:flex;gap:var(--gap-inline);align-items:center;flex-wrap:wrap;">
@@ -494,11 +481,7 @@
   const _discoverURL = _isDemo ? '/api/demo/discover' : '/api/factories/' + _factoryID + '/discover';
   const _solveURL    = _isDemo ? '/api/demo/solve'    : '/api/factories/' + _factoryID + '/solve';
   let _mode           = 'AUTO';
-  let _machineTier    = 'electric'; // 'bronze' | 'steel' | 'electric' — applies to all non-EBF machine families
-  // EBF's own tier is a fully independent axis (steam/cupronickel/kanthal) — it only
-  // ever affects blast-furnace-family recipes and is chosen alongside _machineTier,
-  // never instead of it (a chain can use Steel macerators AND Kanthal EBF at once).
-  let _ebfTier        = 'kanthal'; // 'steam' | 'cupronickel' | 'kanthal'
+  let _machineTier    = 'electric'; // 'bronze' | 'steel' | 'electric'
   let _upgradeMode    = 'off'; // 'off' | 'auto' | 'fixed'
   let _tiers          = [];
   let _draftID        = null;
@@ -672,42 +655,46 @@
 
   // Machine-tier prefix convention, matching the MI addon-machine naming pattern
   // (see markdown/modern_industrialization.yml): bronze_/steel_ tiers implement
-  // their electric base type via machine_interfaces.
-  // The Electric Blast Furnace family is its OWN independent axis — steam (no
-  // upgrades), cupronickel and kanthal coils (both upgradable, but with different
-  // structural EU caps) — modeled as 'ebf-steam'/'ebf-cupronickel'/'ebf-kanthal'
-  // buckets, entirely separate from bronze/steel/electric so picking a main tier
-  // never affects which EBF coil is used, and vice versa.
+  // their electric base type via machine_interfaces. steam_blast_furnace has no
+  // bronze_/steel_ prefix of its own but is the sole steam-tier option for the
+  // blast-furnace family, so it stands in for both buckets (see resolveOptionKeyForTier).
   function machineTierOf(machineID) {
     if (machineID.startsWith('bronze_')) return 'bronze';
     if (machineID.startsWith('steel_'))  return 'steel';
-    if (machineID === 'steam_blast_furnace') return 'ebf-steam';
-    if (machineID === 'electric_blast_furnace_cupronickel') return 'ebf-cupronickel';
-    if (machineID === 'electric_blast_furnace') return 'ebf-kanthal';
+    if (machineID === 'steam_blast_furnace') return 'steam';
     return 'electric';
   }
 
-  // Resolve which RecipeOption.Key to use for a given RecipeID. Two independent
-  // axes: if this recipe belongs to the EBF family (any option classifies as an
-  // 'ebf-*' bucket), the EBF tier alone decides — the main Bronze/Steel/Electric
-  // tier is irrelevant to blast-furnace recipes and never overrides it. Otherwise
-  // the main tier applies as before, falling back to Electric if this family has
-  // no bronze/steel variant.
-  function resolveOptionKeyForTier(options, recipeID, tier, ebfTier) {
+  // Within the 'electric' bucket, the blast-furnace family has two eligible machine
+  // variants (Cupronickel/Kanthal coils) with identical throughput but different EU/t
+  // ceilings — the backend has already filtered out whichever one can't run this
+  // recipe (see recipeBanned), so preferring Cupronickel when present always picks the
+  // cheaper-to-build option without needing any EU/t math here.
+  const ELECTRIC_PREFERENCE = ['electric_blast_furnace_cupronickel', 'electric_blast_furnace'];
+
+  function pickElectricOption(group) {
+    for (const id of ELECTRIC_PREFERENCE) {
+      const opt = group.find(o => o.MachineID === id);
+      if (opt) return opt;
+    }
+    return group.find(o => machineTierOf(o.MachineID) === 'electric');
+  }
+
+  // Resolve which RecipeOption.Key to use for a given RecipeID under the given
+  // Bronze/Steel/Electric tier. Falls back to the steam-only variant for bronze/steel
+  // when no dedicated bronze_/steel_ machine exists, then to electric as a last resort.
+  function resolveOptionKeyForTier(options, recipeID, tier) {
     const group = (options || []).filter(o => o.RecipeID === recipeID);
     if (!group.length) return null;
 
-    const ebfOptions = group.filter(o => machineTierOf(o.MachineID).startsWith('ebf-'));
-    if (ebfOptions.length) {
-      const wanted = ebfOptions.find(o => machineTierOf(o.MachineID) === 'ebf-' + (ebfTier || _ebfTier));
+    if (tier === 'bronze' || tier === 'steel') {
+      const wanted = group.find(o => machineTierOf(o.MachineID) === tier);
       if (wanted) return wanted.Key;
-      const kanthal = ebfOptions.find(o => machineTierOf(o.MachineID) === 'ebf-kanthal');
-      return (kanthal || ebfOptions[0]).Key;
+      const steam = group.find(o => machineTierOf(o.MachineID) === 'steam');
+      if (steam) return steam.Key;
     }
 
-    const wanted = group.find(o => machineTierOf(o.MachineID) === tier);
-    if (wanted) return wanted.Key;
-    const electric = group.find(o => machineTierOf(o.MachineID) === 'electric');
+    const electric = pickElectricOption(group);
     return (electric || group[0]).Key;
   }
 
@@ -720,32 +707,12 @@
     // Re-resolve any already-chosen recipes to the new tier (same RecipeID,
     // different machine variant) — a manual per-item pick stays a pick, it just
     // follows the global tier like everything else unless the user picks a
-    // genuinely different recipe. EBF-family recipes are untouched here — they
-    // only ever follow _ebfTier (see setEbfTier), never the main tier.
+    // genuinely different recipe.
     let changed = false;
     for (const item of _chainItems) {
       if (!item.ChosenRecipeID) continue;
       const key = itemKey(item.Item);
-      const newOptKey = resolveOptionKeyForTier(item.Options, item.ChosenRecipeID, tier, _ebfTier);
-      if (newOptKey && _overrides[key] !== newOptKey) {
-        _overrides[key] = newOptKey;
-        changed = true;
-      }
-    }
-    if (changed && _chainItems.length) doDiscover();
-  }
-
-  function setEbfTier(tier) {
-    _ebfTier = tier;
-    document.getElementById('btn-ebf-steam').classList.toggle('active',       tier === 'steam');
-    document.getElementById('btn-ebf-cupronickel').classList.toggle('active', tier === 'cupronickel');
-    document.getElementById('btn-ebf-kanthal').classList.toggle('active',     tier === 'kanthal');
-
-    let changed = false;
-    for (const item of _chainItems) {
-      if (!item.ChosenRecipeID) continue;
-      const key = itemKey(item.Item);
-      const newOptKey = resolveOptionKeyForTier(item.Options, item.ChosenRecipeID, _machineTier, tier);
+      const newOptKey = resolveOptionKeyForTier(item.Options, item.ChosenRecipeID, tier);
       if (newOptKey && _overrides[key] !== newOptKey) {
         _overrides[key] = newOptKey;
         changed = true;
@@ -756,9 +723,6 @@
   document.getElementById('btn-tier-bronze').addEventListener('click',   () => setMachineTier('bronze'));
   document.getElementById('btn-tier-steel').addEventListener('click',    () => setMachineTier('steel'));
   document.getElementById('btn-tier-electric').addEventListener('click', () => setMachineTier('electric'));
-  document.getElementById('btn-ebf-steam').addEventListener('click',       () => setEbfTier('steam'));
-  document.getElementById('btn-ebf-cupronickel').addEventListener('click', () => setEbfTier('cupronickel'));
-  document.getElementById('btn-ebf-kanthal').addEventListener('click',     () => setEbfTier('kanthal'));
 
   function fillTierSelect(sel) {
     sel.innerHTML = '';
@@ -1159,11 +1123,9 @@
       return true;
     });
     for (const opt of distinctOptions) {
-      // Show the machine name matching the currently active tier (EBF-family recipes
-      // use the independent EBF tier instead of the main Bronze/Steel/Electric one).
-      const isEbfFamily = (item.Options || []).some(o => o.RecipeID === opt.RecipeID && machineTierOf(o.MachineID).startsWith('ebf-'));
-      const wantedBucket = isEbfFamily ? ('ebf-' + _ebfTier) : _machineTier;
-      const tierOpt = (item.Options || []).find(o => o.RecipeID === opt.RecipeID && machineTierOf(o.MachineID) === wantedBucket) || opt;
+      // Show the machine name matching the currently active tier.
+      const tierKey = resolveOptionKeyForTier(item.Options, opt.RecipeID, _machineTier);
+      const tierOpt = (item.Options || []).find(o => o.Key === tierKey) || opt;
       const ins = (opt.Inputs || []).join(', ');
       items.push({
         label: _machineNames[tierOpt.MachineMod + ':' + tierOpt.MachineID] || tierOpt.MachineID,
@@ -1197,7 +1159,7 @@
       _stopPoints.add(key);
     } else {
       const item = _chainItems.find(ci => itemKey(ci.Item) === key);
-      const optKey = resolveOptionKeyForTier(item?.Options, recipeID, _machineTier, _ebfTier);
+      const optKey = resolveOptionKeyForTier(item?.Options, recipeID, _machineTier);
       _overrides[key] = optKey || recipeID;
       _stopPoints.delete(key);
     }

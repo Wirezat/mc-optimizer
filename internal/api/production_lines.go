@@ -428,6 +428,29 @@ func ListProductionLinesHandler(database *db.DB) http.HandlerFunc {
 		if pls == nil {
 			pls = []*model.ProductionLine{}
 		}
+		for _, pl := range pls {
+			mgs, err := database.ListMachineGroupsByPL(r.Context(), pl.ID)
+			if err != nil {
+				errInternal(w, err)
+				return
+			}
+			for _, mg := range mgs {
+				if err := database.EnrichMachineGroupEU(r.Context(), mg); err != nil {
+					errInternal(w, err)
+					return
+				}
+				pl.TargetEUPerTick += mg.EUPerTick * int64(mg.Count)
+				pl.CurrentEUPerTick += mg.CurrentEUPerTick * int64(mg.BuiltCount)
+			}
+			frac, err := database.EstimateCurrentRateFraction(r.Context(), mgs)
+			if err != nil {
+				errInternal(w, err)
+				return
+			}
+			if pl.RateDen > 0 {
+				pl.CurrentRate = frac * float64(pl.RateNum) / float64(pl.RateDen)
+			}
+		}
 		writeJSON(w, http.StatusOK, pls)
 	}
 }
@@ -467,6 +490,22 @@ func GetProductionLineHandler(database *db.DB) http.HandlerFunc {
 		}
 		if ios == nil {
 			ios = []*model.PLIO{}
+		}
+		for _, mg := range mgs {
+			if err := database.EnrichMachineGroupEU(r.Context(), mg); err != nil {
+				errInternal(w, err)
+				return
+			}
+			pl.TargetEUPerTick += mg.EUPerTick * int64(mg.Count)
+			pl.CurrentEUPerTick += mg.CurrentEUPerTick * int64(mg.BuiltCount)
+		}
+		frac, err := database.EstimateCurrentRateFraction(r.Context(), mgs)
+		if err != nil {
+			errInternal(w, err)
+			return
+		}
+		if pl.RateDen > 0 {
+			pl.CurrentRate = frac * float64(pl.RateNum) / float64(pl.RateDen)
 		}
 		writeJSON(w, http.StatusOK, &model.ProductionLineDetail{
 			ProductionLine: *pl,
@@ -511,7 +550,8 @@ func UpdateProductionLineStatusHandler(database *db.DB) http.HandlerFunc {
 
 // ResolveProductionLineHandler re-solves an existing line (e.g. for more output) using its
 // stored solver request with the given overrides, replacing its machine groups and IO.
-//        "upgrade_mode":"auto"|"fixed"|"off", "upgrade_tier":"<uuid>", "upgrade_count":N}
+//
+//	"upgrade_mode":"auto"|"fixed"|"off", "upgrade_tier":"<uuid>", "upgrade_count":N}
 func ResolveProductionLineHandler(database *db.DB, svc *service.PLService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())

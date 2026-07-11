@@ -88,6 +88,14 @@ func effectiveTicks(recipe *RecipeRow, machine *MachineSpec, euBonusPerSlot int6
 	return ceilDiv(total, effectiveEU)
 }
 
+// EffectiveEUPerTick is the exported wrapper around effectiveEUPerTick, for callers
+// outside the package that need the same per-machine EU/t formula for display (e.g. a
+// confirmed production line's current-vs-target power draw, which isn't computed by
+// the solver's own optimization pass).
+func EffectiveEUPerTick(recipe *RecipeRow, machine *MachineSpec, euBonusPerSlot int64, n int) int64 {
+	return effectiveEUPerTick(recipe, machine, euBonusPerSlot, n)
+}
+
 // effectiveEUPerTick returns the actual EU/t ONE machine draws under the given upgrade
 // configuration — the same effectiveEU value effectiveTicks derives internally, just
 // exposed for display. 0 for non-eu machines (their power draw isn't EU-denominated).

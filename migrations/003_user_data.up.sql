@@ -74,6 +74,15 @@ CREATE TABLE machine_groups (
     -- from the true required rate (lossless) instead of from the rounded count.
     exact_count_num BIGINT NOT NULL DEFAULT 0,
     exact_count_den BIGINT NOT NULL DEFAULT 1,
+    -- Current (in-game) build state, independent of the target count/upgrade_tier_id/
+    -- upgrade_count above: a player often builds fewer machines than planned, or builds
+    -- them without the full upgrade loadout yet, and needs to track that partial state
+    -- separately from the target the solver computed. Current upgrades always track
+    -- toward the group's own target upgrade_tier_id — a player upgrades incrementally
+    -- toward the planned tier, never installs a different one — so only the count needs
+    -- to be tracked, not a separate tier. Like upgrade_count, this is per machine.
+    built_count           INT NOT NULL DEFAULT 0 CHECK (built_count >= 0 AND built_count <= count),
+    current_upgrade_count INT NOT NULL DEFAULT 0 CHECK (current_upgrade_count >= 0),
     FOREIGN KEY (machine_mod_id, machine_id) REFERENCES machine_types(mod_id, machine_id)
 );
 

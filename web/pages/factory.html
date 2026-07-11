@@ -530,7 +530,7 @@
         </div>
       </td>
       <td>${itemHtml(pl.target_item_id, pl.target_item_name, pl.target_mod_id, 'cell-clamp--dots td-muted')}</td>
-      <td>${rateHtml(pl.rate_num, pl.rate_den, pl.time_unit, 'pl-rate-val')}</td>
+      <td>${rateHtml(pl.rate_num, pl.rate_den, pl.time_unit, 'pl-rate-val')}${euRollupHtml(pl)}</td>
       <td class="col-actions">
         <button class="pl-tri-btn btn-icon-color ${esc(triCls[pl.status] || 'inbau')}" data-plid="${esc(pl.id)}" data-action="triAdvance" data-status="${esc(pl.status)}" title="${esc(triTip[pl.status] || '')}">
           <span class="tri-cur">${triCur[pl.status] || '⚒'}</span>
@@ -572,6 +572,33 @@
       <div class="cell-clamp ${esc(clampClass)}" style="flex:1;min-width:0;"><span class="cell-clamp-inner">${name}</span></div>
       ${itemId ? _TRIGGER + def : ''}
     </div>`;
+  }
+
+  // Compact build-state rollup for the PL list row: a faint line with the target
+  // EU/t, plus a warn-colored "current" line (rate and EU/t from the real build
+  // state) while the line isn't fully built/upgraded yet — stacked as separate
+  // short lines so nothing gets clipped by the column width (see
+  // production-line.html's per-group build state for where these values come from).
+  function euRollupHtml(pl) {
+    const targetEU  = pl.target_eu_per_tick || 0;
+    const currentEU = pl.current_eu_per_tick || 0;
+    const rate      = pl.rate_den ? pl.rate_num / pl.rate_den : 0;
+    const curRate   = pl.current_rate || 0;
+    const complete  = currentEU === targetEU && curRate >= rate - 1e-9;
+
+    let html = '';
+    if (targetEU > 0) {
+      html += `<div class="td-faint" style="font-size:var(--text-xs);white-space:nowrap;">${targetEU} EU/t</div>`;
+    }
+    if (pl.status === 'active' && !complete) {
+      const shortRate = Math.round(curRate * 100) / 100;
+      const cur = esc(t('production_line.row.current'));
+      html += `<div style="font-size:var(--text-xs);white-space:nowrap;color:var(--warn);" title="${cur}">${shortRate} /${esc(pl.time_unit)}</div>`;
+      if (targetEU > 0) {
+        html += `<div style="font-size:var(--text-xs);white-space:nowrap;color:var(--warn);" title="${cur}">${currentEU} EU/t</div>`;
+      }
+    }
+    return html;
   }
 
   function rateHtml(num, den, unit, extraClass = null) {

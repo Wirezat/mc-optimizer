@@ -316,7 +316,8 @@ func (d *DB) ListMachineGroupsByPL(ctx context.Context, plID uuid.UUID) ([]*mode
 	rows, err := d.Pool.Query(ctx, `
 		SELECT id, pl_id, machine_mod_id, machine_id, recipe_id,
 		       count, upgrade_tier_id, upgrade_count, status,
-		       exact_count_num, exact_count_den
+		       exact_count_num, exact_count_den,
+		       built_count, current_upgrade_count
 		FROM machine_groups
 		WHERE pl_id = $1
 		ORDER BY machine_id
@@ -333,6 +334,7 @@ func (d *DB) ListMachineGroupsByPL(ctx context.Context, plID uuid.UUID) ([]*mode
 			&mg.ID, &mg.PLID, &mg.MachineModID, &mg.MachineID, &mg.RecipeID,
 			&mg.Count, &mg.UpgradeTierID, &mg.UpgradeCount, &mg.Status,
 			&mg.ExactCountNum, &mg.ExactCountDen,
+			&mg.BuiltCount, &mg.CurrentUpgradeCount,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan machine group: %w", err)
 		}
@@ -347,13 +349,15 @@ func (d *DB) GetMachineGroup(ctx context.Context, id uuid.UUID) (*model.MachineG
 	err := d.Pool.QueryRow(ctx, `
 		SELECT id, pl_id, machine_mod_id, machine_id, recipe_id,
 		       count, upgrade_tier_id, upgrade_count, status,
-		       exact_count_num, exact_count_den
+		       exact_count_num, exact_count_den,
+		       built_count, current_upgrade_count
 		FROM machine_groups
 		WHERE id = $1
 	`, id).Scan(
 		&mg.ID, &mg.PLID, &mg.MachineModID, &mg.MachineID, &mg.RecipeID,
 		&mg.Count, &mg.UpgradeTierID, &mg.UpgradeCount, &mg.Status,
 		&mg.ExactCountNum, &mg.ExactCountDen,
+		&mg.BuiltCount, &mg.CurrentUpgradeCount,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -397,6 +401,25 @@ func (d *DB) UpdateMachineGroupStatus(ctx context.Context, id uuid.UUID, status 
 	return nil
 }
 
+// UpdateMachineGroupBuildState sets the current (in-game) build state of a machine group —
+// how many of its target count are actually standing, and how many of its target upgrade
+// loadout are installed so far (same tier as upgrade_tier_id, just fewer of them) —
+// independent of the group's target count/upgrade_tier_id/upgrade_count.
+func (d *DB) UpdateMachineGroupBuildState(ctx context.Context, id uuid.UUID, builtCount, currentUpgradeCount int) error {
+	tag, err := d.Pool.Exec(ctx, `
+		UPDATE machine_groups
+		SET built_count = $2, current_upgrade_count = $3
+		WHERE id = $1
+	`, id, builtCount, currentUpgradeCount)
+	if err != nil {
+		return fmt.Errorf("db: update machine group build state: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // MachineGroupOwnerUserID resolves the user_id that owns a machine group
 // via the chain machine_groups → production_lines → factories → saves.
 func (d *DB) MachineGroupOwnerUserID(ctx context.Context, groupID uuid.UUID) (uuid.UUID, error) {
@@ -418,12 +441,16 @@ func (d *DB) MachineGroupOwnerUserID(ctx context.Context, groupID uuid.UUID) (uu
 	return userID, nil
 }
 
-// MarkAllPlannedAsBuilt sets all 'planned' machine groups in a production line to 'built'.
+// MarkAllPlannedAsBuilt sets all 'planned' machine groups in a production line to 'built',
+// and fills their current build state (built_count, current_upgrade_count) to match the
+// target — "mark all built" means the player finished building everything as planned.
 // Returns the number of rows updated.
 func (d *DB) MarkAllPlannedAsBuilt(ctx context.Context, plID uuid.UUID) (int64, error) {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE machine_groups
-		SET status = 'built'
+		SET status = 'built',
+		    built_count = count,
+		    current_upgrade_count = upgrade_count
 		WHERE pl_id = $1 AND status = 'planned'
 	`, plID)
 	if err != nil {

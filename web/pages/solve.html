@@ -477,7 +477,7 @@
   const _isDemo    = window.location.pathname.startsWith('/demo/');
   const _factoryID = _isDemo ? null : window.location.pathname.split('/')[2];
   if (!_isDemo) guard();
-  initHeader();
+  initHeader({ publicPage: _isDemo });
   const _discoverURL = _isDemo ? '/api/demo/discover' : '/api/factories/' + _factoryID + '/discover';
   const _solveURL    = _isDemo ? '/api/demo/solve'    : '/api/factories/' + _factoryID + '/solve';
   let _mode           = 'AUTO';

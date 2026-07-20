@@ -26,6 +26,6 @@ const LABELS = () => ({
   demo:     t('header.demo'),
 });
 
-export function init() {
-  return _wuiInit({ navLinks: NAV_LINKS(), adminSections: ADMIN_SECTIONS(), labels: LABELS(), getLang, setLang });
+export function init({ publicPage = false } = {}) {
+  return _wuiInit({ navLinks: NAV_LINKS(), adminSections: ADMIN_SECTIONS(), labels: LABELS(), getLang, setLang, publicPage });
 }

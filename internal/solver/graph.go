@@ -148,6 +148,7 @@ func (s *Solver) BuildRecipeGraph(
 			if err != nil {
 				return nil, fmt.Errorf("solver: get recipes for fluid %s: %w", key, err)
 			}
+			recipes = filterByActiveMods(recipes, s.ActiveMods)
 			selected := (*RecipeRow)(nil)
 			for _, r := range recipes {
 				if RecipeOptionKey(r.ID, r.MachineMod, r.MachineID) == overrideID {
@@ -177,6 +178,7 @@ func (s *Solver) BuildRecipeGraph(
 		if err != nil {
 			return nil, fmt.Errorf("solver: get recipes for %s: %w", key, err)
 		}
+		recipes = filterByActiveMods(recipes, s.ActiveMods)
 		if len(recipes) == 0 {
 			node.IsRawMaterial = true
 			g.Nodes[key] = node
@@ -185,11 +187,18 @@ func (s *Solver) BuildRecipeGraph(
 
 		selected := recipes[0]
 		if overrideID, ok := overrides[key]; ok {
+			found := false
 			for _, r := range recipes {
 				if RecipeOptionKey(r.ID, r.MachineMod, r.MachineID) == overrideID {
 					selected = r
+					found = true
 					break
 				}
+			}
+			if !found {
+				node.IsRawMaterial = true
+				g.Nodes[key] = node
+				continue
 			}
 		}
 

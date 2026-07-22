@@ -87,6 +87,10 @@
             data-i18n-placeholder="saves.modal.name_placeholder"
             autocomplete="off" />
         </div>
+        <div class="field">
+          <label class="field-label" data-i18n="saves.modal.mods_label"></label>
+          <div id="save-mods-picker"></div>
+        </div>
         <span class="status-msg" id="status-create"></span>
       </div>
       <div class="modal-footer">
@@ -102,12 +106,16 @@
   import { init as initHeader } from '/static/js/header.js';
   import { initModal, closeModal } from '/static/ui/js/modal.js';
   import { createListView } from '/static/js/list-view.js';
+  import { renderModPicker } from '/static/js/mod-picker.js';
 
   await load(getLang());
   applyI18n();
   guard();
   initHeader();
   initModal();
+
+  let _modPicker = null;
+  let _modPickerReady = null;
 
   const listView = createListView({
     containerEl: document.getElementById('saves-container'),
@@ -118,9 +126,10 @@
         <button class="btn btn-danger-flat btn-sm btn-icon tile-action"
           data-id="${esc(s.id)}" title="${esc(t('common.delete'))}">🗑</button>
         <div class="tile-title">${esc(s.name)}</div>
-        <!-- TODO: show s.mod_count in tile-subtitle once /api/saves returns mod_count -->
         <div class="tile-meta">
           <span>${fmtFactories(s.factory_count)}</span>
+          <span>·</span>
+          <span>${fmtMods(s.mod_count)}</span>
           <span>·</span>
           <span>${esc(fmtDate(s.created_at))}</span>
         </div>
@@ -131,6 +140,8 @@
         render: (v, row) => `<a href="/saves/${esc(row.id)}">${esc(v)}</a>` },
       { key: 'factories', label: t('saves.factories_col'),
         render: (_, row) => esc(fmtFactories(row.factory_count)) },
+      { key: 'mods',      label: t('saves.mods_col'),
+        render: (_, row) => esc(fmtMods(row.mod_count)) },
       { key: 'created',   label: t('common.created_at'),
         render: (_, row) => esc(fmtDate(row.created_at)) },
     ],
@@ -138,8 +149,8 @@
     onDelete: (id, btn) => deleteSave(id, btn),
   });
 
-  document.getElementById('new-save-btn').addEventListener('click', openModal);
-  document.getElementById('new-save-btn-empty').addEventListener('click', openModal);
+  document.getElementById('new-save-btn').addEventListener('click', openModalAsync);
+  document.getElementById('new-save-btn-empty').addEventListener('click', openModalAsync);
   document.getElementById('modal-create-btn').addEventListener('click', doCreate);
   document.getElementById('save-name').addEventListener('keydown', e => { if (e.key === 'Enter') doCreate(); });
 
@@ -160,13 +171,31 @@
     setTimeout(() => document.getElementById('save-name').focus(), 80);
   }
 
+  // Picker rendering is async (loads /api/mods) — must be awaited before
+  // doCreate() can read the selection, so this is what the "New Save"
+  // buttons call instead of the plain sync openModal().
+  async function openModalAsync() {
+    openModal();
+    _modPickerReady = renderModPicker(document.getElementById('save-mods-picker'));
+    _modPicker = await _modPickerReady;
+  }
+
   async function doCreate() {
     const name = document.getElementById('save-name').value.trim();
     if (!name) { showStatus('status-create', 'err', t('msg.name_required')); return; }
+    // The mod picker loads /api/mods asynchronously — if the user submits
+    // before it resolves (e.g. pressing Enter right after opening the
+    // modal), wait for it so we never PUT an empty mod_ids that wasn't a
+    // deliberate "deactivate everything" choice.
+    if (_modPickerReady) await _modPickerReady;
     const res = await apiFetch('/api/saves', { method: 'POST', body: JSON.stringify({ name }) });
     if (!res) return;
     const data = await res.json();
     if (!res.ok) { showStatus('status-create', 'err', data.message || t('msg.error')); return; }
+    await apiFetch('/api/saves/' + data.id + '/active-mods', {
+      method: 'PUT',
+      body: JSON.stringify({ mod_ids: _modPicker ? _modPicker.getSelected() : [] }),
+    });
     closeModal();
     loadSaves();
   }
@@ -184,6 +213,11 @@
   function fmtFactories(n) {
     if (!n) return esc(t('saves.factories_none'));
     return esc(t('saves.factory_count').replace('{n}', n));
+  }
+
+  function fmtMods(n) {
+    if (!n) return esc(t('saves.mods_none'));
+    return esc(t('saves.mod_count').replace('{n}', n));
   }
 
   function showStatus(id, cls, text) {

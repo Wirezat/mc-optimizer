@@ -145,12 +145,18 @@ func DiscoverHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 
+		activeMods, ok := loadActiveModsForFactory(w, r, database, factoryID)
+		if !ok {
+			return
+		}
+
 		req, ok := decodeDiscoverRequest(w, r)
 		if !ok {
 			return
 		}
 
 		s := solver.NewSolver(database, 0)
+		s.ActiveMods = activeMods
 		result, err := s.Discover(r.Context(), req.TargetItem, req.StopPoints,
 			solver.FactoryState{}, req.RecipeOverrides, req.TagOverrides)
 		if err != nil {
@@ -159,6 +165,20 @@ func DiscoverHandler(database *db.DB) http.HandlerFunc {
 		}
 		respondDiscover(w, r, database, result)
 	}
+}
+
+func loadActiveModsForFactory(w http.ResponseWriter, r *http.Request, database *db.DB, factoryID uuid.UUID) (map[string]bool, bool) {
+	factory, err := database.GetFactory(r.Context(), factoryID)
+	if err != nil {
+		errInternal(w, err)
+		return nil, false
+	}
+	activeMods, err := database.GetActiveMods(r.Context(), factory.SaveID)
+	if err != nil {
+		errInternal(w, err)
+		return nil, false
+	}
+	return activeMods, true
 }
 
 // DemoDiscoverHandler is the factory-less counterpart to DiscoverHandler, used

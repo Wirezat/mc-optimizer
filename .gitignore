@@ -28,7 +28,11 @@ logs/
 Claude
 /.claude/
 CLAUDE.md
+/.playwright-mcp/
 
 # Import Data
 /assets/
 /temp mc jar/
+
+# Local-only planning docs (specs/plans) — never committed
+/docs/superpowers/

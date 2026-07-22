@@ -133,6 +133,9 @@ func run() error {
 	mux.Handle("GET /api/saves/{save_id}", protected(api.GetSaveHandler(database)))
 	mux.Handle("DELETE /api/saves/{save_id}", protected(api.DeleteSaveHandler(database)))
 
+	mux.Handle("GET /api/saves/{save_id}/active-mods", protected(api.GetActiveModsHandler(database)))
+	mux.Handle("PUT /api/saves/{save_id}/active-mods", protected(api.SetActiveModsHandler(database)))
+	mux.Handle("POST /api/saves/{save_id}/active-mods/dependents", protected(api.CheckActiveModDependentsHandler(database)))
 	mux.Handle("GET /api/saves/{save_id}/factories", protected(api.ListFactoriesHandler(database)))
 	mux.Handle("POST /api/saves/{save_id}/factories", protected(api.CreateFactoryHandler(database)))
 	mux.Handle("GET /api/factories/{factory_id}", protected(api.GetFactoryHandler(database)))

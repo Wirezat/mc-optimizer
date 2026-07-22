@@ -21,6 +21,7 @@ type RecipeStore interface {
 type Solver struct {
 	DB           RecipeStore
 	AutoScaleMax int64
+	ActiveMods   map[string]bool
 }
 
 // NewSolver creates a new Solver with the given store and auto-scale max.

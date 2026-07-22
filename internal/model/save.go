@@ -12,6 +12,7 @@ type Save struct {
 	Name         string    `json:"name"`
 	CreatedAt    time.Time `json:"created_at"`
 	FactoryCount int       `json:"factory_count"`
+	ModCount     int       `json:"mod_count"`
 }
 
 type Factory struct {
@@ -27,6 +28,13 @@ type PLGroup struct {
 	FactoryID uuid.UUID `json:"factory_id"`
 	Name      string    `json:"name"`
 	Position  string    `json:"position"`
+}
+
+type DependentProductionLine struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	FactoryID   uuid.UUID `json:"factory_id"`
+	FactoryName string    `json:"factory_name"`
 }
 
 type FactorySource struct {

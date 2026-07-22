@@ -62,7 +62,10 @@
             </div>
             <div class="page-title" id="page-title">…</div>
           </div>
-          <button class="btn btn-primary" id="new-factory-btn" data-i18n="save.new_factory"></button>
+          <div style="display:flex;gap:var(--gap-control);">
+            <button class="btn btn-ghost" id="mods-btn" data-i18n="save.mods_btn"></button>
+            <button class="btn btn-primary" id="new-factory-btn" data-i18n="save.new_factory"></button>
+          </div>
         </div>
 
         <div id="factories-container"></div>
@@ -107,12 +110,48 @@
     </div>
   </div>
 
+  <!-- ── Mods Modal ── -->
+  <div class="modal-backdrop" data-wui-modal="mods">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <span class="modal-title" data-i18n="save.mods_modal.title"></span>
+        <button class="modal-close" data-modal-close>×</button>
+      </div>
+      <div class="modal-body">
+        <p class="field-caption" data-i18n="save.mods_modal.hint"></p>
+        <div id="save-mods-picker"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" data-modal-cancel data-i18n="common.cancel"></button>
+        <button class="btn btn-primary" id="mods-save-btn" data-i18n="common.save"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Generic confirm modal (mods-confirm) — used for the "deactivating this
+       mod affects existing production lines" prompt. Placed after the Mods
+       modal so it paints on top when both happen to be open. ── -->
+  <div class="modal-backdrop" data-wui-modal="mods-confirm">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mods-confirm-title">
+      <div class="modal-header">
+        <span class="modal-title" data-modal-title id="mods-confirm-title"></span>
+        <button class="modal-close" data-modal-close>×</button>
+      </div>
+      <div class="modal-body" data-modal-body></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" data-modal-cancel data-i18n="common.no"></button>
+        <button class="btn btn-primary" data-modal-confirm></button>
+      </div>
+    </div>
+  </div>
+
 <script type="module">
   import { guard, apiFetch } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
-  import { initModal, closeModal } from '/static/ui/js/modal.js';
+  import { initModal, closeModal, openModal as openGenericModal } from '/static/ui/js/modal.js';
   import { createListView } from '/static/js/list-view.js';
+  import { renderModPicker } from '/static/js/mod-picker.js';
 
   await load(getLang());
   applyI18n();
@@ -121,6 +160,7 @@
   initModal();
 
   const _saveID = window.location.pathname.split('/')[2];
+  let _modPicker = null;
 
   const listView = createListView({
     containerEl: document.getElementById('factories-container'),
@@ -167,6 +207,57 @@
   }
 
   document.getElementById('mode-btn').addEventListener('click', () => setSrcMode(!_srcMode));
+
+  // ── Mods modal ─────────────────────────────────────────────────────────────
+  document.getElementById('mods-btn').addEventListener('click', openModsModal);
+  document.getElementById('mods-save-btn').addEventListener('click', saveMods);
+
+  let _activeModsBeforeEdit = [];
+
+  async function openModsModal() {
+    const res = await apiFetch('/api/saves/' + _saveID + '/active-mods');
+    _activeModsBeforeEdit = res && res.ok ? (await res.json()).mod_ids : [];
+    document.querySelector('[data-wui-modal="mods"]').classList.add('open');
+    _modPicker = await renderModPicker(document.getElementById('save-mods-picker'), _activeModsBeforeEdit);
+  }
+
+  // Deactivating a mod that existing production lines depend on doesn't touch
+  // their data (see design doc) — but it's a one-way, easy-to-miss action, so
+  // ask first. Only mods being newly turned OFF matter; adding mods back is
+  // always safe and needs no confirmation.
+  async function saveMods() {
+    if (!_modPicker) return;
+    const newSelection = _modPicker.getSelected();
+    const removed = _activeModsBeforeEdit.filter(m => !newSelection.includes(m));
+
+    if (removed.length > 0) {
+      const res = await apiFetch('/api/saves/' + _saveID + '/active-mods/dependents', {
+        method: 'POST',
+        body: JSON.stringify({ mod_ids: removed }),
+      });
+      const lines = res && res.ok ? (await res.json()).production_lines : [];
+      if (lines.length > 0) {
+        const list = lines.map(pl => `<li>${esc(pl.factory_name)} — ${esc(pl.name)}</li>`).join('');
+        openGenericModal({
+          name:         'mods-confirm',
+          title:        t('save.mods_confirm.title'),
+          bodyHTML:     `<p>${esc(t('save.mods_confirm.body'))}</p><ul>${list}</ul>`,
+          confirmLabel: t('common.yes'),
+          onConfirm:    () => persistActiveMods(newSelection),
+        });
+        return;
+      }
+    }
+    await persistActiveMods(newSelection);
+  }
+
+  async function persistActiveMods(modIds) {
+    await apiFetch('/api/saves/' + _saveID + '/active-mods', {
+      method: 'PUT',
+      body: JSON.stringify({ mod_ids: modIds }),
+    });
+    closeModal('mods');
+  }
 
   // ── Load save metadata ────────────────────────────────────────────────────
   async function loadSave() {
@@ -235,6 +326,7 @@
 
   loadSave();
   loadFactories();
+  if (new URLSearchParams(window.location.search).get('open') === 'mods') openModsModal();
 </script>
 </body>
 </html>

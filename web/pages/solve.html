@@ -87,6 +87,10 @@
       background: var(--danger-muted);
       border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
     }
+    .banner-warn {
+      background: var(--warn-muted);
+      border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+    }
     .banner strong { display: block; margin-bottom: var(--gap-inline); }
     .banner ul { margin: 0 0 0 var(--pad-container); padding: 0; }
     .banner-action { margin-top: var(--gap-inline); color: var(--text-muted); }
@@ -315,6 +319,15 @@
           </div>
         </div>
 
+        <!-- ── No active mods banner (blocking) ───────────────────────────── -->
+        <div id="no-mods-banner" class="banner banner-warn" style="display:none;">
+          <strong data-i18n="solve.discover.no_mods_title">No mods configured for this world</strong>
+          <span data-i18n="solve.discover.no_mods_hint">Without active mods there are no recipes to discover.</span>
+          <div class="banner-action">
+            <a id="no-mods-link" href="#" data-i18n="solve.discover.no_mods_action">→ Set up mods</a>
+          </div>
+        </div>
+
         <!-- ── Step 1: Target + Mode ───────────────────────────────────────── -->
         <div class="step-label"><span>1 — </span><span data-i18n="solve.step.target">What do you want to produce?</span></div>
         <div class="container container-config" style="margin-bottom:var(--gap-section);">
@@ -507,6 +520,13 @@
 
   async function init() {
     let modsRes, itemsRes, fluidsRes;
+    // Appended to /api/items and /api/fluids so the backend restricts the
+    // target-item picker to mods active for this save — '' (demo mode) means
+    // unrestricted. ModRestricted chain nodes reached mid-discovery aren't
+    // affected by this: their display name arrives via each Discover/Solve
+    // response's own Names map (merged into _names below), independent of
+    // whether the item was ever offered as a pickable target.
+    let saveIDParam = '';
 
     if (_isDemo) {
       document.title = 'MC Optimizer — ' + t('solve.title') + ' — Demo';
@@ -526,17 +546,26 @@
       document.getElementById('bc-factory').textContent = factory.name;
       document.getElementById('bc-factory').href        = '/factories/' + _factoryID;
 
-      let saveRes;
-      [saveRes, modsRes, itemsRes, fluidsRes] = await Promise.all([
+      saveIDParam = '&save_id=' + encodeURIComponent(factory.save_id);
+
+      let saveRes, activeModsRes;
+      [saveRes, modsRes, activeModsRes, itemsRes, fluidsRes] = await Promise.all([
         apiFetch('/api/saves/' + factory.save_id),
         apiFetch('/api/mods'),
-        apiFetch('/api/items?all=true'),
-        apiFetch('/api/fluids?all=true'),
+        apiFetch('/api/saves/' + factory.save_id + '/active-mods'),
+        apiFetch('/api/items?all=true' + saveIDParam),
+        apiFetch('/api/fluids?all=true' + saveIDParam),
       ]);
       if (saveRes?.ok) {
         const save = await saveRes.json();
         document.getElementById('bc-save').textContent = save.name;
         document.getElementById('bc-save').href        = '/saves/' + factory.save_id;
+      }
+
+      const activeModIds = activeModsRes?.ok ? (await activeModsRes.json()).mod_ids : [];
+      if (activeModIds.length === 0) {
+        document.getElementById('no-mods-link').href = '/saves/' + factory.save_id + '?open=mods';
+        document.getElementById('no-mods-banner').style.display = 'block';
       }
       // Real aggregate output rate (per minute) per item this factory already
       // produces, across ALL its production lines — from the factory balance,
@@ -558,14 +587,15 @@
       for (const m of mods) _modNames[m.mod_id] = m.name;
     }
 
-    // Preload all items + fluids into nameMap
+    // Preload items + fluids (already save-scoped by the backend) into nameMap
     function addEntry(mod_id, item_id, name, _fluid) {
       const displayName = name || item_id;
+      const itemKey = (_fluid ? 'fluid:' : '') + mod_id + ':' + item_id;
+      _names[itemKey] = displayName;
+
       const k = displayName.toLowerCase();
       if (!_nameMap.has(k)) _nameMap.set(k, []);
       _nameMap.get(k).push({ mod_id, item_id, _fluid, name: displayName });
-      const itemKey = (_fluid ? 'fluid:' : '') + mod_id + ':' + item_id;
-      _names[itemKey] = displayName;
     }
     // Fluids first: when a fluid and a block-item share the same display name
     // the fluid entry must win so IsFluid is set correctly.
@@ -907,6 +937,9 @@
 
   function _chainRecipeCell(item, key, withStop) {
     const opts = item.Options || [];
+    if (item.ModRestricted) {
+      return `<span style="color:var(--warn);font-size:var(--text-xs);">⚠ ${t('solve.chain.mod_restricted')}</span>`;
+    }
     if (item.IsRawMaterial || opts.length === 0) {
       return `<span style="color:var(--text-faint);font-style:italic;font-size:var(--text-xs);">${t('solve.chain.raw_material')}</span>`;
     }
@@ -1041,7 +1074,10 @@
       // the others).
       const noOptions = (ci.Options || []).length === 0;
       let kind = ci.Level === 0 ? 'primary' : '', badge = '';
-      if (ci.IsRawMaterial || noOptions) {
+      if (ci.ModRestricted) {
+        kind = 'terminal';
+        badge = t('solve.chain.mod_restricted');
+      } else if (ci.IsRawMaterial || noOptions) {
         kind = 'terminal';
         badge = t('solve.chain.raw_material');
       } else if (_stopPoints.has(key) && !chosen && ci.Level !== 0) {
@@ -1069,7 +1105,7 @@
         subtitle: ci.Item.TagRef ? '' : modName(ci.Item.ModID),
         badge,
         kind,
-        warn: _cycleNodes.has(key),
+        warn: _cycleNodes.has(key) || ci.ModRestricted,
         labels: pickable ? [{ text: labelText, cls: tag?.cls, menu: buildRecipeMenu(ci, key, { withStop: ci.Level !== 0 }) }] : null,
       });
 

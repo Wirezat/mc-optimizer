@@ -24,8 +24,19 @@ func (d *DB) ListProductionLinesByFactory(ctx context.Context, factoryID uuid.UU
 		         (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||pl.target_mod_id||'.'||pl.target_item_id),
 		         ''
 		       ) AS target_item_name,
-		       EXISTS(SELECT 1 FROM fluids WHERE mod_id = pl.target_mod_id AND fluid_id = pl.target_item_id) AS target_is_fluid
+		       EXISTS(SELECT 1 FROM fluids WHERE mod_id = pl.target_mod_id AND fluid_id = pl.target_item_id) AS target_is_fluid,
+		       -- True if any machine group's mod isn't active for this PL's save —
+		       -- surfaces a warning icon without touching the PL's own data.
+		       EXISTS(
+		         SELECT 1 FROM machine_groups mg
+		         WHERE mg.pl_id = pl.id
+		           AND NOT EXISTS (
+		             SELECT 1 FROM save_active_mods sam
+		             WHERE sam.save_id = f.save_id AND sam.mod_id = mg.machine_mod_id
+		           )
+		       ) AS mod_missing
 		FROM production_lines pl
+		JOIN factories f ON f.id = pl.factory_id
 		LEFT JOIN pl_groups g ON g.id = pl.pl_group_id
 		WHERE pl.factory_id = $1
 		ORDER BY COALESCE(g.position, ''), pl.position
@@ -43,7 +54,7 @@ func (d *DB) ListProductionLinesByFactory(ctx context.Context, factoryID uuid.UU
 			&pl.TargetModID, &pl.TargetItemID,
 			&pl.RateNum, &pl.RateDen, &pl.TimeUnit,
 			&pl.OptimizeMode, &pl.Status, &pl.PLGroupID, &pl.Position,
-			&pl.TargetItemName, &pl.TargetIsFluid,
+			&pl.TargetItemName, &pl.TargetIsFluid, &pl.ModMissing,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan production line: %w", err)
 		}

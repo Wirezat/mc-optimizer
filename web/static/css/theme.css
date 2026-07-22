@@ -81,3 +81,23 @@ html.dark {
 .status-msg.ok   { background: var(--success-muted); color: var(--success); display: inline-flex; }
 .status-msg.err  { background: var(--danger-muted);  color: var(--danger);  display: inline-flex; }
 .status-msg.warn { background: var(--warn-muted);    color: var(--warn);    display: inline-flex; }
+
+/* ── Mod picker (mod-picker.js) ──────────────────────────────────────────── */
+.check-all-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2px var(--gap-inline);
+    font-size: var(--text-xs); color: var(--text-faint);
+}
+.mod-checklist {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg-card); max-height: 220px; overflow-y: auto;
+}
+.mod-check-row {
+    display: flex; align-items: center; gap: var(--gap-control);
+    padding: var(--gap-inline) var(--gap-field);
+    border-bottom: 1px solid var(--border);
+}
+.mod-check-row:last-child { border-bottom: none; }
+.mod-check-row:hover { background: var(--bg-hover); }
+.mod-check-name { flex: 1; font-size: var(--text-base); }
+.mod-check-count { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }

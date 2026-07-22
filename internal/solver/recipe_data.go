@@ -51,15 +51,22 @@ type MachineSpec struct {
 	FixedRecipeEUCap int64
 }
 
+func filterByActiveMods(recipes []*RecipeRow, activeMods map[string]bool) []*RecipeRow {
+	if activeMods == nil {
+		return recipes
+	}
+	out := make([]*RecipeRow, 0, len(recipes))
+	for _, r := range recipes {
+		if activeMods[r.MachineMod] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // UpgradeTierSpec holds the subset of upgrade tier properties the solver needs.
 type UpgradeTierSpec struct {
 	ID             string
 	EUBonusPerSlot int64
-	// MaxStackSize is how many of this upgrade item fit in a machine's single
-	// upgrade slot (MI: UpgradeComponent holds one ItemStack; bonus scales with
-	// itemStack.getCount()) — sourced from the upgrade item's own max_stack in
-	// the items table (single source of truth), not duplicated in this table.
-	// 64 for a standard stack, 1 for quantum_upgrade (stacksTo(1) in MI source).
-	// This caps upgrade count, NOT machine.MaxSlots.
-	MaxStackSize int64
+	MaxStackSize   int64
 }

@@ -28,7 +28,8 @@ func (d *DB) CreateSave(ctx context.Context, userID uuid.UUID, name string) (*mo
 func (d *DB) ListSavesByUser(ctx context.Context, userID uuid.UUID) ([]*model.Save, error) {
 	rows, err := d.Pool.Query(ctx,
 		`SELECT id, user_id, name, created_at,
-		        (SELECT COUNT(*) FROM factories WHERE save_id = saves.id) AS factory_count
+		        (SELECT COUNT(*) FROM factories WHERE save_id = saves.id) AS factory_count,
+		        (SELECT COUNT(*) FROM save_active_mods WHERE save_id = saves.id) AS mod_count
 		 FROM saves WHERE user_id = $1 ORDER BY created_at DESC`,
 		userID,
 	)
@@ -40,7 +41,7 @@ func (d *DB) ListSavesByUser(ctx context.Context, userID uuid.UUID) ([]*model.Sa
 	var saves []*model.Save
 	for rows.Next() {
 		s := &model.Save{}
-		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.CreatedAt, &s.FactoryCount); err != nil {
+		if err := rows.Scan(&s.ID, &s.UserID, &s.Name, &s.CreatedAt, &s.FactoryCount, &s.ModCount); err != nil {
 			return nil, fmt.Errorf("db: scan save: %w", err)
 		}
 		saves = append(saves, s)
@@ -52,9 +53,12 @@ func (d *DB) ListSavesByUser(ctx context.Context, userID uuid.UUID) ([]*model.Sa
 func (d *DB) GetSave(ctx context.Context, id, userID uuid.UUID) (*model.Save, error) {
 	s := &model.Save{}
 	err := d.Pool.QueryRow(ctx,
-		`SELECT id, user_id, name, created_at FROM saves WHERE id = $1 AND user_id = $2`,
+		`SELECT id, user_id, name, created_at,
+		        (SELECT COUNT(*) FROM factories WHERE save_id = saves.id) AS factory_count,
+		        (SELECT COUNT(*) FROM save_active_mods WHERE save_id = saves.id) AS mod_count
+		 FROM saves WHERE id = $1 AND user_id = $2`,
 		id, userID,
-	).Scan(&s.ID, &s.UserID, &s.Name, &s.CreatedAt)
+	).Scan(&s.ID, &s.UserID, &s.Name, &s.CreatedAt, &s.FactoryCount, &s.ModCount)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/importer"
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/google/uuid"
 )
 
 // ListModsHandler returns all mods.
@@ -571,13 +572,29 @@ func DeleteMachineInterfaceHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
+// optionalSaveID parses an optional ?save_id= query param. Returns nil (no
+// filter) if absent or malformed — this endpoint is also used by /demo/solve,
+// which has no save, so a missing/bad save_id must never be a hard error.
+func optionalSaveID(r *http.Request) *uuid.UUID {
+	raw := r.URL.Query().Get("save_id")
+	if raw == "" {
+		return nil
+	}
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return nil
+	}
+	return &id
+}
+
 // SearchItemsHandler returns items matching an optional query string across all mods.
 // ?all=true  → returns all items (catalog use, no limit)
+// ?all=true&save_id=<id> → same, restricted to mods active for that save (Solve target picker)
 // ?q=&offset → paginated search (autocomplete use, LIMIT 50)
 func SearchItemsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("all") == "true" {
-			items, err := database.ListAllItems(r.Context())
+			items, err := database.ListAllItems(r.Context(), optionalSaveID(r))
 			if err != nil {
 				errInternal(w, err)
 				return
@@ -604,11 +621,11 @@ func SearchItemsHandler(database *db.DB) http.HandlerFunc {
 }
 
 // SearchFluidsHandler returns fluids matching an optional query string across all mods.
-// Optional query params: ?q=<search term>&offset=<int>&all=true
+// Optional query params: ?q=<search term>&offset=<int>&all=true&save_id=<id>
 func SearchFluidsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("all") == "true" {
-			fluids, err := database.ListAllFluids(r.Context())
+			fluids, err := database.ListAllFluids(r.Context(), optionalSaveID(r))
 			if err != nil {
 				errInternal(w, err)
 				return

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/Wirezat/production-optimizer/internal/solver"
+	"github.com/google/uuid"
 )
 
 // strPtrOr returns a pointer to s if non-empty, else nil.
@@ -390,8 +391,10 @@ func (d *DB) SearchItems(ctx context.Context, q string, offset int) ([]*model.It
 }
 
 // ListAllItems returns all items across all mods with translated names, ordered by mod then name.
-// Used by catalog pages; no pagination limit.
-func (d *DB) ListAllItems(ctx context.Context) ([]*model.Item, error) {
+// Used by catalog pages (no pagination limit) and the Solve target-item picker.
+// saveID, if non-nil, restricts results to items whose mod is active for that save —
+// nil means unfiltered (catalog pages, demo mode).
+func (d *DB) ListAllItems(ctx context.Context, saveID *uuid.UUID) ([]*model.Item, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT i.mod_id, i.item_id,
 		       COALESCE(
@@ -401,12 +404,13 @@ func (d *DB) ListAllItems(ctx context.Context) ([]*model.Item, error) {
 		       ) AS iname,
 		       i.max_stack
 		FROM items i
+		WHERE $1::uuid IS NULL OR i.mod_id IN (SELECT mod_id FROM save_active_mods WHERE save_id = $1)
 		ORDER BY i.mod_id, COALESCE(
 		    (SELECT name FROM translations WHERE lang='en_us' AND lang_key='item.'||i.mod_id||'.'||i.item_id),
 		    (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||i.mod_id||'.'||i.item_id),
 		    i.item_id
 		)
-	`)
+	`, saveID)
 	if err != nil {
 		return nil, fmt.Errorf("db: list all items: %w", err)
 	}
@@ -424,7 +428,9 @@ func (d *DB) ListAllItems(ctx context.Context) ([]*model.Item, error) {
 }
 
 // ListAllFluids returns all fluids across all mods with translated names, ordered by mod then name.
-func (d *DB) ListAllFluids(ctx context.Context) ([]*model.Fluid, error) {
+// saveID, if non-nil, restricts results to fluids whose mod is active for that save —
+// nil means unfiltered (catalog pages, demo mode).
+func (d *DB) ListAllFluids(ctx context.Context, saveID *uuid.UUID) ([]*model.Fluid, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT mod_id, fluid_id, name FROM (
 			SELECT f.mod_id, f.fluid_id,
@@ -441,9 +447,10 @@ func (d *DB) ListAllFluids(ctx context.Context) ([]*model.Fluid, error) {
 			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END
 			       ) LIMIT 1), '') AS name
 			FROM fluids f
+			WHERE $1::uuid IS NULL OR f.mod_id IN (SELECT mod_id FROM save_active_mods WHERE save_id = $1)
 		) sub
 		ORDER BY mod_id, COALESCE(NULLIF(name, ''), fluid_id)
-	`)
+	`, saveID)
 	if err != nil {
 		return nil, fmt.Errorf("db: list all fluids: %w", err)
 	}

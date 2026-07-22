@@ -41,10 +41,18 @@ func NewPLService(database *db.DB, autoScaleMax int64) *PLService {
 	return &PLService{db: database, autoScaleMax: autoScaleMax}
 }
 
+func (s *PLService) activeModsForFactory(ctx context.Context, factoryID uuid.UUID) (map[string]bool, error) {
+	factory, err := s.db.GetFactory(ctx, factoryID)
+	if err != nil {
+		return nil, err
+	}
+	return s.db.GetActiveMods(ctx, factory.SaveID)
+}
+
 // SolveOutput is returned by Solve and contains what the HTTP handler needs.
 type SolveOutput struct {
-	DraftID   uuid.UUID        `json:"draft_id"`
-	ExpiresAt time.Time        `json:"expires_at"`
+	DraftID   uuid.UUID          `json:"draft_id"`
+	ExpiresAt time.Time          `json:"expires_at"`
 	Result    solver.SolveResult `json:"result"`
 }
 
@@ -56,7 +64,13 @@ func (s *PLService) Solve(ctx context.Context, factoryID, userID uuid.UUID, req 
 		req.Mode, req.TargetRate.Num, req.TargetRate.Den, req.TimeUnit,
 		len(req.StopPoints))
 
-	result, err := solver.NewSolver(s.db, s.autoScaleMax).Solve(ctx, req)
+	activeMods, err := s.activeModsForFactory(ctx, factoryID)
+	if err != nil {
+		return nil, err
+	}
+	sv := solver.NewSolver(s.db, s.autoScaleMax)
+	sv.ActiveMods = activeMods
+	result, err := sv.Solve(ctx, req)
 	if err != nil {
 		GoLog.Infof("solve: error: %v", err)
 		return nil, err
@@ -310,7 +324,17 @@ func (s *PLService) Resolve(ctx context.Context, plID uuid.UUID, in ResolveInput
 		req.UpgradeCount = in.UpgradeCount
 	}
 
-	result, err := solver.NewSolver(s.db, s.autoScaleMax).Solve(ctx, req)
+	pl, err := s.db.GetProductionLine(ctx, plID)
+	if err != nil {
+		return nil, err
+	}
+	activeMods, err := s.activeModsForFactory(ctx, *pl.FactoryID)
+	if err != nil {
+		return nil, err
+	}
+	sv := solver.NewSolver(s.db, s.autoScaleMax)
+	sv.ActiveMods = activeMods
+	result, err := sv.Solve(ctx, req)
 	if err != nil {
 		return nil, err
 	}

@@ -26,6 +26,7 @@ type ChainItem struct {
 	ChosenMachineID  string
 	IsStop           bool
 	IsRawMaterial    bool
+	ModRestricted    bool
 }
 
 // DiscoverResult is the output of Discover.
@@ -118,6 +119,14 @@ func (s *Solver) Discover(
 		if err != nil {
 			return res, err
 		}
+		filtered := filterByActiveMods(recipes, s.ActiveMods)
+		if len(recipes) > 0 && len(filtered) == 0 {
+			ci.ModRestricted = true
+			ci.IsStop = true
+			res.Items = append(res.Items, ci)
+			continue
+		}
+		recipes = filtered
 		if len(recipes) == 0 {
 			ci.IsRawMaterial = true
 			ci.IsStop = true

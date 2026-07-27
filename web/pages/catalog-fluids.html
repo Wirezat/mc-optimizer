@@ -65,7 +65,6 @@
               <tr><td colspan="2" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
             </tbody>
           </table>
-          <div id="fluid-sentinel" style="height:1px;"></div>
         </div>
       </div>
 
@@ -80,6 +79,7 @@
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
   import { entryOf, iconImageHTML } from '/static/js/catalog-registry.js';
+  import { VirtualWindow } from '/static/ui/js/virtual-window.js';
 
   await load(getLang());
   applyI18n();
@@ -89,44 +89,59 @@
   const tbody    = document.getElementById('fluid-tbody');
   const countEl  = document.getElementById('fluid-count');
   const searchEl = document.getElementById('fluid-search');
-  const sentinel = document.getElementById('fluid-sentinel');
   const urlMod   = new URLSearchParams(location.search).get('mod') || '';
 
-  const PAGE_SIZE = 100;
   let allFluids = [];
-  let modNames  = {};
-  let filtered  = [];
-  let rendered  = 0;
-  let groupCounts = {};
+  let modNames = {};
+  let filtered = [];
+  const openGroups = new Map();
+  const groupRows = new Map();
 
+  function fluidRowEl(fluid) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>
+      <td>
+        <a href="/catalog/recipes?fluid=${encodeURIComponent(fluid.mod_id + ':' + fluid.fluid_id)}"
+           class="row-name-link">
+          <span class="icontext icontext-sm">
+            ${iconImageHTML(entryOf(fluid, true), { cls: 'icontext-icon' })}
+            <span class="icontext-body"><span class="icontext-text">${esc(fluid.name || fluid.fluid_id)}</span></span>
+          </span>
+        </a>
+      </td>`;
+    return [tr];
+  }
 
-  function renderChunk() {
-    const chunk = filtered.slice(rendered, rendered + PAGE_SIZE);
-    if (!chunk.length) return;
-    let html = '';
-    let lastMod = rendered === 0 ? null : filtered[rendered - 1].mod_id;
-    for (const fluid of chunk) {
-      if (fluid.mod_id !== lastMod) {
-        lastMod = fluid.mod_id;
-        const modName = modNames[fluid.mod_id] || fluid.mod_id;
-        html += `<tr class="table-group-hd collapsed"><td colspan="2"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${groupCounts[fluid.mod_id] || 0}</span></td></tr>`;
-      }
-      html += `<tr>
-        <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>
-        <td>
-          <a href="/catalog/recipes?fluid=${encodeURIComponent(fluid.mod_id + ':' + fluid.fluid_id)}"
-             class="row-name-link">
-            <span class="icontext icontext-sm">
-              ${iconImageHTML(entryOf(fluid, true), { cls: 'icontext-icon' })}
-              <span class="icontext-body"><span class="icontext-text">${esc(fluid.name || fluid.fluid_id)}</span></span>
-            </span>
-          </a>
-        </td>
-      </tr>`;
+  function skeletonRowEl() {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="skeleton-bar" style="width:40%;"></span></td>
+      <td><span class="skeleton-bar" style="width:60%;"></span></td>`;
+    return [tr];
+  }
+
+  function toggleGroup(modId, hdRow, rowsBody) {
+    const collapsed = hdRow.classList.toggle('collapsed');
+    if (collapsed) {
+      openGroups.get(modId)?.destroy();
+      openGroups.delete(modId);
+      return;
     }
-    tbody.insertAdjacentHTML('beforeend', html);
-    rendered += chunk.length;
-    applyCollapseState();
+    const fluids = groupRows.get(modId) || [];
+    const vw = new VirtualWindow({
+      container: rowsBody,
+      scrollMode: 'ancestor',
+      scrollEl: document.querySelector('.main'),
+      fetch: async (offset) => ({
+        rows: fluids.slice(offset, offset + 50),
+        hasMore: offset + 50 < fluids.length,
+      }),
+      renderRow: fluidRowEl,
+      renderSkeletonRow: skeletonRowEl,
+    });
+    openGroups.set(modId, vw);
+    vw.start();
   }
 
   function resetAndRender() {
@@ -134,39 +149,43 @@
     filtered = urlMod ? allFluids.filter(f => f.mod_id === urlMod) : allFluids;
     if (q) filtered = filtered.filter(f => wuiFilter(f, q, ['name', 'fluid_id', 'mod_name']));
     countEl.textContent = filtered.length + ' fluid' + (filtered.length !== 1 ? 's' : '');
-    groupCounts = {};
-    for (const f of filtered) groupCounts[f.mod_id] = (groupCounts[f.mod_id] || 0) + 1;
-    rendered = 0;
+
+    for (const vw of openGroups.values()) vw.destroy();
+    openGroups.clear();
+    groupRows.clear();
+
     tbody.innerHTML = '';
     if (!filtered.length) {
       tbody.innerHTML = `<tr><td colspan="2" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_fluids')}</td></tr>`;
       return;
     }
-    renderChunk();
-  }
 
-  new IntersectionObserver(entries => {
-    if (entries[0].isIntersecting && rendered < filtered.length) renderChunk();
-  }, { rootMargin: '300px' }).observe(sentinel);
+    const byMod = new Map();
+    for (const f of filtered) {
+      if (!byMod.has(f.mod_id)) byMod.set(f.mod_id, []);
+      byMod.get(f.mod_id).push(f);
+    }
 
-  function applyCollapseState() {
-    let collapsed = false;
-    for (const row of tbody.rows) {
-      if (row.classList.contains('table-group-hd')) {
-        collapsed = row.classList.contains('collapsed');
-      } else {
-        row.hidden = collapsed;
-      }
+    for (const [modId, fluids] of byMod) {
+      groupRows.set(modId, fluids);
+      const modName = modNames[modId] || modId;
+
+      const hdBody = document.createElement('tbody');
+      const hdRow = document.createElement('tr');
+      hdRow.className = 'table-group-hd collapsed';
+      hdRow.innerHTML = `<td colspan="2"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${fluids.length}</span></td>`;
+      hdBody.appendChild(hdRow);
+
+      const rowsBody = document.createElement('tbody');
+      hdRow.addEventListener('click', e => {
+        if (e.target.closest('a')) return;
+        toggleGroup(modId, hdRow, rowsBody);
+      });
+
+      tbody.appendChild(hdBody);
+      tbody.appendChild(rowsBody);
     }
   }
-
-  tbody.addEventListener('click', e => {
-    if (e.target.closest('a')) return;
-    const hd = e.target.closest('.table-group-hd');
-    if (!hd) return;
-    hd.classList.toggle('collapsed');
-    applyCollapseState();
-  });
 
   searchEl.addEventListener('input', resetAndRender);
 

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -212,6 +213,10 @@ func run() error {
 	// Frontend pages — clean URLs without .html extension
 	page := func(file string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
+			// A page names the module and stylesheet URLs the browser then
+			// fetches, so a stale one drags a whole stale deploy in behind it.
+			// ServeFile still answers an unchanged file with a 304.
+			w.Header().Set("Cache-Control", "no-cache")
 			http.ServeFile(w, r, "web/pages/"+file)
 		}
 	}
@@ -232,17 +237,41 @@ func run() error {
 	mux.HandleFunc("GET /admin/settings", page("admin-settings.html"))
 	mux.HandleFunc("GET /admin/import", page("admin-import.html"))
 
-	// Static assets and fallback
+	// Static assets and fallback.
+	//
+	// None of these URLs carry a content hash, so a file's URL stays the same
+	// when the file changes. Without an explicit policy a browser falls back to
+	// heuristic freshness and happily serves the previous deploy's JS — which it
+	// did, repeatedly. Everything below therefore revalidates; the file servers
+	// answer an unchanged file with a 304 off Last-Modified, so revalidation is
+	// cheap and correctness does not depend on guessing a lifetime.
 	staticFS := http.FileServer(http.Dir("web/static"))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if len(r.URL.Path) >= 8 && r.URL.Path[:8] == "locales/" {
+		if strings.HasPrefix(r.URL.Path, "locales/") {
+			// Translations are read on every page load and must never lag a
+			// deploy, not even by one conditional request.
 			w.Header().Set("Cache-Control", "no-store")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
 		}
 		staticFS.ServeHTTP(w, r)
 	})))
-	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
+	// Textures and models change only on import, but a re-import replaces them
+	// at the same URL. A short lifetime keeps a page full of icons from
+	// revalidating each one while bounding how long a stale icon can survive.
+	assetFS := http.FileServer(http.Dir("assets"))
+	mux.Handle("/assets/", http.StripPrefix("/assets/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
+		assetFS.ServeHTTP(w, r)
+	})))
 	mux.Handle("GET /{$}", http.RedirectHandler("/login", http.StatusFound))
-	mux.Handle("/", http.FileServer(http.Dir("web/pages")))
+	// Pages are the entry point to everything above; a stale one pulls in stale
+	// module URLs, so it revalidates too.
+	pagesFS := http.FileServer(http.Dir("web/pages"))
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		pagesFS.ServeHTTP(w, r)
+	}))
 
 	srv := &http.Server{
 		Addr:           ":" + port,

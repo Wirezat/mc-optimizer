@@ -113,6 +113,7 @@
     }
     .chain-cell-recipe .chain-override-btn { flex-shrink: 0; margin-left: auto; }
     .chain-recipe-inputs { font-size: var(--text-xs); color: var(--text-faint); }
+    .chain-target-icontext .icontext-text { font-weight: var(--weight-bold); color: var(--text); }
     .cycle-warn {
       display: inline-block;
       min-width: 1.4em;
@@ -246,7 +247,6 @@
       display: flex; align-items: baseline; justify-content: space-between;
       gap: var(--gap-control); padding: 3px 0; font-size: var(--text-sm);
     }
-    .io-item { color: var(--text); }
     .io-sublabel { font-size: 10px; color: var(--text-faint); font-style: italic; font-family: var(--mono); }
     .io-rate { color: var(--text-muted); font-family: var(--mono); font-size: var(--text-xs); flex-shrink: 0; }
 
@@ -473,6 +473,7 @@
   import { createContainer } from '/static/ui/js/components/container.js';
   import { openPopover, closePopover } from '/static/ui/js/components/popover.js';
   import { renderGraph } from '/static/ui/js/components/graph.js';
+  import { loadCatalog, lookupCatalog, iconTextHTML, catalogEntries } from '/static/js/catalog-registry.js';
 
   await load(getLang());
   applyI18n();
@@ -519,7 +520,7 @@
   function modName(modID) { return _modNames[modID] || modID; }
 
   async function init() {
-    let modsRes, itemsRes, fluidsRes;
+    let modsRes;
     // Appended to /api/items and /api/fluids so the backend restricts the
     // target-item picker to mods active for this save — '' (demo mode) means
     // unrestricted. ModRestricted chain nodes reached mid-discovery aren't
@@ -532,10 +533,9 @@
       document.title = 'MC Optimizer — ' + t('solve.title') + ' — Demo';
       document.querySelector('.breadcrumb').style.display = 'none';
       document.querySelector('.confirm-bar').style.display = 'none';
-      [modsRes, itemsRes, fluidsRes] = await Promise.all([
+      [modsRes] = await Promise.all([
         apiFetch('/api/mods'),
-        apiFetch('/api/items?all=true'),
-        apiFetch('/api/fluids?all=true'),
+        loadCatalog(),
       ]);
     } else {
       const factRes = await apiFetch('/api/factories/' + _factoryID);
@@ -549,12 +549,11 @@
       saveIDParam = '&save_id=' + encodeURIComponent(factory.save_id);
 
       let saveRes, activeModsRes;
-      [saveRes, modsRes, activeModsRes, itemsRes, fluidsRes] = await Promise.all([
+      [saveRes, modsRes, activeModsRes] = await Promise.all([
         apiFetch('/api/saves/' + factory.save_id),
         apiFetch('/api/mods'),
         apiFetch('/api/saves/' + factory.save_id + '/active-mods'),
-        apiFetch('/api/items?all=true' + saveIDParam),
-        apiFetch('/api/fluids?all=true' + saveIDParam),
+        loadCatalog({ saveIDParam }),
       ]);
       if (saveRes?.ok) {
         const save = await saveRes.json();
@@ -587,24 +586,25 @@
       for (const m of mods) _modNames[m.mod_id] = m.name;
     }
 
-    // Preload items + fluids (already save-scoped by the backend) into nameMap
+    // Preload items + fluids (already save-scoped by the backend) into the
+    // reverse lowercase-name → refs index used by the target-item search box.
+    // Display names themselves now come from the catalog registry (loadCatalog
+    // above); _names stays reserved for the Discover/Solve response's own
+    // Names map (see the comment on saveIDParam above) — items reached
+    // mid-discovery that fall outside this save's active-mod restriction.
     function addEntry(mod_id, item_id, name, _fluid) {
       const displayName = name || item_id;
-      const itemKey = (_fluid ? 'fluid:' : '') + mod_id + ':' + item_id;
-      _names[itemKey] = displayName;
-
       const k = displayName.toLowerCase();
       if (!_nameMap.has(k)) _nameMap.set(k, []);
       _nameMap.get(k).push({ mod_id, item_id, _fluid, name: displayName });
     }
+    // Built from the registry the page already loaded — fetching the catalog a
+    // second time here would double the payload and the server's texture lookups.
     // Fluids first: when a fluid and a block-item share the same display name
     // the fluid entry must win so IsFluid is set correctly.
-    if (fluidsRes?.ok) {
-      for (const f of await fluidsRes.json()) addEntry(f.mod_id, f.fluid_id, f.name, true);
-    }
-    if (itemsRes?.ok) {
-      for (const i of await itemsRes.json()) addEntry(i.mod_id, i.item_id, i.name, false);
-    }
+    const _catalog = catalogEntries();
+    for (const e of _catalog) if (e.isFluid)  addEntry(e.modID, e.id, e.name, true);
+    for (const e of _catalog) if (!e.isFluid) addEntry(e.modID, e.id, e.name, false);
 
     // Build flat sorted array for virtual autocomplete
     _allEntries = [..._nameMap.values()].map(entries => entries[0]);
@@ -987,15 +987,12 @@
 
     const target = _chainItems.find(ci => ci.Level === 0);
     if (target) {
-      const key  = itemKey(target.Item);
-      const name = nameOf(target.Item);
-      const sub  = target.Item.TagRef ? '' : modName(target.Item.ModID);
+      const key   = itemKey(target.Item);
+      const name  = nameOf(target.Item);
+      const sub   = target.Item.TagRef ? '' : modName(target.Item.ModID);
       const title = target.Item.TagRef ? '' : ` title="${esc(target.Item.ModID + ':' + target.Item.ItemID)}"`;
       rows.push(`<tr>
-        <td>
-          <span style="font-weight:var(--weight-bold);color:var(--text);"${title}>${esc(name)}</span>
-          ${sub ? `<div style="font-size:var(--text-xs);color:var(--text-faint);font-family:var(--mono)">${esc(sub)}</div>` : ''}
-        </td>
+        <td><span${title}>${iconTextHTML(target.Item.ModID, target.Item.ItemID, { isFluid: target.Item.IsFluid, name, subtitle: sub, size: 'sm', extraClass: 'chain-target-icontext' })}</span></td>
         <td><div class="chain-cell-recipe">${_chainRecipeCell(target, key, false)}</div></td>
       </tr>`);
     }
@@ -1014,10 +1011,7 @@
         const sub    = item.Item.TagRef ? '' : modName(item.Item.ModID);
         const isStop = item.IsStop && !item.IsRawMaterial;
         rows.push(`<tr${isStop ? ' class="tc-stopped"' : ''}>
-          <td>
-            <span style="font-weight:var(--weight-medium)">${esc(name)}</span>
-            ${sub ? `<div style="font-size:var(--text-xs);color:var(--text-faint);font-family:var(--mono)">${esc(sub)}</div>` : ''}
-          </td>
+          <td>${iconTextHTML(item.Item.ModID, item.Item.ItemID, { isFluid: item.Item.IsFluid, name, subtitle: sub, size: 'sm' })}</td>
           <td><div class="chain-cell-recipe">${_chainRecipeCell(item, key, true)}</div></td>
         </tr>`);
       }
@@ -1399,8 +1393,9 @@
     const ioItemHTML = (e) => {
       const name = nameOf(e.Item);
       const sub  = e.Item.TagRef ? '' : modName(e.Item.ModID);
-      return `<div class="io-item" title="${esc(e.Item.ModID + ':' + (e.Item.ItemID || e.Item.TagRef))}">${esc(name)}</div>` +
-        (sub ? `<div class="io-sublabel">${esc(sub)}</div>` : '');
+      return `<span title="${esc(e.Item.ModID + ':' + (e.Item.ItemID || e.Item.TagRef))}">` +
+        iconTextHTML(e.Item.ModID, e.Item.ItemID, { isFluid: e.Item.IsFluid, name, subtitle: sub, size: 'sm' }) +
+        `</span>`;
     };
     if (inputs.length) {
       io += `<div class="io-section-label">${t('solve.inputs')}</div>`;
@@ -1466,7 +1461,8 @@
 
   function nameOf(item) {
     if (item.TagRef) return '#' + item.TagRef;
-    return _names[itemKey(item)] || item.ItemID || '';
+    return lookupCatalog(item.ModID, item.ItemID, item.IsFluid)?.name
+      || _names[itemKey(item)] || item.ItemID || '';
   }
 
   function closeAllPickers() {
@@ -1479,7 +1475,14 @@
     _cycleNodes = new Set(nodes);
     const list = document.getElementById('cycle-error-list');
     list.innerHTML = nodes.map(key => {
-      const name = _names[key] || key.split(':').pop();
+      let name = _names[key];
+      if (!name && !key.startsWith('#')) {
+        const isFluid = key.startsWith('fluid:');
+        const rest = isFluid ? key.slice('fluid:'.length) : key;
+        const sep = rest.indexOf(':');
+        if (sep >= 0) name = lookupCatalog(rest.slice(0, sep), rest.slice(sep + 1), isFluid)?.name;
+      }
+      name = name || key.split(':').pop();
       return `<li>${esc(name)}</li>`;
     }).join('');
     document.getElementById('cycle-error-banner').style.display = '';

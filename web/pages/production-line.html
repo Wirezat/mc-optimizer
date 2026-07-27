@@ -273,6 +273,7 @@
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { machine as machineName, loadMI } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
+  import { loadCatalog, iconTextHTML } from '/static/js/catalog-registry.js';
 
   const _lang = getLang();
   await load(_lang);
@@ -290,6 +291,7 @@
     const [res, tRes] = await Promise.all([
       apiFetch('/api/production-lines/' + _plID),
       apiFetch('/api/upgrade-tiers'),
+      loadCatalog(),
     ]);
     if (!res?.ok) { window.location.href = '/saves'; return; }
     _pl = await res.json();
@@ -387,8 +389,7 @@
     document.getElementById('pl-meta').innerHTML = `
       <div class="stat">
         <span class="stat-label">${esc(t('production_line.meta.target'))}</span>
-        <span class="stat-value">${esc(targetName)}</span>
-        <span class="td-faint">${esc(_pl.target_mod_id)}</span>
+        ${iconTextHTML(_pl.target_mod_id, _pl.target_item_id, { isFluid: _pl.target_is_fluid, name: targetName, subtitle: _pl.target_mod_id, size: 'lg' })}
       </div>
       <div class="stat">
         <span class="stat-label">${esc(t('production_line.meta.mode'))}</span>
@@ -534,7 +535,8 @@
     </div>`;
   }
 
-  // IO row layout ported from solve.html's result view (.io-row/.io-item/.io-sublabel).
+  // IO row layout ported from solve.html's result view (.io-row), label rendered
+  // via catalog-registry's iconTextHTML (see the ★ primary marker below).
   function renderIO() {
     const ioEl    = document.getElementById('io-list');
     const all     = _pl.io || [];
@@ -555,11 +557,18 @@
 
   function ioRow(e, isPrimary) {
     const rate = fmtFrac(e.rate_num, e.rate_den) + ' /' + (_pl.time_unit || 't');
-    const name = e.name || e.item_fluid_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    // Same fallback as targetName above: a name-less id (mid-import, before
+    // translations load) still reads as words instead of raw snake_case.
+    const name  = e.name || e.item_fluid_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    const label = iconTextHTML(e.mod_id, e.item_fluid_id, {
+      isFluid:  e.io_type === 'fluid',
+      name,
+      subtitle: e.mod_id,
+      size:     'sm',
+    });
     return `<div class="io-row">
-      <div style="flex:1;min-width:0;">
-        <div class="io-item${isPrimary ? ' io-item-primary' : ''}">${isPrimary ? '★ ' : ''}${esc(name)}</div>
-        <div class="io-sublabel">${esc(e.mod_id)}</div>
+      <div style="flex:1;min-width:0;display:flex;align-items:center;gap:var(--gap-icon);">
+        ${isPrimary ? '<span class="io-item-primary">★</span>' : ''}${label}
       </div>
       <div class="io-rate">${esc(rate)}</div>
     </div>`;

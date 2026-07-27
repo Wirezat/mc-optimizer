@@ -173,8 +173,8 @@ func run() error {
 	mux.Handle("POST /api/mods/{mod_id}/machines/{machine_id}/interfaces", adminOnly(api.AddMachineInterfaceHandler(database)))
 	mux.Handle("DELETE /api/mods/{mod_id}/machines/{machine_id}/interfaces/{base_mod_id}/{base_machine_id}", adminOnly(api.DeleteMachineInterfaceHandler(database)))
 	mux.Handle("GET /api/mods/{mod_id}/machines/{machine_id}/slots", protected(api.ListMachineSlotsHandler(database)))
-	mux.Handle("GET /api/mods/{mod_id}/items", protected(api.ListModItemsHandler(database)))
-	mux.Handle("GET /api/mods/{mod_id}/fluids", protected(api.ListModFluidsHandler(database)))
+	mux.Handle("GET /api/mods/{mod_id}/items", protected(api.ListModItemsHandler(database, "assets")))
+	mux.Handle("GET /api/mods/{mod_id}/fluids", protected(api.ListModFluidsHandler(database, "assets")))
 	mux.Handle("PATCH /api/mods/{mod_id}/items/{item_id}", adminOnly(api.UpdateItemHandler(database)))
 	mux.Handle("GET /api/recipes", protected(api.ListRecipesCatalogHandler(database)))
 	mux.Handle("GET /api/mods/{mod_id}/recipes", protected(api.ListModRecipesHandler(database)))
@@ -182,9 +182,9 @@ func run() error {
 	mux.Handle("PATCH /api/recipes/{recipe_id}", adminOnly(api.UpdateRecipeNameHandler(database)))
 	mux.Handle("DELETE /api/recipes/{recipe_id}", adminOnly(api.DeleteRecipeHandler(database)))
 
-	mux.Handle("GET /api/items", api.SearchItemsHandler(database)) // public: global game data, needed for /demo/solve pre-login
+	mux.Handle("GET /api/items", api.SearchItemsHandler(database, "assets")) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/items/{mod_id}/{item_id}/recipes", protected(api.GetItemRecipesHandler(database)))
-	mux.Handle("GET /api/fluids", api.SearchFluidsHandler(database)) // public: global game data, needed for /demo/solve pre-login
+	mux.Handle("GET /api/fluids", api.SearchFluidsHandler(database, "assets")) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/tags", protected(api.SearchTagsHandler(database)))
 	mux.Handle("GET /api/trades", protected(api.ListVillagerTradesHandler(database)))
 

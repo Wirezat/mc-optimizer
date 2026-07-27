@@ -80,6 +80,7 @@
   import { init as initHeader } from '/static/js/header.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
+  import { entryOf, iconImageHTML } from '/static/js/catalog-registry.js';
 
   await load(getLang());
   applyI18n();
@@ -114,7 +115,12 @@
       html += `<tr>
         <td>
           <a href="/catalog/recipes?item=${encodeURIComponent(item.mod_id + ':' + item.item_id)}"
-             class="row-name-link">${esc(item.name || item.item_id)}</a>
+             class="row-name-link">
+            <span class="icontext icontext-sm">
+              ${iconImageHTML(entryOf(item, false), { cls: 'icontext-icon' })}
+              <span class="icontext-body"><span class="icontext-text">${esc(item.name || item.item_id)}</span></span>
+            </span>
+          </a>
         </td>
         <td class="td-mono td-muted">${esc(item.item_id)}</td>
         <td class="td-muted td-num">${esc(item.max_stack)}×</td>

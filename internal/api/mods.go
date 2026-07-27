@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Wirezat/production-optimizer/internal/assets"
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/importer"
 	"github.com/Wirezat/production-optimizer/internal/model"
@@ -308,7 +309,7 @@ func UpdateItemHandler(database *db.DB) http.HandlerFunc {
 }
 
 // ListModItemsHandler returns all items for a mod.
-func ListModItemsHandler(database *db.DB) http.HandlerFunc {
+func ListModItemsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := strings.TrimSpace(r.PathValue("mod_id"))
 		if modID == "" {
@@ -327,12 +328,13 @@ func ListModItemsHandler(database *db.DB) http.HandlerFunc {
 		if items == nil {
 			items = []*model.Item{}
 		}
+		attachItemTextures(items, assetsDir)
 		writeJSON(w, http.StatusOK, items)
 	}
 }
 
 // ListModFluidsHandler returns all fluids for a mod.
-func ListModFluidsHandler(database *db.DB) http.HandlerFunc {
+func ListModFluidsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := strings.TrimSpace(r.PathValue("mod_id"))
 		if modID == "" {
@@ -347,7 +349,45 @@ func ListModFluidsHandler(database *db.DB) http.HandlerFunc {
 		if fluids == nil {
 			fluids = []*model.Fluid{}
 		}
+		attachFluidTextures(fluids, assetsDir)
 		writeJSON(w, http.StatusOK, fluids)
+	}
+}
+
+// attachItemTextures populates TextureURL on each item by resolving its
+// texture file on disk, leaving it nil when no file exists.
+func attachItemTextures(items []*model.Item, assetsDir string) {
+	for _, it := range items {
+		if url, ok := assets.ResolveItemTexture(assetsDir, it.ModID, it.ItemID); ok {
+			it.TextureURL = &url
+			it.Animation = resolveAnimation(assetsDir, url)
+		}
+	}
+}
+
+// attachFluidTextures populates TextureURL on each fluid by resolving its
+// texture file on disk, leaving it nil when no file exists.
+func attachFluidTextures(fluids []*model.Fluid, assetsDir string) {
+	for _, fl := range fluids {
+		if url, ok := assets.ResolveFluidTexture(assetsDir, fl.ModID, fl.FluidID); ok {
+			fl.TextureURL = &url
+			fl.Animation = resolveAnimation(assetsDir, url)
+		}
+	}
+}
+
+// resolveAnimation describes how to play a texture that turns out to be a sprite
+// sheet, and returns nil for an ordinary one so the field stays out of the JSON.
+func resolveAnimation(assetsDir, url string) *model.TextureAnimation {
+	sheet, ok := assets.ResolveAnimation(assetsDir, url)
+	if !ok {
+		return nil
+	}
+	return &model.TextureAnimation{
+		Cells:    sheet.Cells,
+		Frames:   sheet.Play,
+		FrameMS:  sheet.FrameMS,
+		PingPong: sheet.PingPong,
 	}
 }
 
@@ -365,9 +405,9 @@ func splitCatalogRef(ref string) (modID, id string) {
 // Returns recipes without IO details (IO is fetched per-recipe on expand).
 func ListRecipesCatalogHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		modID     := strings.TrimSpace(r.URL.Query().Get("mod"))
+		modID := strings.TrimSpace(r.URL.Query().Get("mod"))
 		machineID := strings.TrimSpace(r.URL.Query().Get("machine"))
-		itemModID, itemID   := splitCatalogRef(r.URL.Query().Get("item"))
+		itemModID, itemID := splitCatalogRef(r.URL.Query().Get("item"))
 		fluidModID, fluidID := splitCatalogRef(r.URL.Query().Get("fluid"))
 		recipes, err := database.ListRecipesCatalog(r.Context(), modID, machineID, itemModID, itemID, fluidModID, fluidID)
 		if err != nil {
@@ -591,7 +631,7 @@ func optionalSaveID(r *http.Request) *uuid.UUID {
 // ?all=true  → returns all items (catalog use, no limit)
 // ?all=true&save_id=<id> → same, restricted to mods active for that save (Solve target picker)
 // ?q=&offset → paginated search (autocomplete use, LIMIT 50)
-func SearchItemsHandler(database *db.DB) http.HandlerFunc {
+func SearchItemsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("all") == "true" {
 			items, err := database.ListAllItems(r.Context(), optionalSaveID(r))
@@ -602,12 +642,15 @@ func SearchItemsHandler(database *db.DB) http.HandlerFunc {
 			if items == nil {
 				items = []*model.Item{}
 			}
+			attachItemTextures(items, assetsDir)
 			writeJSON(w, http.StatusOK, items)
 			return
 		}
-		q      := strings.TrimSpace(r.URL.Query().Get("q"))
+		q := strings.TrimSpace(r.URL.Query().Get("q"))
 		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-		if offset < 0 { offset = 0 }
+		if offset < 0 {
+			offset = 0
+		}
 		items, err := database.SearchItems(r.Context(), q, offset)
 		if err != nil {
 			errInternal(w, err)
@@ -616,13 +659,14 @@ func SearchItemsHandler(database *db.DB) http.HandlerFunc {
 		if items == nil {
 			items = []*model.Item{}
 		}
+		attachItemTextures(items, assetsDir)
 		writeJSON(w, http.StatusOK, items)
 	}
 }
 
 // SearchFluidsHandler returns fluids matching an optional query string across all mods.
 // Optional query params: ?q=<search term>&offset=<int>&all=true&save_id=<id>
-func SearchFluidsHandler(database *db.DB) http.HandlerFunc {
+func SearchFluidsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("all") == "true" {
 			fluids, err := database.ListAllFluids(r.Context(), optionalSaveID(r))
@@ -633,12 +677,15 @@ func SearchFluidsHandler(database *db.DB) http.HandlerFunc {
 			if fluids == nil {
 				fluids = []*model.Fluid{}
 			}
+			attachFluidTextures(fluids, assetsDir)
 			writeJSON(w, http.StatusOK, fluids)
 			return
 		}
-		q      := strings.TrimSpace(r.URL.Query().Get("q"))
+		q := strings.TrimSpace(r.URL.Query().Get("q"))
 		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-		if offset < 0 { offset = 0 }
+		if offset < 0 {
+			offset = 0
+		}
 		fluids, err := database.SearchFluids(r.Context(), q, offset)
 		if err != nil {
 			errInternal(w, err)
@@ -647,6 +694,7 @@ func SearchFluidsHandler(database *db.DB) http.HandlerFunc {
 		if fluids == nil {
 			fluids = []*model.Fluid{}
 		}
+		attachFluidTextures(fluids, assetsDir)
 		writeJSON(w, http.StatusOK, fluids)
 	}
 }

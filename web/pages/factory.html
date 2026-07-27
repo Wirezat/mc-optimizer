@@ -310,6 +310,7 @@
   import { initKonfigBar, initModal, openModal } from '/static/ui/js/index.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
+  import { loadCatalog, lookupCatalog, iconTextHTML, iconImageHTML } from '/static/js/catalog-registry.js';
 
   await load(getLang());
   applyI18n();
@@ -340,6 +341,7 @@
       apiFetch('/api/factories/' + _factoryID + '/production-lines'),
       apiFetch('/api/factories/' + _factoryID + '/pl-groups'),
       apiFetch('/api/mods'),
+      loadCatalog(),
     ]);
 
     if (!factRes?.ok) { window.location.href = '/saves'; return; }
@@ -563,7 +565,7 @@
           <input class="td-input" type="text" value="${esc(pl.name)}" />
         </div>
       </td>
-      <td>${itemHtml(pl.target_item_id, pl.target_item_name, pl.target_mod_id, 'cell-clamp--dots td-muted')}</td>
+      <td>${itemHtml(pl.target_item_id, pl.target_item_name, pl.target_mod_id, 'td-muted', pl.target_is_fluid)}</td>
       <td>${rateHtml(pl.rate_num, pl.rate_den, pl.time_unit, 'pl-rate-val')}${euRollupHtml(pl)}</td>
       <td class="col-actions">
         <button class="pl-tri-btn btn-icon-color ${esc(triCls[pl.status] || 'inbau')}" data-plid="${esc(pl.id)}" data-action="triAdvance" data-status="${esc(pl.status)}" title="${esc(triTip[pl.status] || '')}">
@@ -586,12 +588,15 @@
   const _toPerSec = { s: 1, min: 1/60, t: 20 };
   const _TRIGGER  = `<span class="infocard-trigger" data-infocard-inline style="color:var(--text-faint);font-size:var(--text-xs);flex-shrink:0;line-height:1;">ℹ</span>`;
 
-  function itemHtml(itemId, itemName, modId, clampClass = 'cell-clamp--dots td-muted') {
-    const name    = esc(itemName || itemId || '');
+  // The overflow strategy now lives on the label itself (iconTextHTML's marquee
+  // option), so labelCls carries styling only — passing a cell-clamp modifier
+  // here would be inert.
+  function itemHtml(itemId, itemName, modId, labelCls = 'td-muted', isFluid = false) {
     const modDisp = esc(modName(modId));
     const def     = itemId ? `<div class="infocard-def" hidden>
       <div class="infocard-header">
-        <!-- TODO: item icon <img class="infocard-icon" src="..." /> -->
+        ${iconImageHTML(lookupCatalog(modId, itemId, isFluid),
+                        { cls: 'infocard-icon', placeholder: false })}
         <div class="infocard-heading">
           <span class="infocard-title">${esc(itemName || itemId)}</span>
           <span class="infocard-subtitle">${modDisp}</span>
@@ -603,7 +608,9 @@
       </div>
     </div>` : '';
     return `<div style="display:flex;align-items:center;gap:var(--gap-icon);">
-      <div class="cell-clamp ${esc(clampClass)}" style="flex:1;min-width:0;"><span class="cell-clamp-inner">${name}</span></div>
+      <div class="${esc(labelCls)}" style="flex:1;min-width:0;">
+        ${iconTextHTML(modId, itemId, { isFluid, name: itemName, size: 'sm', marquee: true })}
+      </div>
       ${itemId ? _TRIGGER + def : ''}
     </div>`;
   }
@@ -1018,7 +1025,7 @@
       const bot     = isSurplus && e.is_bottleneck;
       const rateCls = bot ? ' style="color:var(--danger);font-weight:600;"' : '';
       return `<tr>
-        <td>${itemHtml(e.item_fluid_id, e.name, e.mod_id, 'cell-clamp--scroll')}</td>
+        <td>${itemHtml(e.item_fluid_id, e.name, e.mod_id, '', e.io_type === 'fluid')}</td>
         <td style="text-align:right;white-space:nowrap;"${rateCls}>${rateHtml(e.rate_num, e.rate_den, 'min', null)}</td>
       </tr>`;
     };
@@ -1046,7 +1053,8 @@
     };
     return `<div id="${defId}" class="infocard-def" hidden>
       <div class="infocard-header">
-        <!-- TODO: item icon <img class="infocard-icon" src="..." /> -->
+        ${iconImageHTML(lookupCatalog(e.mod_id, e.item_fluid_id, e.io_type === 'fluid'),
+                        { cls: 'infocard-icon', placeholder: false })}
         <div class="infocard-heading">
           <span class="infocard-title">${esc(e.name || e.item_fluid_id)}</span>
           <span class="infocard-subtitle">${esc(e.item_fluid_id)}</span>

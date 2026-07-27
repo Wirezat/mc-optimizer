@@ -252,20 +252,42 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 	}
 	res.VillagerTrades = len(def.VillagerTrades)
 
-	// 11. Extract assets from assets/{mod_id}/textures/**
+	// 11. Extract assets from assets/{mod_id}/textures/** — strip the leading
+	// "assets/" prefix so files land at <assetsDir>/<mod_id>/... instead of
+	// doubling it to <assetsDir>/assets/<mod_id>/... (imp.assetsDir is itself
+	// the "assets" directory).
 	for _, f := range zr.File {
 		if !strings.HasPrefix(f.Name, "assets/") || f.FileInfo().IsDir() {
 			continue
 		}
-		dst := filepath.Join(imp.assetsDir, f.Name)
+		rel := strings.TrimPrefix(f.Name, "assets/")
+		dst := filepath.Join(imp.assetsDir, rel)
+		// A zip entry names its own path, so a crafted "assets/../../x" would
+		// have filepath.Join clean its way out of the asset tree and write
+		// anywhere the process can reach. Refuse rather than warn: an entry
+		// that tries this is not a mistake.
+		if !underDir(imp.assetsDir, dst) {
+			warn("asset %s: path escapes the assets directory, skipped", f.Name)
+			continue
+		}
 		if err := extractZipFile(f, dst); err != nil {
-			warn("texture %s: %v", f.Name, err)
+			warn("asset %s: %v", f.Name, err)
 			continue
 		}
 		res.Textures++
 	}
 
 	return res, nil
+}
+
+// underDir reports whether path stays inside dir once both are cleaned, so a
+// zip entry cannot write outside the tree it is supposed to land in.
+func underDir(dir, path string) bool {
+	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(path))
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // modRecipeToNormalized converts a ModRecipeDef to the NormalizedRecipe the DB expects.

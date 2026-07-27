@@ -33,16 +33,41 @@ type ModUpdate struct {
 }
 
 type Item struct {
-	ModID    string `json:"mod_id"`
-	ItemID   string `json:"item_id"`
-	Name     string `json:"name"` // populated from translations (en_us); empty until JAR import
-	MaxStack int16  `json:"max_stack"`
+	ModID      string  `json:"mod_id"`
+	ItemID     string  `json:"item_id"`
+	Name       string  `json:"name"` // populated from translations (en_us); empty until JAR import
+	MaxStack   int16   `json:"max_stack"`
+	TextureURL *string `json:"texture_url,omitempty"`
+	// Set only when the texture is a sprite sheet, so a client knows to play it
+	// instead of showing all its frames at once.
+	Animation *TextureAnimation `json:"animation,omitempty"`
+}
+
+// TextureAnimation describes a texture that is a vertical sprite sheet rather
+// than a single image. Fluids are the common case: the file holds every frame
+// stacked downward, and showing all of them at once is why an unhandled fluid
+// icon looks like a smear.
+type TextureAnimation struct {
+	// Cells is how many frames are stacked in the file. Frames can be fewer —
+	// a ping-pong order plays only the way up — and a client stepping through
+	// the strip needs both to land on cell boundaries.
+	Cells int `json:"cells"`
+	// Frames is how many cells the client should play.
+	Frames int `json:"frames"`
+	// FrameMS is how long one frame is shown. Minecraft counts in ticks; the
+	// conversion happens server-side so the unit never reaches the client.
+	FrameMS int `json:"frame_ms"`
+	// PingPong is set when the frame order runs up and back down again, which
+	// the client can play by alternating direction instead of following a list.
+	PingPong bool `json:"ping_pong,omitempty"`
 }
 
 type Fluid struct {
-	ModID   string `json:"mod_id"`
-	FluidID string `json:"fluid_id"`
-	Name    string `json:"name"` // populated from translations (en_us); empty until JAR import
+	ModID      string            `json:"mod_id"`
+	FluidID    string            `json:"fluid_id"`
+	Name       string            `json:"name"` // populated from translations (en_us); empty until JAR import
+	TextureURL *string           `json:"texture_url,omitempty"`
+	Animation  *TextureAnimation `json:"animation,omitempty"`
 }
 
 type MachineType struct {
@@ -75,18 +100,18 @@ type MachineSlot struct {
 }
 
 type VillagerTradeView struct {
-	ID             string  `json:"id"`
-	Profession     string  `json:"profession"`
-	Tier           int     `json:"tier"`
-	CostModID      string  `json:"cost_mod_id"`
-	CostItemID     string  `json:"cost_item_id"`
-	CostName       string  `json:"cost_name"`
-	CostCount      int     `json:"cost_count"`
-	ResultModID    string  `json:"result_mod_id"`
-	ResultItemID   string  `json:"result_item_id"`
-	ResultName     string  `json:"result_name"`
-	ResultCount    int     `json:"result_count"`
-	ResultModified bool    `json:"result_modified"`
-	MaxUses        *int    `json:"max_uses,omitempty"`
-	XP             *int    `json:"xp,omitempty"`
+	ID             string `json:"id"`
+	Profession     string `json:"profession"`
+	Tier           int    `json:"tier"`
+	CostModID      string `json:"cost_mod_id"`
+	CostItemID     string `json:"cost_item_id"`
+	CostName       string `json:"cost_name"`
+	CostCount      int    `json:"cost_count"`
+	ResultModID    string `json:"result_mod_id"`
+	ResultItemID   string `json:"result_item_id"`
+	ResultName     string `json:"result_name"`
+	ResultCount    int    `json:"result_count"`
+	ResultModified bool   `json:"result_modified"`
+	MaxUses        *int   `json:"max_uses,omitempty"`
+	XP             *int   `json:"xp,omitempty"`
 }

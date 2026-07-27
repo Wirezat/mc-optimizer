@@ -79,6 +79,7 @@
   import { init as initHeader } from '/static/js/header.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
+  import { entryOf, iconImageHTML } from '/static/js/catalog-registry.js';
 
   await load(getLang());
   applyI18n();
@@ -114,7 +115,12 @@
         <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>
         <td>
           <a href="/catalog/recipes?fluid=${encodeURIComponent(fluid.mod_id + ':' + fluid.fluid_id)}"
-             class="row-name-link">${esc(fluid.name || fluid.fluid_id)}</a>
+             class="row-name-link">
+            <span class="icontext icontext-sm">
+              ${iconImageHTML(entryOf(fluid, true), { cls: 'icontext-icon' })}
+              <span class="icontext-body"><span class="icontext-text">${esc(fluid.name || fluid.fluid_id)}</span></span>
+            </span>
+          </a>
         </td>
       </tr>`;
     }

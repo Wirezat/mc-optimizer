@@ -11,7 +11,7 @@ import (
 // Returns all recipes that produce the given item, with full IO details.
 func GetItemRecipesHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		modID  := r.PathValue("mod_id")
+		modID := r.PathValue("mod_id")
 		itemID := r.PathValue("item_id")
 		if modID == "" || itemID == "" {
 			errBadRequest(w, "mod_id and item_id are required")
@@ -59,15 +59,25 @@ func GetItemRecipesHandler(database *db.DB) http.HandlerFunc {
 			}
 			for _, in := range r.ItemInputs {
 				v := inputView{Amount: float64(in.AmountNum) / float64(in.AmountDen)}
-				if in.ItemModID != nil { v.ItemModID = *in.ItemModID }
-				if in.ItemID    != nil { v.ItemID    = *in.ItemID }
-				if in.TagID     != nil { v.TagID     = *in.TagID }
+				if in.ItemModID != nil {
+					v.ItemModID = *in.ItemModID
+				}
+				if in.ItemID != nil {
+					v.ItemID = *in.ItemID
+				}
+				if in.TagID != nil {
+					v.TagID = *in.TagID
+				}
 				rv.Inputs = append(rv.Inputs, v)
 			}
 			for _, o := range r.ItemOutputs {
 				var ov outputView
-				if o.ItemModID != nil { ov.ItemModID = *o.ItemModID }
-				if o.ItemID    != nil { ov.ItemID    = *o.ItemID }
+				if o.ItemModID != nil {
+					ov.ItemModID = *o.ItemModID
+				}
+				if o.ItemID != nil {
+					ov.ItemID = *o.ItemID
+				}
 				ov.Amount = float64(o.AmountNum) / float64(o.AmountDen)
 				rv.Outputs = append(rv.Outputs, ov)
 			}
@@ -77,10 +87,18 @@ func GetItemRecipesHandler(database *db.DB) http.HandlerFunc {
 			for _, fo := range r.FluidOutputs {
 				rv.FluidOutputs = append(rv.FluidOutputs, fluidView{ModID: fo.FluidModID, FluidID: fo.FluidID, AmountMB: fo.AmountMB})
 			}
-			if rv.Inputs == nil       { rv.Inputs = []inputView{} }
-			if rv.Outputs == nil      { rv.Outputs = []outputView{} }
-			if rv.FluidInputs == nil  { rv.FluidInputs = []fluidView{} }
-			if rv.FluidOutputs == nil { rv.FluidOutputs = []fluidView{} }
+			if rv.Inputs == nil {
+				rv.Inputs = []inputView{}
+			}
+			if rv.Outputs == nil {
+				rv.Outputs = []outputView{}
+			}
+			if rv.FluidInputs == nil {
+				rv.FluidInputs = []fluidView{}
+			}
+			if rv.FluidOutputs == nil {
+				rv.FluidOutputs = []fluidView{}
+			}
 			out[i] = rv
 		}
 		writeJSON(w, http.StatusOK, out)

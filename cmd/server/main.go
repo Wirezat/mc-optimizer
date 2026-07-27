@@ -19,6 +19,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/api"
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/logging"
+	"github.com/Wirezat/production-optimizer/internal/render"
 	"github.com/Wirezat/production-optimizer/internal/service"
 )
 
@@ -188,8 +189,13 @@ func run() error {
 	mux.Handle("GET /api/tags", protected(api.SearchTagsHandler(database)))
 	mux.Handle("GET /api/trades", protected(api.ListVillagerTradesHandler(database)))
 
+	// Renders block models to icons on demand and caches the result. Created
+	// here because the import handler has to drop the cache once it has replaced
+	// the models and textures those renders came from.
+	renderCache := render.NewCache(render.NewLoader("assets"))
+
 	mux.Handle("GET /api/import/status", adminOnly(api.ImportStatusHandler(database)))
-	mux.Handle("POST /api/import/modfile", adminOnly(api.ImportModFileHandler(database, "assets")))
+	mux.Handle("POST /api/import/modfile", adminOnly(api.ImportModFileHandler(database, "assets", renderCache)))
 
 	mux.Handle("PATCH /api/machine-groups/{group_id}/status", protected(api.UpdateMachineGroupStatusHandler(database)))
 	mux.Handle("PATCH /api/machine-groups/{group_id}/upgrades", protected(api.UpdateMachineGroupUpgradesHandler(database, plSvc)))
@@ -259,6 +265,9 @@ func run() error {
 	// Textures and models change only on import, but a re-import replaces them
 	// at the same URL. A short lifetime keeps a page full of icons from
 	// revalidating each one while bounding how long a stale icon can survive.
+	// Rendered model icons, registered before the plain asset tree so the more
+	// specific prefix wins. Nothing is written to disk — see internal/render.
+	mux.Handle("GET /assets/render/", api.RenderModelHandler(renderCache))
 	assetFS := http.FileServer(http.Dir("assets"))
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=300, must-revalidate")

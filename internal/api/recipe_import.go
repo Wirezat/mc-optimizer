@@ -11,15 +11,30 @@ import (
 
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/importer"
+	"github.com/Wirezat/production-optimizer/internal/render"
 )
 
 // ImportModFileHandler accepts one or more modfile ZIP uploads and imports them.
 // Content-Type: multipart/form-data; field name "modfile" (repeatable)
-func ImportModFileHandler(database *db.DB, assetsDir string) http.HandlerFunc {
+//
+// renderCache is dropped once the import finishes: an import overwrites models
+// and textures at paths the cache has already rendered from, and it holds those
+// renders for the process's lifetime. Without this an icon would keep showing
+// the pre-import geometry until a restart.
+func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rc := http.NewResponseController(w)
 		_ = rc.SetReadDeadline(time.Now().Add(10 * time.Minute))
 		_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Minute))
+
+		// Deferred, not called after the loop: a later file in a multi-file
+		// upload can fail and return early, after an earlier one already
+		// overwrote assets the cache rendered from. Invalidating on an upload
+		// that imported nothing is harmless — the next request just pays for
+		// a fresh render instead of a cache hit.
+		if renderCache != nil {
+			defer renderCache.Invalidate()
+		}
 
 		if err := r.ParseMultipartForm(64 << 20); err != nil {
 			errBadRequest(w, "invalid multipart form (max 64 MiB)")

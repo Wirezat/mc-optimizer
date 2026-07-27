@@ -116,6 +116,7 @@
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
   import { loadCatalog, lookupCatalog, iconTextHTML, iconImageHTML } from '/static/js/catalog-registry.js';
+  import { VirtualWindow } from '/static/ui/js/virtual-window.js';
 
   await load(getLang());
   applyI18n();
@@ -177,6 +178,65 @@
       </div>`;
   }
 
+  const openGroups = new Map(); // groupKey -> VirtualWindow
+  const groupRows = new Map();  // groupKey -> trade[]
+
+  function tradeRowEl(tr) {
+    const enchanted = tr.result_modified
+      ? `<span class="trade-modified infocard-trigger" data-infocard-inline>*</span>` +
+        `<div class="infocard-def" hidden><div class="infocard-section">${esc(t('catalog.trades.enchanted'))}</div></div>`
+      : '';
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${tr.tier}</td>
+      ${countCell(tr.cost_count, tr.cost_variable)}
+      <td>${itemCell(tr.cost_mod_id, tr.cost_item_id, tr.cost_name)}${cost2Cell(tr)}</td>
+      <td class="td-muted" style="text-align:center;">→</td>
+      ${countCell(tr.result_count)}
+      <td>${itemCell(tr.result_mod_id, tr.result_item_id, tr.result_name)}${enchanted}</td>
+      <td class="td-muted" style="text-align:right;">${tr.max_uses ?? '—'}</td>
+      <td class="td-muted" style="text-align:right;">${tr.xp ?? '—'}</td>`;
+    initInfocards(row);
+    return [row];
+  }
+
+  function skeletonRowEl() {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><span class="skeleton-bar" style="width:20px;"></span></td>
+      <td><span class="skeleton-bar" style="width:80%;"></span></td>
+      <td><span class="skeleton-bar" style="width:70%;"></span></td>
+      <td></td>
+      <td><span class="skeleton-bar" style="width:80%;"></span></td>
+      <td><span class="skeleton-bar" style="width:70%;"></span></td>
+      <td><span class="skeleton-bar" style="width:40%;"></span></td>
+      <td><span class="skeleton-bar" style="width:40%;"></span></td>`;
+    return [row];
+  }
+
+  function toggleGroup(key, hdRow, rowsBody) {
+    const collapsed = hdRow.classList.toggle('collapsed');
+    if (collapsed) {
+      openGroups.get(key)?.destroy();
+      openGroups.delete(key);
+      return;
+    }
+    const trades = groupRows.get(key) || [];
+    const vw = new VirtualWindow({
+      container: rowsBody,
+      scrollMode: 'ancestor',
+      scrollEl: document.querySelector('.main'),
+      fetch: async (offset) => ({
+        rows: trades.slice(offset, offset + 50),
+        hasMore: offset + 50 < trades.length,
+      }),
+      renderRow: tradeRowEl,
+      renderSkeletonRow: skeletonRowEl,
+    });
+    openGroups.set(key, vw);
+    vw.start();
+  }
+
   function renderTrades() {
     const q = searchEl.value.trim().toLowerCase();
     let trades = allTrades;
@@ -184,70 +244,47 @@
 
     countEl.textContent = trades.length + ' trade' + (trades.length !== 1 ? 's' : '');
 
+    for (const vw of openGroups.values()) vw.destroy();
+    openGroups.clear();
+    groupRows.clear();
+
     if (!trades.length) {
       tbody.innerHTML = `<tr><td colspan="8" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_trades')}</td></tr>`;
       return;
     }
 
     // Grouped by defining mod as well as profession: the trade_rebalance
-    // datapack redefines professions minecraft already has, so "armorer" alone
-    // would label two different groups identically. Every group names its mod,
-    // so which set of offers you are looking at never has to be inferred.
+    // datapack redefines professions minecraft already has, so "armorer"
+    // alone would label two different groups identically.
     const groupOf = tr => tr.source_mod_id + ' ' + tr.profession;
-    const groupCounts = {};
-    for (const tr of trades) groupCounts[groupOf(tr)] = (groupCounts[groupOf(tr)] || 0) + 1;
-
-    let html = '';
-    let lastGroup = null;
+    const byGroup = new Map();
     for (const tr of trades) {
-      if (groupOf(tr) !== lastGroup) {
-        lastGroup = groupOf(tr);
-        // A modded profession carries its mod's namespace; the villager's own
-        // name is the readable half, and the mod is spelled out beside it.
-        const villager = tr.profession.split(':').pop();
-        html += `<tr class="table-group-hd collapsed"><td colspan="8"><span class="group-toggle"></span>${esc(villager)}` +
-          `<span class="trade-source">${esc(tr.source_name || tr.source_mod_id)}</span>` +
-          `<span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${groupCounts[lastGroup]}</span></td></tr>`;
-      }
-      // Marks a result the plain item id understates — enchanted, named or
-      // otherwise altered. A hover card carries the wording, since a bare
-      // marker in a dense table explains nothing on its own.
-      const enchanted = tr.result_modified
-        ? `<span class="trade-modified infocard-trigger" data-infocard-inline>*</span>` +
-          `<div class="infocard-def" hidden><div class="infocard-section">${esc(t('catalog.trades.enchanted'))}</div></div>`
-        : '';
-      html += `<tr>
-        <td>${tr.tier}</td>
-        ${countCell(tr.cost_count, tr.cost_variable)}
-        <td>${itemCell(tr.cost_mod_id, tr.cost_item_id, tr.cost_name)}${cost2Cell(tr)}</td>
-        <td class="td-muted" style="text-align:center;">→</td>
-        ${countCell(tr.result_count)}
-        <td>${itemCell(tr.result_mod_id, tr.result_item_id, tr.result_name)}${enchanted}</td>
-        <td class="td-muted" style="text-align:right;">${tr.max_uses ?? '—'}</td>
-        <td class="td-muted" style="text-align:right;">${tr.xp ?? '—'}</td>
-      </tr>`;
+      const key = groupOf(tr);
+      if (!byGroup.has(key)) byGroup.set(key, []);
+      byGroup.get(key).push(tr);
     }
-    tbody.innerHTML = html;
-    applyI18n(tbody);
-    initInfocards();
-    applyCollapseState();
-  }
 
-  function applyCollapseState() {
-    let collapsed = false;
-    for (const row of tbody.querySelectorAll('tr')) {
-      if (row.classList.contains('table-group-hd')) {
-        collapsed = row.classList.contains('collapsed');
-      } else {
-        row.hidden = collapsed;
-      }
+    tbody.innerHTML = '';
+    for (const [key, groupTrades] of byGroup) {
+      groupRows.set(key, groupTrades);
+      const first = groupTrades[0];
+      const villager = first.profession.split(':').pop();
+
+      const hdBody = document.createElement('tbody');
+      const hdRow = document.createElement('tr');
+      hdRow.className = 'table-group-hd collapsed';
+      hdRow.innerHTML = `<td colspan="8"><span class="group-toggle"></span>${esc(villager)}` +
+        `<span class="trade-source">${esc(first.source_name || first.source_mod_id)}</span>` +
+        `<span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${groupTrades.length}</span></td>`;
+      hdBody.appendChild(hdRow);
+
+      const rowsBody = document.createElement('tbody');
+      hdRow.addEventListener('click', () => toggleGroup(key, hdRow, rowsBody));
+
+      tbody.appendChild(hdBody);
+      tbody.appendChild(rowsBody);
     }
   }
-
-  tbody.addEventListener('click', e => {
-    const hd = e.target.closest('.table-group-hd');
-    if (hd) { hd.classList.toggle('collapsed'); applyCollapseState(); }
-  });
 
   searchEl.addEventListener('input', renderTrades);
 

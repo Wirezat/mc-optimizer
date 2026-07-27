@@ -198,7 +198,7 @@ export function iconImageHTML(entry, { cls = '', placeholder = true, dataset = n
     // vanished between catalog load and render degrades to the same empty box
     // an unknown one gets.
     return `<img${classAttr}${styleAttr} src="${esc(entry.textureUrl)}"${data}` +
-           ` alt="" onerror="this.removeAttribute('src')">`;
+           ` alt="" loading="lazy" decoding="async" onerror="this.removeAttribute('src')">`;
 }
 
 /**

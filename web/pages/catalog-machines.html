@@ -74,7 +74,6 @@
               <tr><td colspan="5" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
             </tbody>
           </table>
-          <div id="machine-sentinel" style="height:1px;"></div>
         </div>
       </div>
 
@@ -83,6 +82,7 @@
 </div>
 
 <script type="module">
+  import { VirtualWindow } from '/static/ui/js/virtual-window.js';
   import { guard, apiFetch, isAdmin, getUser } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
@@ -99,59 +99,101 @@
   const tbody    = document.getElementById('machine-tbody');
   const countEl  = document.getElementById('machine-count');
   const searchEl = document.getElementById('machine-search');
-  const sentinel = document.getElementById('machine-sentinel');
   const urlMod   = new URLSearchParams(location.search).get('mod') || '';
 
-  const PAGE_SIZE = 100;
   let allMachines = [];
-  let modNames    = {};
-  let filtered    = [];
-  let rendered    = 0;
-  let groupCounts = {};
+  let modNames = {};
+  let filtered = [];
+  const openGroups = new Map();
+  const groupRows = new Map();
 
+  function wireEnergyEdit(cell, machine) {
+    if (!admin) return;
+    cell.addEventListener('click', () => {
+      if (cell.contentEditable === 'true') return;
+      const prev = cell.textContent.trim();
+      cell.contentEditable = 'true';
+      cell.focus();
+      const r = document.createRange();
+      r.selectNodeContents(cell); r.collapse(false);
+      getSelection()?.removeAllRanges(); getSelection()?.addRange(r);
 
-  function applyCollapseState() {
-    let collapsed = false;
-    for (const row of tbody.rows) {
-      if (row.classList.contains('table-group-hd')) {
-        collapsed = row.classList.contains('collapsed');
-      } else {
-        row.hidden = collapsed;
-      }
-    }
+      const commit = async () => {
+        if (cell.contentEditable !== 'true') return;
+        cell.contentEditable = 'false';
+        const raw = cell.textContent.trim().replace(/[^\d]/g, '');
+        const val = raw ? parseInt(raw, 10) : 0;
+        cell.textContent = val || '';
+        if (val === (machine.max_eu_per_tick || 0)) return;
+        const prevVal = machine.max_eu_per_tick;
+        machine.max_eu_per_tick = val;
+        const res = await apiFetch(`/api/mods/${encodeURIComponent(machine.mod_id)}/machines/${encodeURIComponent(machine.machine_id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ max_eu_per_tick: val }),
+        });
+        if (!res?.ok) { machine.max_eu_per_tick = prevVal; cell.textContent = prevVal || ''; }
+      };
+
+      cell.addEventListener('blur', commit, { once: true });
+      cell.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); cell.blur(); }
+        if (e.key === 'Escape') { cell.textContent = prev; cell.contentEditable = 'false'; }
+      }, { once: true });
+    });
   }
 
-  function renderChunk() {
-    const chunk = filtered.slice(rendered, rendered + PAGE_SIZE);
-    if (!chunk.length) return;
-    let html = '';
-    let lastMod = rendered === 0 ? null : filtered[rendered - 1].mod_id;
-    for (const m of chunk) {
-      if (m.mod_id !== lastMod) {
-        lastMod = m.mod_id;
-        const modName = modNames[m.mod_id] || m.mod_id;
-        html += `<tr class="table-group-hd collapsed"><td colspan="5"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${groupCounts[m.mod_id] || 0}</span></td></tr>`;
-      }
-      const energyVal  = m.max_eu_per_tick || '';
-      const recipesUrl = `/catalog/recipes?mod=${encodeURIComponent(m.mod_id)}&machine=${encodeURIComponent(m.machine_id)}`;
-      const energyCell = admin
-        ? `<span class="energy-edit td-muted" contenteditable="false"
-             data-mod-id="${esc(m.mod_id)}" data-machine-id="${esc(m.machine_id)}"
-             data-placeholder="—">${esc(energyVal)}</span>`
-        : `<span class="td-muted">${energyVal || '—'}</span>`;
-      html += `<tr>
-        <td><a href="${esc(recipesUrl)}" class="row-name-link">${esc(m.name || m.machine_id)}</a></td>
-        <td class="td-mono td-muted">${esc(m.machine_id)}</td>
-        <td>${energyCell}</td>
-        <td><span class="badge badge-neutral">${esc(m.energy_type || '—')}</span></td>
-        <td>${m.recipe_count
-          ? `<a href="${esc(recipesUrl)}" class="recipe-count-link">${m.recipe_count}</a>`
-          : `<span class="td-muted">—</span>`}</td>
-      </tr>`;
+  function machineRowEl(m) {
+    const energyVal = m.max_eu_per_tick || '';
+    const recipesUrl = `/catalog/recipes?mod=${encodeURIComponent(m.mod_id)}&machine=${encodeURIComponent(m.machine_id)}`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><a href="${esc(recipesUrl)}" class="row-name-link">${esc(m.name || m.machine_id)}</a></td>
+      <td class="td-mono td-muted">${esc(m.machine_id)}</td>
+      <td>${admin
+        ? `<span class="energy-edit td-muted" contenteditable="false" data-placeholder="—">${esc(energyVal)}</span>`
+        : `<span class="td-muted">${energyVal || '—'}</span>`}</td>
+      <td><span class="badge badge-neutral">${esc(m.energy_type || '—')}</span></td>
+      <td>${m.recipe_count
+        ? `<a href="${esc(recipesUrl)}" class="recipe-count-link">${m.recipe_count}</a>`
+        : `<span class="td-muted">—</span>`}</td>`;
+    const energyCell = tr.querySelector('.energy-edit');
+    if (energyCell) wireEnergyEdit(energyCell, m);
+    return [tr];
+  }
+
+  function skeletonRowEl() {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="skeleton-bar" style="width:60%;"></span></td>
+      <td><span class="skeleton-bar" style="width:50%;"></span></td>
+      <td><span class="skeleton-bar" style="width:30%;"></span></td>
+      <td><span class="skeleton-bar" style="width:40%;"></span></td>
+      <td><span class="skeleton-bar" style="width:20%;"></span></td>`;
+    return [tr];
+  }
+
+  function toggleGroup(modId, hdRow, rowsBody) {
+    const collapsed = hdRow.classList.toggle('collapsed');
+    if (collapsed) {
+      openGroups.get(modId)?.destroy();
+      openGroups.delete(modId);
+      return;
     }
-    tbody.insertAdjacentHTML('beforeend', html);
-    rendered += chunk.length;
-    applyCollapseState();
+    const machines = groupRows.get(modId) || [];
+    const vw = new VirtualWindow({
+      container: rowsBody,
+      scrollMode: 'ancestor',
+      scrollEl: document.querySelector('.main'),
+      fetch: async (offset) => ({
+        rows: machines.slice(offset, offset + 50),
+        hasMore: offset + 50 < machines.length,
+      }),
+      renderRow: machineRowEl,
+      renderSkeletonRow: skeletonRowEl,
+    });
+    openGroups.set(modId, vw);
+    vw.start();
   }
 
   function resetAndRender() {
@@ -159,64 +201,43 @@
     filtered = urlMod ? allMachines.filter(m => m.mod_id === urlMod) : allMachines;
     if (q) filtered = filtered.filter(m => wuiFilter(m, q, ['name', 'machine_id', 'mod_name', 'energy_type', 'max_eu_per_tick']));
     countEl.textContent = filtered.length + ' machine' + (filtered.length !== 1 ? 's' : '');
-    groupCounts = {};
-    for (const m of filtered) groupCounts[m.mod_id] = (groupCounts[m.mod_id] || 0) + 1;
-    rendered = 0;
+
+    for (const vw of openGroups.values()) vw.destroy();
+    openGroups.clear();
+    groupRows.clear();
+
     tbody.innerHTML = '';
     if (!filtered.length) {
       tbody.innerHTML = `<tr><td colspan="5" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_machines')}</td></tr>`;
       return;
     }
-    renderChunk();
-  }
 
-  tbody.addEventListener('click', e => {
-    if (e.target.closest('a')) return;
-    const hd = e.target.closest('.table-group-hd');
-    if (hd) { hd.classList.toggle('collapsed'); applyCollapseState(); return; }
+    const byMod = new Map();
+    for (const m of filtered) {
+      if (!byMod.has(m.mod_id)) byMod.set(m.mod_id, []);
+      byMod.get(m.mod_id).push(m);
+    }
 
-    if (!admin) return;
-    const cell = e.target.closest('.energy-edit');
-    if (!cell || cell.contentEditable === 'true') return;
+    for (const [modId, machines] of byMod) {
+      groupRows.set(modId, machines);
+      const modName = modNames[modId] || modId;
 
-    const prev = cell.textContent.trim();
-    cell.contentEditable = 'true';
-    cell.focus();
-    const r = document.createRange();
-    r.selectNodeContents(cell); r.collapse(false);
-    getSelection()?.removeAllRanges(); getSelection()?.addRange(r);
+      const hdBody = document.createElement('tbody');
+      const hdRow = document.createElement('tr');
+      hdRow.className = 'table-group-hd collapsed';
+      hdRow.innerHTML = `<td colspan="5"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${machines.length}</span></td>`;
+      hdBody.appendChild(hdRow);
 
-    const commit = async () => {
-      if (cell.contentEditable !== 'true') return;
-      cell.contentEditable = 'false';
-      const raw  = cell.textContent.trim().replace(/[^\d]/g, '');
-      const val  = raw ? parseInt(raw, 10) : 0;
-      cell.textContent = val || '';
-      const modID     = cell.dataset.modId;
-      const machineID = cell.dataset.machineId;
-      const m = allMachines.find(m => m.mod_id === modID && m.machine_id === machineID);
-      if (!m) return;
-      if (val === (m.max_eu_per_tick || 0)) return;
-      const prevVal = m.max_eu_per_tick;
-      m.max_eu_per_tick = val;
-      const res = await apiFetch(`/api/mods/${encodeURIComponent(modID)}/machines/${encodeURIComponent(machineID)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ max_eu_per_tick: val }),
+      const rowsBody = document.createElement('tbody');
+      hdRow.addEventListener('click', e => {
+        if (e.target.closest('a')) return;
+        toggleGroup(modId, hdRow, rowsBody);
       });
-      if (!res?.ok) { m.max_eu_per_tick = prevVal; cell.textContent = prevVal || ''; }
-    };
 
-    cell.addEventListener('blur', commit, { once: true });
-    cell.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); cell.blur(); }
-      if (e.key === 'Escape') { cell.textContent = prev; cell.contentEditable = 'false'; }
-    }, { once: true });
-  });
-
-  new IntersectionObserver(entries => {
-    if (entries[0].isIntersecting && rendered < filtered.length) renderChunk();
-  }, { rootMargin: '300px' }).observe(sentinel);
+      tbody.appendChild(hdBody);
+      tbody.appendChild(rowsBody);
+    }
+  }
 
   searchEl.addEventListener('input', resetAndRender);
 

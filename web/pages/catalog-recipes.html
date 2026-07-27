@@ -138,11 +138,14 @@
   import { initInfocards } from '/static/ui/js/infocard.js';
   import { initIconCycle } from '/static/ui/js/icon-cycle.js';
   import { loadCatalog, lookupCatalog, lookupTag, iconImageHTML } from '/static/js/catalog-registry.js';
+  import { VirtualWindow } from '/static/ui/js/virtual-window.js';
 
   await load(getLang());
   applyI18n();
   guard();
   initHeader();
+
+  const openGroups = new Map(); // modId -> VirtualWindow
 
   const tbody = document.getElementById('recipe-tbody');
   const countEl = document.getElementById('recipe-count');
@@ -380,55 +383,75 @@
     return byId;
   }
 
-  // Load and render recipes for a mod group; inserts rows after the group header.
-  // Browse mode only — machine/item/fluid filters never reach this path (see
-  // "Filtered mode" below), so no per-call filter merging is needed here.
-  async function loadModGroup(modId, hdRow) {
-    if (modRecipeCache.has(modId)) {
-      return modRecipeCache.get(modId);
+  // One recipe's markup as real elements — recipeRows(recipes) (unchanged
+  // above) still serves renderFilteredRecipes, which renders a whole
+  // pre-filtered array as one string; this is the same markup, one recipe at
+  // a time, as elements VirtualWindow can append/prepend/remove individually.
+  function recipeRowEls(r) {
+    const tmp = document.createElement('tbody');
+    tmp.innerHTML = recipeRows([r]);
+    return [...tmp.children]; // [summaryTr, detailTr]
+  }
+
+  function recipeSkeletonEls() {
+    const summary = document.createElement('tr');
+    summary.innerHTML = `
+      <td></td>
+      <td><span class="skeleton-bar" style="width:70%;"></span></td>
+      <td><span class="skeleton-bar" style="width:60%;"></span></td>
+      <td><span class="skeleton-bar" style="width:40%;"></span></td>
+      <td><span class="skeleton-bar" style="width:30%;"></span></td>
+      <td><span class="skeleton-bar" style="width:40%;"></span></td>`;
+    const detail = document.createElement('tr');
+    detail.hidden = true;
+    detail.innerHTML = `<td colspan="6"></td>`;
+    return [summary, detail];
+  }
+
+  function toggleModGroup(modId, hdRow, rowsBody) {
+    const wasCollapsed = hdRow.classList.contains('collapsed');
+    hdRow.classList.toggle('collapsed');
+    if (!wasCollapsed) {
+      openGroups.get(modId)?.destroy();
+      openGroups.delete(modId);
+      return;
     }
+    startModGroup(modId, hdRow, rowsBody);
+  }
+
+  async function startModGroup(modId, hdRow, rowsBody) {
+    const recipes = await loadModGroup(modId);
+    const countBadge = hdRow.querySelector('.mod-recipe-count');
+    if (countBadge) countBadge.textContent = recipes.length;
+    if (!recipes.length) return;
+
+    const vw = new VirtualWindow({
+      container: rowsBody,
+      scrollMode: 'ancestor',
+      scrollEl: document.querySelector('.main'),
+      fetch: async (offset) => ({
+        rows: recipes.slice(offset, offset + 50),
+        hasMore: offset + 50 < recipes.length,
+      }),
+      renderRow: recipeRowEls,
+      renderSkeletonRow: recipeSkeletonEls,
+    });
+    openGroups.set(modId, vw);
+    await vw.start();
+    initCellClampScroll(rowsBody);
+
+    const machines = [...new Set(recipes.map(r => r.machine_id))];
+    for (const machineId of machines) ensureMachineLoaded(modId, machineId);
+  }
+
+  // Load and cache a mod's full recipe list. Browse mode only — machine/
+  // item/fluid filters never reach this path (see "Filtered mode" below).
+  async function loadModGroup(modId) {
+    if (modRecipeCache.has(modId)) return modRecipeCache.get(modId);
     const res = await apiFetch(`/api/recipes?mod=${encodeURIComponent(modId)}`);
     const recipes = res?.ok ? await res.json() : [];
     modRecipeCache.set(modId, recipes);
     return recipes;
-  }
-
-  async function expandModGroup(hdRow) {
-    const modId = hdRow.dataset.modGroup;
-    if (hdRow.dataset.loaded) return;
-    hdRow.dataset.loaded = '1';
-
-    const placeholder = hdRow.nextElementSibling;
-    const recipes = await loadModGroup(modId, hdRow);
-
-    // update count badge
-    const countBadge = hdRow.querySelector('.mod-recipe-count');
-    if (countBadge) countBadge.textContent = recipes.length;
-
-    if (!recipes.length) {
-      if (placeholder?.dataset.placeholder) placeholder.remove();
-      return;
-    }
-
-    const tmp = document.createElement('tbody');
-    tmp.innerHTML = recipeRows(recipes);
-
-    if (placeholder?.dataset.placeholder) placeholder.remove();
-    // insert all rows after hdRow in order
-    const toInsert = [...tmp.children];
-    let ref = hdRow;
-    for (const row of toInsert) {
-      ref.insertAdjacentElement('afterend', row);
-      ref = row;
-    }
-
-    initCellClampScroll(hdRow.closest('tbody'));
-
-    // fire summary fetches per unique machine
-    const machines = [...new Set(recipes.map(r => r.machine_id))];
-    for (const machineId of machines) {
-      ensureMachineLoaded(modId, machineId);
-    }
   }
 
   function renderModGroups(mods) {
@@ -436,45 +459,31 @@
       tbody.innerHTML = `<tr><td colspan="6" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_recipes')}</td></tr>`;
       return;
     }
-    let html = '';
+    tbody.innerHTML = '';
     for (const m of mods) {
-      html += `<tr class="table-group-hd collapsed" data-mod-group="${esc(m.mod_id)}">
-        <td colspan="6"><span class="group-toggle"></span>
-          <a href="/catalog/mods" class="catalog-link">${esc(m.name || m.mod_id)}</a>
-          <span class="td-muted mod-recipe-count" style="font-size:var(--text-xs);margin-left:6px;">${m.recipe_count || 0}</span>
-        </td>
-      </tr>
-      <tr data-placeholder="${esc(m.mod_id)}" hidden><td colspan="6"></td></tr>`;
+      const hdBody = document.createElement('tbody');
+      const hdRow = document.createElement('tr');
+      hdRow.className = 'table-group-hd collapsed';
+      hdRow.dataset.modGroup = m.mod_id;
+      hdRow.innerHTML = `<td colspan="6"><span class="group-toggle"></span>
+        <a href="/catalog/mods" class="catalog-link">${esc(m.name || m.mod_id)}</a>
+        <span class="td-muted mod-recipe-count" style="font-size:var(--text-xs);margin-left:6px;">${m.recipe_count || 0}</span>
+      </td>`;
+      hdBody.appendChild(hdRow);
+
+      const rowsBody = document.createElement('tbody');
+      rowsBody.dataset.modGroup = m.mod_id;
+      hdRow.addEventListener('click', e => {
+        if (e.target.closest('.catalog-link')) return;
+        toggleModGroup(m.mod_id, hdRow, rowsBody);
+      });
+
+      tbody.appendChild(hdBody);
+      tbody.appendChild(rowsBody);
     }
-    tbody.innerHTML = html;
   }
 
   tbody.addEventListener('click', async e => {
-    // group header toggle
-    const hd = e.target.closest('.table-group-hd');
-    if (hd) {
-      if (e.target.closest('.catalog-link')) return;
-      const wasCollapsed = hd.classList.contains('collapsed');
-      hd.classList.toggle('collapsed');
-      if (wasCollapsed) {
-        // expanding: load if needed, then show rows
-        await expandModGroup(hd);
-        let el = hd.nextElementSibling;
-        while (el && !el.classList.contains('table-group-hd')) {
-          if (!el.dataset.placeholder) el.hidden = false;
-          el = el.nextElementSibling;
-        }
-      } else {
-        // collapsing: hide rows
-        let el = hd.nextElementSibling;
-        while (el && !el.classList.contains('table-group-hd')) {
-          el.hidden = true;
-          el = el.nextElementSibling;
-        }
-      }
-      return;
-    }
-
     // expand-trigger or clickable recipe row
     const trigger = e.target.closest('.table-expand-trigger');
     const clickedRow = e.target.closest('tr[data-expand-row]');
@@ -502,7 +511,6 @@
 
     // find recipe metadata from cache
     const modId = row.dataset.mod;
-    const hdRow = tbody.querySelector(`tr.table-group-hd[data-mod-group="${modId}"]`);
     const recipes = modRecipeCache.get(modId) || [];
     const recipe = recipes.find(r => r.id === recipeID);
     if (!recipe) { bodyEl.innerHTML = `<span class="td-muted">—</span>`; return; }
@@ -527,28 +535,32 @@
     ioCache.set(recipeID, html);
   });
 
+  // Browse mode wraps each group as a header <tbody> (one <tr>) followed by
+  // a sibling rows <tbody> (VirtualWindow's container); filtered mode (see
+  // renderFilteredRecipes, untouched) still renders flat <tr> siblings in
+  // the one shared #recipe-tbody. Both DOM shapes reach this same listener,
+  // so it has to detect which one it's looking at rather than assume either.
   searchEl.addEventListener('input', () => {
     const q = searchEl.value.trim().toLowerCase();
-    if (!q) {
-      // show all groups, hide their loaded rows back to collapsed state
-      for (const hd of tbody.querySelectorAll('.table-group-hd')) {
-        hd.hidden = false;
-        if (!hd.classList.contains('collapsed')) {
-          // keep expanded rows visible
-        }
-      }
-      return;
-    }
-    // filter: show only matching mod groups (by mod_id / name)
     for (const hd of tbody.querySelectorAll('.table-group-hd')) {
       const modId = hd.dataset.modGroup;
       const modName = hd.querySelector('.catalog-link')?.textContent?.toLowerCase() || '';
-      const match = modId.toLowerCase().includes(q) || modName.includes(q);
-      hd.hidden = !match;
-      let el = hd.nextElementSibling;
-      while (el && !el.classList.contains('table-group-hd')) {
-        el.hidden = !match || hd.classList.contains('collapsed');
-        el = el.nextElementSibling;
+      const match = !q || modId.toLowerCase().includes(q) || modName.includes(q);
+      const hdBody = hd.closest('tbody');
+      if (hdBody !== tbody) {
+        // Browse mode: header + rows are separate sibling <tbody>s.
+        hdBody.hidden = !match;
+        const rowsBody = hdBody.nextElementSibling;
+        if (rowsBody) rowsBody.hidden = !match;
+      } else {
+        // Filtered mode: header and its recipe row-pairs are flat <tr>
+        // siblings directly inside the shared tbody.
+        hd.hidden = !match;
+        let el = hd.nextElementSibling;
+        while (el && !el.classList.contains('table-group-hd')) {
+          el.hidden = !match;
+          el = el.nextElementSibling;
+        }
       }
     }
   });
@@ -620,7 +632,11 @@
       // if urlMod is set, auto-expand it
       if (urlMod) {
         const hd = tbody.querySelector(`.table-group-hd[data-mod-group="${CSS.escape(urlMod)}"]`);
-        if (hd) { hd.classList.remove('collapsed'); await expandModGroup(hd); }
+        if (hd) {
+          hd.classList.remove('collapsed');
+          const rowsBody = hd.closest('tbody').nextElementSibling;
+          await startModGroup(urlMod, hd, rowsBody);
+        }
       }
     }
 

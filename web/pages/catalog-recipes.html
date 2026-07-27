@@ -32,11 +32,43 @@
     .table-group-hd.collapsed .group-toggle::before { content: '▸'; }
     .crafting-layout { display: flex; align-items: flex-start; gap: var(--gap-container); }
     .crafting-grid { display: grid; gap: 2px; flex-shrink: 0; }
-    .crafting-cell { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); color: var(--text-muted); text-align: center; padding: 2px; line-height: 1.2; overflow: hidden; }
+    .crafting-cell { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); color: var(--text-muted); text-align: center; line-height: 1.2; overflow: hidden; }
     .crafting-cell.empty { opacity: .3; }
     .crafting-cell--nc { border-style: dashed; opacity: .75; }
-    .nc-badge { position: absolute; bottom: 1px; right: 2px; font-size: 8px; color: var(--text-faint); pointer-events: none; }
-    .crafting-cell { position: relative; }
+    .crafting-cell { position: relative; cursor: help; }
+    .crafting-cell.empty { cursor: default; }
+    /* The texture fills the slot, the way an item fills its inventory square. */
+    .crafting-cell-icon {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+    /* Plain-text stand-in when an item has no texture; it has to live inside
+       the same 36px square, so it gets the padding the icon does not want. */
+    .crafting-cell-text {
+      --crafting-text-pad: 2px;
+      padding: var(--crafting-text-pad);
+      overflow: hidden;
+    }
+    /* Stack count, bottom-right over the texture, as the game draws it. The
+       outline keeps it legible on top of any texture underneath. */
+    .crafting-cell-count {
+      --crafting-count-size: 10px;
+      --crafting-count-inset: 1px;
+      --crafting-count-outline: #000;
+      position: absolute;
+      right: var(--crafting-count-inset);
+      bottom: var(--crafting-count-inset);
+      font-size: var(--crafting-count-size);
+      font-weight: var(--weight-semibold);
+      font-family: var(--font-mono);
+      color: #fff;
+      text-shadow: 1px 1px 0 var(--crafting-count-outline), -1px 1px 0 var(--crafting-count-outline),
+                   1px -1px 0 var(--crafting-count-outline), -1px -1px 0 var(--crafting-count-outline);
+      pointer-events: none;
+    }
+    /* Moved off the bottom-right corner so it cannot collide with the count. */
+    .nc-badge { position: absolute; top: 0; left: 2px; font-size: 8px; color: var(--text-faint); pointer-events: none; }
     .crafting-arrow { font-size: 1.2em; color: var(--text-faint); align-self: center; }
     .crafting-result { display: flex; flex-direction: column; gap: var(--gap-inline); justify-content: center; }
   </style>
@@ -103,6 +135,9 @@
   import { initCellClampScroll } from '/static/ui/js/table-features.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
+  import { initInfocards } from '/static/ui/js/infocard.js';
+  import { initIconCycle } from '/static/ui/js/icon-cycle.js';
+  import { loadCatalog, lookupCatalog, lookupTag, iconImageHTML } from '/static/js/catalog-registry.js';
 
   await load(getLang());
   applyI18n();
@@ -134,13 +169,112 @@
       + (ios.length > 3 ? ` +${ios.length - 3}` : '');
   }
 
-  function itemLabel(io) {
-    if (io.tag_name) return '#' + io.tag_name;
-    return io.item_name || io.item_id || '?';
-  }
-
   function fmt0(v, suffix) {
     return (v == null || v === 0) ? '—' : (v + (suffix || ''));
+  }
+
+  // A crafting cell is a fixed 36px square. An icon beside a label leaves the
+  // label no room at that size, so the texture fills the slot on its own and
+  // the plain name stands in only when there is no texture.
+  // Resolves both at once: the cell's fill and the hover card's icon.
+  function cellParts(modID, id, isFluid, name) {
+    const entry = lookupCatalog(modID, id, isFluid);
+    return {
+      entry,
+      name:  name || id || '?',
+      label: entry?.textureUrl
+        ? iconImageHTML(entry, { cls: 'crafting-cell-icon' })
+        : `<span class="crafting-cell-text">${esc(name || id || '?')}</span>`,
+    };
+  }
+
+  // Cell plus its hover card, as one unit. Where the texture replaces the label
+  // the display name has nowhere else to go, and 36px truncates any amount — the
+  // card carries both, along with the raw ref. It uses the app's own infocard
+  // system rather than a native title="": the browser's tooltip delay is
+  // uncontrollable and would not match the infocards used on every other page.
+  // The def is the cell's immediately following sibling (infocard inline mode);
+  // it is display:none, so it never claims a grid track.
+  // A tag slot accepts any of its members, so showing one of them would claim
+  // the recipe needs that particular item. It cycles instead, the way JEI does,
+  // and the hover card lays the whole set out at once.
+  const TAG_CARD_ICONS = 12;
+
+  // Grid stays at a fixed column count so its cells keep the size of an icon.
+  // Sizing the columns to the member count instead blows a single member up to
+  // the full card width, and the tag's card stops looking like an item's.
+  const TAG_CARD_COLS = 6;
+
+  // Same shape cellParts returns, so a tag slot and an item slot go through
+  // craftCell identically and their cards come out looking the same. The
+  // members only add a grid underneath; they do not replace the header.
+  function tagCell(tagName) {
+    const resolved = lookupTag(tagName);
+    const icons = resolved?.icons ?? [];
+    const total = resolved?.total ?? 0;
+    const first = icons[0] ?? null;
+    return {
+      name:  '#' + tagName,
+      // The card's icon is the same texture the cell shows first.
+      entry: first,
+      // A tag has no mod:id of its own; what it stands for goes here instead.
+      ref:   total === 0 ? ''
+           : total === 1 ? t('catalog.recipes.card.tag_members_one')
+           : t('catalog.recipes.card.tag_members').replace('{n}', total),
+      label: first
+        ? iconImageHTML(first, {
+            cls: 'crafting-cell-icon',
+            // More than one member means no single texture is the right answer,
+            // so the cell rotates through them.
+            dataset: icons.length > 1
+              ? { 'wui-cycle': JSON.stringify(icons.map(i => ({ src: i.textureUrl }))) }
+              : null,
+          })
+        : `<span class="crafting-cell-text">#${esc(tagName)}</span>`,
+      extra: tagCardGrid(icons, total),
+    };
+  }
+
+  // The member grid, using the infocard's own grid slot.
+  function tagCardGrid(icons, total) {
+    if (icons.length < 2) return '';   // one member is already the card's icon
+    const shown = icons.slice(0, TAG_CARD_ICONS);
+    const cells = shown.map(e =>
+      `<div class="infocard-grid-cell" data-label="${esc(e.name)}">` +
+      iconImageHTML(e, { placeholder: false }) + '</div>').join('');
+    const more = total > shown.length
+      ? `<div class="infocard-section td-muted">+${total - shown.length}</div>`
+      : '';
+    return `<div class="infocard-grid" data-cols="${TAG_CARD_COLS}">${cells}</div>${more}`;
+  }
+
+  // count is the bare number drawn in the corner; amount carries the unit and
+  // stays in the hover card, where there is room for it.
+  function craftCell({ label, name, ref = '', entry = null,
+                       count = '', amount = '', nonConsuming = false, extra = '' }) {
+    const countMark = count ? `<span class="crafting-cell-count">${esc(count)}</span>` : '';
+    const ncMark  = nonConsuming ? `<span class="nc-badge">↺</span>` : '';
+    const icon    = iconImageHTML(entry, { cls: 'infocard-icon', placeholder: false });
+    const amtRow  = amount
+      ? `<div class="infocard-section"><div class="infocard-row">` +
+        `<span class="infocard-key">${esc(t('catalog.recipes.card.amount'))}</span>` +
+        `<span class="infocard-val">${esc(amount)}</span></div></div>`
+      : '';
+    const ncRow = nonConsuming
+      ? `<div class="infocard-section">${esc(t('recipe.non_consuming_title'))}</div>`
+      : '';
+    // Tags pass no ref: they have no mod id, so the ref would be nothing but
+    // the tag name the title already shows, under a stray leading ':'.
+    const sub = ref ? `<span class="infocard-subtitle">${esc(ref)}</span>` : '';
+    return `<div class="crafting-cell${nonConsuming ? ' crafting-cell--nc' : ''}" data-infocard-inline>${label}${countMark}${ncMark}</div>
+      <div class="infocard-def" hidden>
+        <div class="infocard-header">${icon}
+          <div class="infocard-heading">
+            <span class="infocard-title">${esc(name)}</span>
+            ${sub}
+          </div>
+        </div>${amtRow}${ncRow}${extra}
+      </div>`;
   }
 
   function ioGrid(items) {
@@ -151,33 +285,51 @@
     const style = `grid-template-columns:repeat(${cols},36px);grid-template-rows:repeat(${rows},36px);`;
     let cells = '';
     for (let i = 0; i < total; i++) {
-      if (i < items.length) {
-        const io = items[i];
-        const isFluid = io.fluid_id != null;
-        const label = io.tag_name ? '#' + io.tag_name
-          : (io.item_name || io.fluid_name || io.item_id || io.fluid_id || '?');
-        const amt = isFluid && io.amount_mb ? io.amount_mb + 'mB'
-          : (io.amount_num > 1 ? io.amount_num + '×' : '');
-        const title = isFluid ? (io.fluid_mod_id + ':' + io.fluid_id) : ((io.item_mod_id || '') + ':' + (io.item_id || io.tag_name || ''));
-        const ncMark = io.non_consuming ? `<span class="nc-badge" title="${esc(t('recipe.non_consuming_title'))}">↺</span>` : '';
-        cells += `<div class="crafting-cell${io.non_consuming ? ' crafting-cell--nc' : ''}" title="${esc(title)}">${esc(label)}${amt ? `<span style="display:block;font-size:9px;opacity:.6;">${esc(amt)}</span>` : ''}${ncMark}</div>`;
-      } else {
-        cells += `<div class="crafting-cell empty"></div>`;
+      if (i >= items.length) { cells += `<div class="crafting-cell empty"></div>`; continue; }
+      const io      = items[i];
+      const isFluid = io.fluid_id != null;
+      // The corner takes the bare number; the unit belongs in the hover card.
+      const count   = isFluid && io.amount_mb ? String(io.amount_mb)
+        : (io.amount_num > 1 ? String(io.amount_num) : '');
+      const amount  = isFluid && io.amount_mb ? io.amount_mb + 'mB'
+        : (io.amount_num > 1 ? io.amount_num + '×' : '');
+      if (io.tag_name) {
+        cells += craftCell({ ...tagCell(io.tag_name), count, amount,
+                             nonConsuming: io.non_consuming });
+        continue;
       }
+      const ref = isFluid
+        ? (io.fluid_mod_id + ':' + io.fluid_id)
+        : ((io.item_mod_id || '') + ':' + (io.item_id || ''));
+      const parts = isFluid
+        ? cellParts(io.fluid_mod_id, io.fluid_id, true,  io.fluid_name)
+        : cellParts(io.item_mod_id,  io.item_id,  false, io.item_name);
+      cells += craftCell({ ...parts, ref, count, amount, nonConsuming: io.non_consuming });
     }
     return `<div class="crafting-grid" style="${style}">${cells}</div>`;
   }
 
   function craftingGrid(shape, inputs) {
-    const nameMap = {};
+    // slot key → the slot's full cell + card markup
+    const cellFor = {};
     for (const io of inputs) {
       const key = io.tag_id ? ('#' + (io.tag_name || io.tag_id)) : (io.item_mod_id + ':' + io.item_id);
-      nameMap[key] = itemLabel(io);
+      if (io.tag_name) {
+        cellFor[key] = craftCell(tagCell(io.tag_name));
+        continue;
+      }
+      cellFor[key] = craftCell({
+        ...cellParts(io.item_mod_id, io.item_id, false, io.item_name), ref: key,
+      });
     }
     const cells = shape.map(slot => {
       if (!slot) return `<div class="crafting-cell empty"></div>`;
-      const label = nameMap[slot] || nameMap['#' + slot] || slot.split(':').pop();
-      return `<div class="crafting-cell" title="${esc(slot)}">${esc(label)}</div>`;
+      const bare = slot.split(':').pop();
+      return cellFor[slot] || cellFor['#' + slot]
+        || craftCell({
+             label: `<span class="crafting-cell-text">${esc(bare)}</span>`,
+             name: bare, ref: slot,
+           });
     });
     return `<div class="crafting-grid" style="grid-template-columns:repeat(3,36px);grid-template-rows:repeat(3,36px);">${cells.join('')}</div>`;
   }
@@ -343,6 +495,8 @@
 
     if (ioCache.has(recipeID)) {
       bodyEl.innerHTML = ioCache.get(recipeID);
+      initInfocards(bodyEl);
+      initIconCycle(bodyEl);
       return;
     }
 
@@ -368,6 +522,8 @@
       ${ioGrid(allOutputs)}
     </div>`;
     bodyEl.innerHTML = html;
+    initInfocards(bodyEl);
+    initIconCycle(bodyEl);
     ioCache.set(recipeID, html);
   });
 
@@ -446,6 +602,7 @@
   }
 
   // Initial load: mod list only
+  await loadCatalog();
   const modsRes = await apiFetch('/api/mods');
   if (modsRes?.ok) {
     allMods = await modsRes.json();

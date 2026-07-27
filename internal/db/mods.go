@@ -562,6 +562,31 @@ func (d *DB) SearchTags(ctx context.Context, q string, offset int) ([]string, er
 	return tags, rows.Err()
 }
 
+// ListTagMembers returns every item each tag stands for, ordered so a tag's
+// members always come back in the same sequence — the UI cycles through them,
+// and a cycle that reshuffled per request would be unreadable.
+func (d *DB) ListTagMembers(ctx context.Context) ([]model.TagMember, error) {
+	rows, err := d.Pool.Query(ctx, `
+		SELECT t.name, m.item_mod_id, m.item_id
+		FROM tags t
+		JOIN tag_members m ON m.tag_id = t.id
+		ORDER BY t.name, m.item_mod_id, m.item_id
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("db: list tag members: %w", err)
+	}
+	defer rows.Close()
+	var members []model.TagMember
+	for rows.Next() {
+		var m model.TagMember
+		if err := rows.Scan(&m.TagName, &m.ModID, &m.ItemID); err != nil {
+			return nil, fmt.Errorf("db: scan tag member: %w", err)
+		}
+		members = append(members, m)
+	}
+	return members, rows.Err()
+}
+
 // ListAllMachines returns all machine types across all mods, ordered by mod_id then machine_id.
 func (d *DB) ListAllMachines(ctx context.Context) ([]*model.MachineType, error) {
 	rows, err := d.Pool.Query(ctx, `

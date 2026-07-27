@@ -187,6 +187,7 @@ func run() error {
 	mux.Handle("GET /api/items/{mod_id}/{item_id}/recipes", protected(api.GetItemRecipesHandler(database)))
 	mux.Handle("GET /api/fluids", api.SearchFluidsHandler(database, "assets")) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/tags", protected(api.SearchTagsHandler(database)))
+	mux.Handle("GET /api/tag-members", protected(api.ListTagMembersHandler(database)))
 	mux.Handle("GET /api/trades", protected(api.ListVillagerTradesHandler(database)))
 
 	// Renders block models to icons on demand and caches the result. Created

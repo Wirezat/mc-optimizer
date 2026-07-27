@@ -62,6 +62,15 @@ type TextureAnimation struct {
 	PingPong bool `json:"ping_pong,omitempty"`
 }
 
+// TagMember is one item a tag stands for. A recipe slot that takes a tag
+// accepts any of them, which is why the UI cycles through their icons rather
+// than picking one.
+type TagMember struct {
+	TagName string `json:"tag_name"`
+	ModID   string `json:"mod_id"`
+	ItemID  string `json:"item_id"`
+}
+
 type Fluid struct {
 	ModID      string            `json:"mod_id"`
 	FluidID    string            `json:"fluid_id"`

@@ -100,18 +100,29 @@ type MachineSlot struct {
 }
 
 type VillagerTradeView struct {
-	ID             string `json:"id"`
-	Profession     string `json:"profession"`
-	Tier           int    `json:"tier"`
-	CostModID      string `json:"cost_mod_id"`
-	CostItemID     string `json:"cost_item_id"`
-	CostName       string `json:"cost_name"`
-	CostCount      int    `json:"cost_count"`
-	ResultModID    string `json:"result_mod_id"`
-	ResultItemID   string `json:"result_item_id"`
-	ResultName     string `json:"result_name"`
-	ResultCount    int    `json:"result_count"`
-	ResultModified bool   `json:"result_modified"`
-	MaxUses        *int   `json:"max_uses,omitempty"`
-	XP             *int   `json:"xp,omitempty"`
+	ID          string `json:"id"`
+	SourceModID string `json:"source_mod_id"`
+	SourceName  string `json:"source_name"`
+	Profession  string `json:"profession"`
+	Tier        int    `json:"tier"`
+	CostModID   string `json:"cost_mod_id"`
+	CostItemID  string `json:"cost_item_id"`
+	CostName    string `json:"cost_name"`
+	CostCount   int    `json:"cost_count"`
+	// Second cost slot; all four are null together when the offer charges
+	// only one item.
+	Cost2ModID     *string `json:"cost2_mod_id,omitempty"`
+	Cost2ItemID    *string `json:"cost2_item_id,omitempty"`
+	Cost2Name      *string `json:"cost2_name,omitempty"`
+	Cost2Count     *int    `json:"cost2_count,omitempty"`
+	ResultModID    string  `json:"result_mod_id"`
+	ResultItemID   string  `json:"result_item_id"`
+	ResultName     string  `json:"result_name"`
+	ResultCount    int     `json:"result_count"`
+	ResultModified bool    `json:"result_modified"`
+	// CostVariable marks an offer whose price the data does not fix; the counts
+	// are then a floor, which the UI has to say rather than imply.
+	CostVariable bool `json:"cost_variable"`
+	MaxUses      *int `json:"max_uses,omitempty"`
+	XP           *int `json:"xp,omitempty"`
 }

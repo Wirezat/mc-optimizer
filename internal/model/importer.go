@@ -12,18 +12,34 @@ type BlockDrop struct {
 }
 
 // VillagerTrade is one trade offer from a villager profession.
+//
+// SourceModID is the mod that defines the offer, which is not the mod of the
+// items being traded: vanilla's trade_rebalance datapack redefines minecraft's
+// own professions, so both sets have to be told apart by their definer.
+// TradeKey identifies the offer within that mod — profession, tier and the
+// item pair do not, since several offers can share all three and differ only
+// in an NBT modifier.
 type VillagerTrade struct {
-	Profession     string
-	Tier           int
-	CostModID      string
-	CostItemID     string
-	CostCount      int
+	SourceModID string
+	TradeKey    string
+	Profession  string
+	Tier        int
+	CostModID   string
+	CostItemID  string
+	CostCount   int
+	// Second cost slot; empty IDs mean the offer only charges one item.
+	Cost2ModID     string
+	Cost2ItemID    string
+	Cost2Count     int
 	ResultModID    string
 	ResultItemID   string
 	ResultCount    int
 	ResultModified bool
-	MaxUses        *int
-	XP             *int
+	// CostVariable marks an offer whose price the data does not fix; CostCount
+	// is then the lowest it can be, not what it costs.
+	CostVariable bool
+	MaxUses      *int
+	XP           *int
 }
 
 // ModMetadata holds optional enrichment data fetched from Modrinth.

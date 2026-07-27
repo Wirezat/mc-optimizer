@@ -480,51 +480,79 @@ func (d *DB) UpsertVillagerTrades(ctx context.Context, trades []model.VillagerTr
 	if len(trades) == 0 {
 		return nil
 	}
+	srcMods := make([]string, len(trades))
+	keys := make([]string, len(trades))
 	profs := make([]string, len(trades))
 	tiers := make([]int, len(trades))
 	costMods := make([]string, len(trades))
 	costItems := make([]string, len(trades))
 	costCounts := make([]int, len(trades))
+	cost2Mods := make([]*string, len(trades))
+	cost2Items := make([]*string, len(trades))
+	cost2Counts := make([]*int, len(trades))
 	resMods := make([]string, len(trades))
 	resItems := make([]string, len(trades))
 	resCounts := make([]int, len(trades))
 	modified := make([]bool, len(trades))
+	variable := make([]bool, len(trades))
 	maxUses := make([]*int, len(trades))
 	xps := make([]*int, len(trades))
 	for i, t := range trades {
+		srcMods[i] = t.SourceModID
+		keys[i] = t.TradeKey
 		profs[i] = t.Profession
 		tiers[i] = t.Tier
 		costMods[i] = t.CostModID
 		costItems[i] = t.CostItemID
 		costCounts[i] = t.CostCount
+		// The whole second slot is either present or absent; a partially filled
+		// one would trip the table's own (mod IS NULL) = (item IS NULL) check.
+		if t.Cost2ModID != "" && t.Cost2ItemID != "" {
+			mod, item, count := t.Cost2ModID, t.Cost2ItemID, t.Cost2Count
+			if count < 1 {
+				count = 1
+			}
+			cost2Mods[i], cost2Items[i], cost2Counts[i] = &mod, &item, &count
+		}
 		resMods[i] = t.ResultModID
 		resItems[i] = t.ResultItemID
 		resCounts[i] = t.ResultCount
 		modified[i] = t.ResultModified
+		variable[i] = t.CostVariable
 		maxUses[i] = t.MaxUses
 		xps[i] = t.XP
 	}
 	_, err := d.Pool.Exec(ctx, `
 		INSERT INTO villager_trades
-			(profession, tier, cost_mod_id, cost_item_id, cost_count,
-			 result_mod_id, result_item_id, result_count, result_modified, max_uses, xp)
-		SELECT pr, ti, cm, ci, cc, rm, ri, rc, mo, mu, xp
+			(source_mod_id, trade_key, profession, tier,
+			 cost_mod_id, cost_item_id, cost_count,
+			 cost2_mod_id, cost2_item_id, cost2_count,
+			 result_mod_id, result_item_id, result_count, result_modified,
+			 cost_variable, max_uses, xp)
+		SELECT sm, tk, pr, ti, cm, ci, cc, c2m, c2i, c2c, rm, ri, rc, mo, cv, mu, xp
 		FROM unnest(
-			$1::text[], $2::int[],
-			$3::text[], $4::text[], $5::int[],
-			$6::text[], $7::text[], $8::int[], $9::bool[],
-			$10::int[], $11::int[]
-		) AS t(pr, ti, cm, ci, cc, rm, ri, rc, mo, mu, xp)
-		WHERE EXISTS (SELECT 1 FROM items WHERE mod_id = cm AND item_id = ci)
+			$1::text[], $2::text[], $3::text[], $4::int[],
+			$5::text[], $6::text[], $7::int[],
+			$8::text[], $9::text[], $10::int[],
+			$11::text[], $12::text[], $13::int[], $14::bool[], $15::bool[],
+			$16::int[], $17::int[]
+		) AS t(sm, tk, pr, ti, cm, ci, cc, c2m, c2i, c2c, rm, ri, rc, mo, cv, mu, xp)
+		WHERE EXISTS (SELECT 1 FROM mods  WHERE mod_id = sm)
+		  AND EXISTS (SELECT 1 FROM items WHERE mod_id = cm AND item_id = ci)
 		  AND EXISTS (SELECT 1 FROM items WHERE mod_id = rm AND item_id = ri)
-		ON CONFLICT (profession, tier, cost_mod_id, cost_item_id, result_mod_id, result_item_id) DO NOTHING
-	`, profs, tiers, costMods, costItems, costCounts, resMods, resItems, resCounts, modified, maxUses, xps)
+		  -- An absent second slot must not disqualify the offer, only an
+		  -- unknown one.
+		  AND (c2m IS NULL OR EXISTS (SELECT 1 FROM items WHERE mod_id = c2m AND item_id = c2i))
+		ON CONFLICT (source_mod_id, profession, tier, trade_key) DO NOTHING
+	`, srcMods, keys, profs, tiers,
+		costMods, costItems, costCounts,
+		cost2Mods, cost2Items, cost2Counts,
+		resMods, resItems, resCounts, modified, variable, maxUses, xps)
 	if err != nil {
 		return fmt.Errorf("db: upsert villager trades: %w", err)
 	}
 	return nil
 }
-
 
 // UpsertUpgradeTiers inserts upgrade tier records from machine_upgrades.json datamaps.
 // Entries whose mod_id does not exist in the mods table are silently skipped.

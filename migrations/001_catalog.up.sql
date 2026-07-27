@@ -225,26 +225,54 @@ CREATE INDEX ON block_drops (block_mod_id, block_item_id);
 CREATE INDEX ON block_drops (drop_mod_id,  drop_item_id);
 
 -- Villager trades: what each profession buys/sells at each tier.
+--
+-- source_mod_id names the mod the offer belongs to, not the mod of the traded
+-- items: vanilla's optional trade_rebalance datapack redefines the very same
+-- professions and tiers minecraft already defines, so without it the two sets
+-- overwrite each other instead of coexisting.
+--
+-- trade_key is the offer's stable identity within its mod (the source file
+-- stem for data-driven trades). Profession + tier + item pair does NOT
+-- identify an offer: the cartographer alone sells nine distinct explorer maps
+-- that all read as "emerald + compass -> map" and differ only in an NBT
+-- modifier, and keying on the item pair silently collapses them to two rows.
 CREATE TABLE villager_trades (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_mod_id    TEXT NOT NULL,
+    trade_key        TEXT NOT NULL,
     profession       TEXT NOT NULL,
     tier             INT  NOT NULL CHECK (tier BETWEEN 1 AND 5),
     cost_mod_id      TEXT NOT NULL,
     cost_item_id     TEXT NOT NULL,
     cost_count       INT  NOT NULL DEFAULT 1,
+    -- Optional second cost slot: vanilla charges two different items for a
+    -- single offer 18 times (emerald + compass, emerald + book, ...).
+    cost2_mod_id     TEXT,
+    cost2_item_id    TEXT,
+    cost2_count      INT,
     result_mod_id    TEXT NOT NULL,
     result_item_id   TEXT NOT NULL,
     result_count     INT  NOT NULL DEFAULT 1,
     result_modified  BOOL NOT NULL DEFAULT FALSE,
+    -- The offer's price is not fixed in the data: an enchanted book costs what
+    -- the enchantment decides. The counts above are then a floor, and saying so
+    -- is the difference between a catalog that is right and one that looks it.
+    cost_variable    BOOL NOT NULL DEFAULT FALSE,
     max_uses         INT,
     xp               INT,
-    FOREIGN KEY (cost_mod_id,   cost_item_id)   REFERENCES items(mod_id, item_id) ON DELETE CASCADE,
-    FOREIGN KEY (result_mod_id, result_item_id) REFERENCES items(mod_id, item_id) ON DELETE CASCADE
+    CHECK ((cost2_mod_id IS NULL) = (cost2_item_id IS NULL)),
+    CHECK ((cost2_mod_id IS NULL) = (cost2_count  IS NULL)),
+    FOREIGN KEY (source_mod_id)                   REFERENCES mods(mod_id) ON DELETE CASCADE,
+    FOREIGN KEY (cost_mod_id,   cost_item_id)     REFERENCES items(mod_id, item_id) ON DELETE CASCADE,
+    FOREIGN KEY (cost2_mod_id,  cost2_item_id)    REFERENCES items(mod_id, item_id) ON DELETE CASCADE,
+    FOREIGN KEY (result_mod_id, result_item_id)   REFERENCES items(mod_id, item_id) ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX villager_trades_unique_idx
-    ON villager_trades (profession, tier, cost_mod_id, cost_item_id, result_mod_id, result_item_id);
+    ON villager_trades (source_mod_id, profession, tier, trade_key);
 
+CREATE INDEX ON villager_trades (source_mod_id);
 CREATE INDEX ON villager_trades (profession, tier);
 CREATE INDEX ON villager_trades (cost_mod_id,   cost_item_id);
+CREATE INDEX ON villager_trades (cost2_mod_id,  cost2_item_id);
 CREATE INDEX ON villager_trades (result_mod_id, result_item_id);

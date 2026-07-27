@@ -1091,14 +1091,23 @@ func (d *DB) ListMachineSlots(ctx context.Context, modID, machineID string) ([]*
 // Optionally filtered by profession and/or tier (zero value = no filter).
 func (d *DB) ListVillagerTrades(ctx context.Context, profession string, tier int) ([]*model.VillagerTradeView, error) {
 	q := `
-		SELECT vt.id, vt.profession, vt.tier,
+		SELECT vt.id, vt.source_mod_id,
+		       COALESCE((SELECT name FROM mods WHERE mod_id = vt.source_mod_id), vt.source_mod_id) AS source_name,
+		       vt.profession, vt.tier,
 		       vt.cost_mod_id, vt.cost_item_id, vt.cost_count,
 		       COALESCE(
 		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='item.'||vt.cost_mod_id||'.'||vt.cost_item_id),
 		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||vt.cost_mod_id||'.'||vt.cost_item_id),
 		           vt.cost_item_id
 		       ) AS cost_name,
+		       vt.cost2_mod_id, vt.cost2_item_id, vt.cost2_count,
+		       CASE WHEN vt.cost2_item_id IS NULL THEN NULL ELSE COALESCE(
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='item.'||vt.cost2_mod_id||'.'||vt.cost2_item_id),
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||vt.cost2_mod_id||'.'||vt.cost2_item_id),
+		           vt.cost2_item_id
+		       ) END AS cost2_name,
 		       vt.result_mod_id, vt.result_item_id, vt.result_count, vt.result_modified,
+		       vt.cost_variable,
 		       COALESCE(
 		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='item.'||vt.result_mod_id||'.'||vt.result_item_id),
 		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||vt.result_mod_id||'.'||vt.result_item_id),
@@ -1123,7 +1132,7 @@ func (d *DB) ListVillagerTrades(ctx context.Context, profession string, tier int
 			q += " AND " + c
 		}
 	}
-	q += " ORDER BY vt.profession, vt.tier, vt.result_item_id"
+	q += " ORDER BY vt.source_mod_id, vt.profession, vt.tier, vt.result_item_id, vt.trade_key"
 
 	rows, err := d.Pool.Query(ctx, q, args...)
 	if err != nil {
@@ -1135,9 +1144,10 @@ func (d *DB) ListVillagerTrades(ctx context.Context, profession string, tier int
 	for rows.Next() {
 		t := &model.VillagerTradeView{}
 		if err := rows.Scan(
-			&t.ID, &t.Profession, &t.Tier,
+			&t.ID, &t.SourceModID, &t.SourceName, &t.Profession, &t.Tier,
 			&t.CostModID, &t.CostItemID, &t.CostCount, &t.CostName,
-			&t.ResultModID, &t.ResultItemID, &t.ResultCount, &t.ResultModified, &t.ResultName,
+			&t.Cost2ModID, &t.Cost2ItemID, &t.Cost2Count, &t.Cost2Name,
+			&t.ResultModID, &t.ResultItemID, &t.ResultCount, &t.ResultModified, &t.CostVariable, &t.ResultName,
 			&t.MaxUses, &t.XP,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan villager trade: %w", err)

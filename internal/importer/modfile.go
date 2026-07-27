@@ -90,18 +90,30 @@ type rawModFile struct {
 	} `yaml:"block_drops"`
 
 	VillagerTrades []struct {
+		// key identifies the offer within this mod. Profession + tier + item
+		// pair does not: several offers can share all three.
+		Key        string `yaml:"key"`
 		Profession string `yaml:"profession"`
 		Tier       int    `yaml:"tier"`
 		Cost       struct {
 			Item  string `yaml:"item"`
 			Count int    `yaml:"count"`
 		} `yaml:"cost"`
+		// Optional second item the offer also charges.
+		Cost2 struct {
+			Item  string `yaml:"item"`
+			Count int    `yaml:"count"`
+		} `yaml:"cost2"`
 		Result struct {
 			Item  string `yaml:"item"`
 			Count int    `yaml:"count"`
 		} `yaml:"result"`
-		MaxUses *int `yaml:"max_uses"`
-		XP      *int `yaml:"xp"`
+		ResultModified bool `yaml:"result_modified"`
+		// The data does not fix the price — an enchanted book's cost is derived
+		// at runtime. What cost carries is then a floor, not the price.
+		CostVariable bool `yaml:"cost_variable"`
+		MaxUses      *int `yaml:"max_uses"`
+		XP           *int `yaml:"xp"`
 	} `yaml:"villager_trades"`
 }
 
@@ -353,25 +365,50 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 		if err != nil {
 			return nil, fmt.Errorf("modfile: trade result ref: %w", err)
 		}
+		// The second cost slot is optional; only resolve a ref when one is set.
+		var cost2ModID, cost2ItemID string
+		if r.Cost2.Item != "" {
+			cost2ModID, cost2ItemID, err = splitRef(r.Cost2.Item, "minecraft")
+			if err != nil {
+				return nil, fmt.Errorf("modfile: trade cost2 ref: %w", err)
+			}
+		}
 		costCount := r.Cost.Count
 		if costCount == 0 {
 			costCount = 1
+		}
+		cost2Count := r.Cost2.Count
+		if cost2ItemID != "" && cost2Count == 0 {
+			cost2Count = 1
 		}
 		resultCount := r.Result.Count
 		if resultCount == 0 {
 			resultCount = 1
 		}
+		// Older modfiles predate the key; fall back to the item pair so they
+		// still import, just without distinguishing same-pair offers.
+		key := r.Key
+		if key == "" {
+			key = costItemID + ">" + resultItemID
+		}
 		def.VillagerTrades = append(def.VillagerTrades, model.VillagerTrade{
-			Profession:   r.Profession,
-			Tier:         r.Tier,
-			CostModID:    costModID,
-			CostItemID:   costItemID,
-			CostCount:    costCount,
-			ResultModID:  resultModID,
-			ResultItemID: resultItemID,
-			ResultCount:  resultCount,
-			MaxUses:      r.MaxUses,
-			XP:           r.XP,
+			SourceModID:    raw.ModID,
+			TradeKey:       key,
+			Profession:     r.Profession,
+			Tier:           r.Tier,
+			CostModID:      costModID,
+			CostItemID:     costItemID,
+			CostCount:      costCount,
+			Cost2ModID:     cost2ModID,
+			Cost2ItemID:    cost2ItemID,
+			Cost2Count:     cost2Count,
+			ResultModID:    resultModID,
+			ResultItemID:   resultItemID,
+			ResultCount:    resultCount,
+			ResultModified: r.ResultModified,
+			CostVariable:   r.CostVariable,
+			MaxUses:        r.MaxUses,
+			XP:             r.XP,
 		})
 	}
 

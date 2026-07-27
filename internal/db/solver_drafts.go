@@ -60,4 +60,3 @@ func (d *DB) DeleteExpiredSolverDrafts(ctx context.Context) (int64, error) {
 	}
 	return tag.RowsAffected(), nil
 }
-

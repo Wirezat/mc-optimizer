@@ -268,7 +268,7 @@ func TestChain_stopPoint(t *testing.T) {
 	// Mark mid as stop-point after graph construction
 	if node, ok := g.Nodes["mi:mid"]; ok {
 		node.IsStopPoint = true
-		node.RecipeID = ""  // remove recipe — stop-point is externally supplied
+		node.RecipeID = "" // remove recipe — stop-point is externally supplied
 		node.Inputs = nil
 	}
 	// Remove leaf node (not reachable through stop-point BFS)

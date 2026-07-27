@@ -162,9 +162,10 @@ func TestByproduct_notNeeded(t *testing.T) {
 // ── Test 2: Byproduct fully covers downstream silicon_dust demand ──────────
 //
 // Chain:
-//   sulfuric_acid ← chem_reactor ← (sulfur_dust, ethanol, glass)
-//   sulfur_dust   ← centrifuge   ← ore   (byproduct: 2 silicon_dust per run)
-//   glass         ← furnace      ← 2 silicon_dust
+//
+//	sulfuric_acid ← chem_reactor ← (sulfur_dust, ethanol, glass)
+//	sulfur_dust   ← centrifuge   ← ore   (byproduct: 2 silicon_dust per run)
+//	glass         ← furnace      ← 2 silicon_dust
 //
 // centrifuge byproduct exactly covers furnace's silicon_dust input.
 // Furnace must still run (glass is needed), but silicon_dust needs zero external supply.

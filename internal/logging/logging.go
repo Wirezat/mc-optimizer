@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	maxEntries  = 500
-	tailSleep   = 200 * time.Millisecond
+	maxEntries = 500
+	tailSleep  = 200 * time.Millisecond
 )
 
 // Entry is a single parsed log line.

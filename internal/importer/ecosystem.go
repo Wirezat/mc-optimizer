@@ -27,9 +27,9 @@ type ModFileDB interface {
 // ecosystemRegistry maps ecosystem name → handler.
 // Add a new entry here to support a new ecosystem.
 var ecosystemRegistry = map[string]EcosystemHandler{
-	"vanilla":                &vanillaEcosystem{},
+	"vanilla":                  &vanillaEcosystem{},
 	"modern_industrialization": &miEcosystem{},
-	"mekanism":               &mekanismEcosystem{},
+	"mekanism":                 &mekanismEcosystem{},
 }
 
 // lookupEcosystem returns the handler for the given name, or nil if unknown.

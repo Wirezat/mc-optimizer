@@ -9,7 +9,7 @@ func TestRationalAdd(t *testing.T) {
 		{Rational{1, 2}, Rational{1, 3}, Rational{5, 6}},
 		{Rational{1, 4}, Rational{3, 4}, Rational{1, 1}},
 		{Rational{-1, 3}, Rational{1, 3}, Rational{0, 1}},
-		{Rational{2, 6}, Rational{3, 9}, Rational{2, 3}},   // both reduce to 1/3 → 2/3
+		{Rational{2, 6}, Rational{3, 9}, Rational{2, 3}}, // both reduce to 1/3 → 2/3
 		{Rational{0, 1}, Rational{5, 7}, Rational{5, 7}},
 	}
 	for _, c := range cases {

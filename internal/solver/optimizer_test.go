@@ -64,8 +64,8 @@ func ironIngotRecipe() *RecipeRow {
 func newStub() *stubStore {
 	recipe := ironIngotRecipe()
 	return &stubStore{
-		recipes:  map[string]*RecipeRow{"recipe:iron_ingot": recipe},
-		byItem:   map[string][]*RecipeRow{"minecraft:iron_ingot": {recipe}},
+		recipes: map[string]*RecipeRow{"recipe:iron_ingot": recipe},
+		byItem:  map[string][]*RecipeRow{"minecraft:iron_ingot": {recipe}},
 		machines: map[string]*MachineSpec{
 			"minecraft:furnace": {ModID: "minecraft", MachineID: "furnace", EnergyType: "NONE"},
 		},

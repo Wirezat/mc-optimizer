@@ -167,4 +167,3 @@ func FetchModrinthMetadata(modID, displayName, slugOverride string) (*model.ModM
 	}
 	return meta, nil
 }
-

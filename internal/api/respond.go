@@ -21,12 +21,12 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 // Error codes — machine-readable keys sent in every error response.
 // The frontend can display Message directly or key off Code for custom UI.
 const (
-	CodeBadRequest          = "BAD_REQUEST"
-	CodeUnauthorized        = "UNAUTHORIZED"
-	CodeForbidden           = "FORBIDDEN"
-	CodeNotFound            = "NOT_FOUND"
-	CodeConflict            = "CONFLICT"
-	CodeInternal            = "INTERNAL_SERVER_ERROR"
+	CodeBadRequest   = "BAD_REQUEST"
+	CodeUnauthorized = "UNAUTHORIZED"
+	CodeForbidden    = "FORBIDDEN"
+	CodeNotFound     = "NOT_FOUND"
+	CodeConflict     = "CONFLICT"
+	CodeInternal     = "INTERNAL_SERVER_ERROR"
 )
 
 // apiError is the standard error envelope for all API responses.

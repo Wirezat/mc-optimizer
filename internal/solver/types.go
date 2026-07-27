@@ -141,17 +141,17 @@ type MachineRef struct {
 }
 
 type MachineGroupDraft struct {
-	MachineMod    string
-	MachineID     string
-	RecipeID      string
-	RecipeOutput  ItemRef  // item this recipe produces
-	Count         int64
-	ExactCount    Rational // fractional machine count before ceiling
-	Utilization   Rational
-	UpgradeTier   string
-	UpgradeCount  int
-	Status        DraftStatus
-	EUPerTick     int64 // effective EU/t drawn by ONE machine in this group; 0 for non-eu machines
+	MachineMod   string
+	MachineID    string
+	RecipeID     string
+	RecipeOutput ItemRef // item this recipe produces
+	Count        int64
+	ExactCount   Rational // fractional machine count before ceiling
+	Utilization  Rational
+	UpgradeTier  string
+	UpgradeCount int
+	Status       DraftStatus
+	EUPerTick    int64 // effective EU/t drawn by ONE machine in this group; 0 for non-eu machines
 }
 
 type IOProfile struct {
@@ -177,4 +177,3 @@ type ErrCycleBreakNeeded struct {
 func (e *ErrCycleBreakNeeded) Error() string {
 	return fmt.Sprintf("cycle break needed: %v", e.CycleNodes)
 }
-

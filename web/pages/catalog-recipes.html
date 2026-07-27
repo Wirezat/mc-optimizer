@@ -421,6 +421,11 @@
 
   async function startModGroup(modId, hdRow, rowsBody) {
     const recipes = await loadModGroup(modId);
+    // Unlike the other catalog pages this load is genuinely async, so the
+    // group may have been collapsed again while the fetch was in flight —
+    // toggleModGroup saw no registered VirtualWindow to destroy, so nothing
+    // else stops this call from populating a collapsed group.
+    if (hdRow.classList.contains('collapsed')) return;
     const countBadge = hdRow.querySelector('.mod-recipe-count');
     if (countBadge) countBadge.textContent = recipes.length;
     if (!recipes.length) return;
@@ -436,6 +441,11 @@
       renderRow: recipeRowEls,
       renderSkeletonRow: recipeSkeletonEls,
     });
+    // A concurrent expand for the same group (collapse+expand while our fetch
+    // was in flight) may already have registered its own instance. Overwriting
+    // the map entry would orphan it — still registered on the shared ancestor
+    // scroll dispatcher, still rendering into this same tbody — so destroy it.
+    openGroups.get(modId)?.destroy();
     openGroups.set(modId, vw);
     await vw.start();
     initCellClampScroll(rowsBody);

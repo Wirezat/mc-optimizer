@@ -196,6 +196,11 @@
       <td>${itemCell(tr.result_mod_id, tr.result_item_id, tr.result_name)}${enchanted}</td>
       <td class="td-muted" style="text-align:right;">${tr.max_uses ?? '—'}</td>
       <td class="td-muted" style="text-align:right;">${tr.xp ?? '—'}</td>`;
+    // Per-row, not once per table: rows are built off-DOM as the virtual
+    // window scrolls, so the infocards' data-i18n text (the "view in catalog"
+    // link) has to be filled in here — the page-load applyI18n() ran long
+    // before this row existed.
+    applyI18n(row);
     initInfocards(row);
     return [row];
   }

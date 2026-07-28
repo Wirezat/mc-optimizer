@@ -74,6 +74,57 @@ func TestResolveBlockState_VariantListTakesFirst(t *testing.T) {
 	}
 }
 
+// A block with no "variants" at all — only "multipart", the format newer
+// vanilla blocks (shelves, and others with several independently-placed
+// layers) use even for their base placement state. The first entry stands in
+// for the whole thing.
+func TestResolveBlockState_MultipartTakesFirstEntry(t *testing.T) {
+	dir := t.TempDir()
+	writeBlockstateFixture(t, dir, "mod/blockstates/shelf.json",
+		`{"multipart":[
+			{"apply":{"model":"mod:block/shelf"},"when":{"facing":"north"}},
+			{"apply":{"model":"mod:block/shelf","y":90},"when":{"facing":"east"}}
+		]}`)
+
+	l := NewLoader(dir)
+	ref, ok := l.resolveBlockState("mod", "shelf")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if want := "mod:block/shelf"; ref != want {
+		t.Errorf("ref = %q, want %q (first multipart entry)", ref, want)
+	}
+}
+
+// The simple, unambiguous item-definition case: a bare "minecraft:model"
+// entry naming one model, the format a shelf uses for its standalone icon.
+func TestResolveItemDefinition_ModelEntry(t *testing.T) {
+	dir := t.TempDir()
+	writeBlockstateFixture(t, dir, "mod/items/shelf.json",
+		`{"model":{"type":"minecraft:model","model":"mod:block/shelf_inventory"}}`)
+
+	l := NewLoader(dir)
+	ref, ok := l.resolveItemDefinition("mod", "shelf")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if want := "mod:block/shelf_inventory"; ref != want {
+		t.Errorf("ref = %q, want %q", ref, want)
+	}
+}
+
+// Any entry type other than "minecraft:model" is left unresolved.
+func TestResolveItemDefinition_UnsupportedEntryType(t *testing.T) {
+	dir := t.TempDir()
+	writeBlockstateFixture(t, dir, "mod/items/complex.json",
+		`{"model":{"type":"minecraft:select","property":"minecraft:display_context","cases":[]}}`)
+
+	l := NewLoader(dir)
+	if _, ok := l.resolveItemDefinition("mod", "complex"); ok {
+		t.Error("expected ok=false for a non-model entry type")
+	}
+}
+
 func TestResolveBlockState_MissingFile(t *testing.T) {
 	l := NewLoader(t.TempDir())
 	if _, ok := l.resolveBlockState("mod", "nonexistent"); ok {

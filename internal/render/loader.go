@@ -28,31 +28,16 @@ func NewLoader(assetsDir string) *Loader {
 // this is a cycle, and following it would hang the request.
 const maxParentDepth = 8
 
-// ResolveModel returns ref's fully merged model: parent chain walked and
-// blockstate fallback applied, exactly as LoadScene sees it, but without
-// decoding any of its textures.
-//
-// This is the seam a client-side renderer would use if one is ever built
-// (e.g. an interactive 3D factory planner): resolving a model and rasterising
-// it are separate steps, only this package's own CPU rasterizer needs actual
-// decoded pixels, and a JSON-exporting endpoint would want the model as-is
-// (Model and its fields are already json-tagged for exactly that) plus
-// TextureURL for each face's texture instead. See markdown/TODO.md, "Client-
-// side 3D renderer for the factory planner".
+// ResolveModel returns ref's fully merged model (parent chain walked, item
+// definition/blockstate fallback applied), without decoding any textures.
 func (l *Loader) ResolveModel(ref string) (*Model, error) {
 	return l.loadModelChain(ref, 0)
 }
 
 // LoadScene assembles a drawable scene for one model reference, e.g.
-// "modern_industrialization:block/pipes/item_pipe".
-//
-// A reference whose own model file is missing falls back to the block's
-// blockstate (see resolveBlockState) — the path a plain vanilla block takes
-// when a mod doesn't ship it a dedicated item model.
-//
-// Parents are merged the way the game does: a child's textures and elements win,
-// and a child that declares no elements inherits its parent's. That is what lets
-// a model say nothing but "parent: cube_all, textures: {all: ...}".
+// "modern_industrialization:block/pipes/item_pipe". Parents are merged the
+// way the game does: a child's textures/elements win, inheriting whatever it
+// doesn't declare itself.
 func (l *Loader) LoadScene(ref string) (*Scene, error) {
 	model, err := l.ResolveModel(ref)
 	if err != nil {
@@ -104,6 +89,9 @@ func (l *Loader) loadModelChain(ref string, depth int) (*Model, error) {
 			if i := strings.LastIndexByte(rel, '/'); i >= 0 {
 				blockID = rel[i+1:]
 			}
+			if resolved, ok := l.resolveItemDefinition(modID, blockID); ok {
+				return l.loadModelChain(resolved, depth+1)
+			}
 			if resolved, ok := l.resolveBlockState(modID, blockID); ok {
 				return l.loadModelChain(resolved, depth+1)
 			}
@@ -128,7 +116,7 @@ func (l *Loader) loadModelChain(ref string, depth int) (*Model, error) {
 // mergeModel layers a child over its parent.
 func mergeModel(parent, child *Model) *Model {
 	out := &Model{
-		Textures: map[string]string{},
+		Textures: map[string]TextureRef{},
 		Elements: child.Elements,
 		Tint:     child.Tint,
 	}
@@ -147,10 +135,8 @@ func mergeModel(parent, child *Model) *Model {
 	return out
 }
 
-// TextureURL resolves a texture reference to its public URL under the asset
-// tree, or ok=false if no such file exists — the same lookup LoadTexture
-// does, minus the decode. A client-side renderer fetches and decodes the
-// image itself; only this package's own rasterizer needs decoded pixels.
+// TextureURL resolves ref to its public URL under the asset tree, or
+// ok=false if no such file exists.
 func (l *Loader) TextureURL(ref string) (url string, ok bool) {
 	if err := SanitizeRef(ref); err != nil {
 		return "", false
@@ -185,9 +171,7 @@ func (l *Loader) LoadTexture(ref string) (*Texture, error) {
 	rgba := image.NewRGBA(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
 	draw.Draw(rgba, rgba.Bounds(), src, bounds.Min, draw.Src)
 
-	// A model can be textured with an animated sheet; only its first cell is
-	// the still image an icon should show. Cells — not the number of frames the
-	// animation plays, which can be fewer — is what says where that cell ends.
+	// An animated sheet's first cell is the still image an icon should show.
 	cells := 1
 	if sheet, ok := assets.InspectAnimation(base + ".png"); ok {
 		cells = sheet.Cells
@@ -201,11 +185,9 @@ func (l *Loader) LoadTexture(ref string) (*Texture, error) {
 	}, nil
 }
 
-// SanitizeRef rejects references that would escape the asset tree.
-//
-// Applied to every reference that becomes a path, not only the one from the
-// URL: a model's `parent` and its texture names are just as much untrusted
-// input once a mod ZIP has been imported.
+// SanitizeRef rejects references that would escape the asset tree, checked
+// on every ref that becomes a path (model parents, texture names), not just
+// the one from the URL.
 func SanitizeRef(ref string) error {
 	if ref == "" {
 		return fmt.Errorf("render: empty model reference")

@@ -9,22 +9,22 @@ import (
 )
 
 // blockState is the subset of Minecraft's blockstate format this renderer
-// resolves. It exists only as a fallback: every item ships its own
-// models/item/<id>.json pointing at the right visual, so this is reached
-// only when a mod's block-item omits one.
-//
-// Not implemented: `multipart`, and a variant's `x`/`y` rotation. Both exist
-// to pick a look for a block's placement state (facing, powered, connected
-// neighbours, ...) — state a placed block has and an inventory icon does
-// not. There is no single correct choice to render for those, so a
-// blockstate that needs one is left unresolved rather than guessed at.
+// resolves, used as a fallback when a block-item ships no models/item/<id>.json.
+// Placement state (facing, powered, ...) is not evaluated: variants/multipart
+// entries are picked deterministically instead (see resolveBlockState).
 type blockState struct {
-	Variants map[string]variantEntry `json:"variants"`
+	Variants  map[string]variantEntry `json:"variants"`
+	Multipart []multipartEntry        `json:"multipart"`
 }
 
-// variantEntry is a variant's model choice. Vanilla allows a list here for
-// random visual variety between equally-valid options; an icon wants one
-// deterministic answer, so only the first is kept.
+// multipartEntry is one layer of a multipart blockstate. Only Apply.Model is
+// read; `when` is ignored since only the first entry is ever used.
+type multipartEntry struct {
+	Apply variantEntry `json:"apply"`
+}
+
+// variantEntry is a variant's model choice. A JSON list (vanilla's random
+// visual variety) collapses to its first element.
 type variantEntry struct {
 	Model string
 }
@@ -47,15 +47,44 @@ func (v *variantEntry) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// resolveBlockState picks a model reference for blockID's blockstate, or
-// ok=false if the file is missing, malformed, or has no variant this
-// renderer can pick without knowing the block's placement state.
-//
-// A variant keyed "" is the no-properties case (most ordinary blocks: a
-// stone, a bookshelf) and always wins outright. Otherwise the
-// alphabetically-first key is used, so the result is stable across calls —
-// not necessarily the state a player would picture, but a real model rather
-// than none.
+// itemDefinition is vanilla's per-item model file (assets/<ns>/items/<id>.json,
+// 1.21.2+), read only for its simplest entry type "minecraft:model" — a bare
+// model reference. Other entry types (composite, select, condition, ...)
+// depend on item state this renderer doesn't have, so they're left unresolved.
+type itemDefinition struct {
+	Model itemModelEntry `json:"model"`
+}
+
+type itemModelEntry struct {
+	Type  string `json:"type"`
+	Model string `json:"model"`
+}
+
+// resolveItemDefinition returns modID/itemID's model ref from its
+// items/<id>.json, or ok=false if the file is missing or not a bare
+// "minecraft:model" entry. Checked ahead of resolveBlockState: it points at
+// the model vanilla itself draws standalone, where a blockstate model may
+// assume a placement neighbour.
+func (l *Loader) resolveItemDefinition(modID, itemID string) (ref string, ok bool) {
+	path := filepath.Join(l.assetsDir, modID, "items", itemID+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", false
+	}
+	var def itemDefinition
+	if err := json.Unmarshal(data, &def); err != nil {
+		return "", false
+	}
+	if def.Model.Type != "minecraft:model" || def.Model.Model == "" {
+		return "", false
+	}
+	return def.Model.Model, true
+}
+
+// resolveBlockState returns modID/blockID's model ref from its blockstate, or
+// ok=false if the file is missing, malformed, or has no usable variant/multipart
+// entry. The "" variant wins if present, else the alphabetically-first key,
+// else a multipart blockstate's first entry — a deterministic, real model.
 func (l *Loader) resolveBlockState(modID, blockID string) (ref string, ok bool) {
 	path := filepath.Join(l.assetsDir, modID, "blockstates", blockID+".json")
 	data, err := os.ReadFile(path)
@@ -63,8 +92,14 @@ func (l *Loader) resolveBlockState(modID, blockID string) (ref string, ok bool) 
 		return "", false
 	}
 	var bs blockState
-	if err := json.Unmarshal(data, &bs); err != nil || len(bs.Variants) == 0 {
+	if err := json.Unmarshal(data, &bs); err != nil {
 		return "", false
+	}
+	if len(bs.Variants) == 0 {
+		if len(bs.Multipart) == 0 {
+			return "", false
+		}
+		return bs.Multipart[0].Apply.Model, true
 	}
 	if v, present := bs.Variants[""]; present {
 		return v.Model, true

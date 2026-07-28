@@ -22,10 +22,32 @@ import (
 // itself to code — that is how one grey sprite becomes every cable colour — so a
 // model that needs a tint states it here. Vanilla would ignore the field.
 type Model struct {
-	Parent   string            `json:"parent"`
-	Textures map[string]string `json:"textures"`
-	Elements []Element         `json:"elements"`
-	Tint     *uint32           `json:"tint"`
+	Parent   string                `json:"parent"`
+	Textures map[string]TextureRef `json:"textures"`
+	Elements []Element             `json:"elements"`
+	Tint     *uint32               `json:"tint"`
+}
+
+// TextureRef is a face's texture value: either a bare reference
+// ("minecraft:block/glass", "#other_var") or an object carrying it alongside
+// a translucency hint ({"sprite": "...", "force_translucent": true}), which
+// this renderer reads and discards.
+type TextureRef string
+
+func (t *TextureRef) UnmarshalJSON(data []byte) error {
+	var plain string
+	if err := json.Unmarshal(data, &plain); err == nil {
+		*t = TextureRef(plain)
+		return nil
+	}
+	var withHints struct {
+		Sprite string `json:"sprite"`
+	}
+	if err := json.Unmarshal(data, &withHints); err != nil {
+		return fmt.Errorf("render: texture value: %w", err)
+	}
+	*t = TextureRef(withHints.Sprite)
+	return nil
 }
 
 // Element is one box of the model, in Minecraft's 0..16 block space.
@@ -103,7 +125,7 @@ func (m *Model) ResolveTexture(ref string) (path string, ok bool) {
 		if !exists {
 			return "", false
 		}
-		ref = next
+		ref = string(next)
 	}
 	return "", false
 }

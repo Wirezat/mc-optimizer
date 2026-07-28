@@ -23,38 +23,26 @@ func safeSegment(s string) bool {
 	return s != "" && s != ".." && !strings.ContainsAny(s, `/\`)
 }
 
-// ResolveItemTexture returns the public URL path for itemID's icon under modID,
-// or ok=false if neither a texture nor a model exists on disk under assetsDir.
-//
-// Block-items (whose inventory icon comes from the block texture, not a separate
-// item texture) are handled by falling back to textures/block/ when
-// textures/item/ has no matching file.
-//
-// Some items have no flat sprite at all, because the game draws a 3D model for
-// them — MI's pipes and cables are the case that forced this, and machine blocks
-// are the same story. For those the URL points at the render endpoint instead of
-// a file, so a caller can put it in an <img> either way without caring which it
-// got.
+// ResolveItemTexture returns the public URL path for itemID's icon under modID
+// (both plain path segments, not namespaced refs), or ok=false if neither a
+// texture nor a model exists on disk under assetsDir.
 func ResolveItemTexture(assetsDir, modID, itemID string) (urlPath string, ok bool) {
 	if !safeSegment(modID) || !safeSegment(itemID) {
 		return "", false
+	}
+	// A model draws the block's real shape; a flat texture file is often just one face.
+	if _, err := os.Stat(filepath.Join(assetsDir, modID, "models", "item", itemID+".json")); err == nil {
+		return fmt.Sprintf("/assets/render/%s/item/%s.png", modID, itemID), true
+	}
+	// Falls back to the block's own blockstate when the item ships no model of its own.
+	if _, err := os.Stat(filepath.Join(assetsDir, modID, "blockstates", itemID+".json")); err == nil {
+		return fmt.Sprintf("/assets/render/%s/item/%s.png", modID, itemID), true
 	}
 	if url, ok := resolveFirst(assetsDir, []candidate{
 		{filepath.Join(modID, "textures", "item", itemID+".png"), fmt.Sprintf("%s/textures/item/%s.png", modID, itemID)},
 		{filepath.Join(modID, "textures", "block", itemID+".png"), fmt.Sprintf("%s/textures/block/%s.png", modID, itemID)},
 	}); ok {
 		return url, true
-	}
-	// Minecraft's own layout: an item's model lives at models/item/<id>.json.
-	if _, err := os.Stat(filepath.Join(assetsDir, modID, "models", "item", itemID+".json")); err == nil {
-		return fmt.Sprintf("/assets/render/%s/item/%s.png", modID, itemID), true
-	}
-	// A mod's block-item can omit its own item model and rely on the block's
-	// blockstate the way vanilla never does; the render endpoint resolves
-	// that fallback itself (render.Loader.resolveBlockState), so the same
-	// URL shape still applies.
-	if _, err := os.Stat(filepath.Join(assetsDir, modID, "blockstates", itemID+".json")); err == nil {
-		return fmt.Sprintf("/assets/render/%s/item/%s.png", modID, itemID), true
 	}
 	return "", false
 }

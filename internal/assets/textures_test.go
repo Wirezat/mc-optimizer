@@ -158,16 +158,15 @@ func TestResolveItemTexture_BlockStateFallback(t *testing.T) {
 	}
 }
 
-// A real sprite always beats a model: rendering one is work, and a mod that
-// ships both means the sprite is the intended icon.
-func TestResolveItemTexture_TextureWinsOverModel(t *testing.T) {
+// A model beats a flat texture file when both exist.
+func TestResolveItemTexture_ModelWinsOverTexture(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "mod/textures/item/thing.png")
 	writeFixture(t, dir, "mod/models/item/thing.json")
 
 	url, _ := ResolveItemTexture(dir, "mod", "thing")
-	if want := "/assets/mod/textures/item/thing.png"; url != want {
-		t.Errorf("url = %q, want the flat texture %q", url, want)
+	if want := "/assets/render/mod/item/thing.png"; url != want {
+		t.Errorf("url = %q, want the model render %q", url, want)
 	}
 }
 

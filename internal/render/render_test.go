@@ -26,7 +26,7 @@ func fullCube() *Scene {
 	for _, d := range directions {
 		faces[d] = Face{Texture: "#" + d}
 	}
-	textures := map[string]string{}
+	textures := map[string]TextureRef{}
 	decoded := map[string]*Texture{}
 	// A distinct primary per direction, so which face landed where is visible
 	// from the pixel colour alone.
@@ -37,7 +37,7 @@ func fullCube() *Scene {
 	}
 	for d, c := range colors {
 		ref := "test:block/" + d
-		textures[d] = ref
+		textures[d] = TextureRef(ref)
 		decoded[ref] = solidTexture(c[0], c[1], c[2])
 	}
 	return &Scene{
@@ -179,7 +179,7 @@ func TestRenderTintAppliesOnlyToTintedFaces(t *testing.T) {
 		return &Scene{
 			Model: &Model{
 				Tint:     &tint,
-				Textures: map[string]string{"all": "test:block/all"},
+				Textures: map[string]TextureRef{"all": "test:block/all"},
 				Elements: []Element{{
 					From:  [3]float64{0, 0, 0},
 					To:    [3]float64{16, 16, 16},
@@ -238,7 +238,7 @@ func TestRenderIsDeterministic(t *testing.T) {
 // A chain of texture references has to resolve, and a broken one must fail
 // rather than loop.
 func TestResolveTexture(t *testing.T) {
-	m := &Model{Textures: map[string]string{
+	m := &Model{Textures: map[string]TextureRef{
 		"side": "#all",
 		"all":  "minecraft:block/stone",
 		"loop": "#loop",
@@ -251,6 +251,25 @@ func TestResolveTexture(t *testing.T) {
 	}
 	if _, ok := m.ResolveTexture("#loop"); ok {
 		t.Error(`ResolveTexture("#loop") should fail rather than spin`)
+	}
+}
+
+// Glass and its stained variants write their texture as an object carrying a
+// translucency-sort hint alongside the sprite, not a bare string — a real
+// model this renderer must still parse rather than reject outright.
+func TestParseModelTextureWithTranslucencyHint(t *testing.T) {
+	data := []byte(`{
+		"parent": "minecraft:block/cube_all",
+		"textures": {
+			"all": {"force_translucent": true, "sprite": "minecraft:block/glass"}
+		}
+	}`)
+	m, err := ParseModel(data)
+	if err != nil {
+		t.Fatalf("ParseModel: %v", err)
+	}
+	if got, ok := m.ResolveTexture("#all"); !ok || got != "minecraft:block/glass" {
+		t.Errorf(`ResolveTexture("#all") = %q, %v; want "minecraft:block/glass", true`, got, ok)
 	}
 }
 

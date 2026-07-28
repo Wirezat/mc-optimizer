@@ -55,6 +55,28 @@ func TestResolveModel_MergesParentChain(t *testing.T) {
 	}
 }
 
+// items/<id>.json wins over the blockstate when a block ships both.
+func TestResolveModel_ItemDefinitionWinsOverBlockState(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "mod/blockstates/shelf.json",
+		`{"multipart":[{"apply":{"model":"mod:block/shelf_body"}}]}`)
+	writeFixtureFile(t, dir, "mod/items/shelf.json",
+		`{"model":{"type":"minecraft:model","model":"mod:block/shelf_inventory"}}`)
+	writeFixtureFile(t, dir, "mod/models/block/shelf_body.json",
+		`{"elements":[{"from":[0,0,0],"to":[16,16,16],"faces":{"up":{"texture":"#all"}}}]}`)
+	writeFixtureFile(t, dir, "mod/models/block/shelf_inventory.json",
+		`{"elements":[{"from":[0,0,0],"to":[16,16,16],"faces":{"down":{"texture":"#all"}}}]}`)
+
+	l := NewLoader(dir)
+	model, err := l.ResolveModel("mod:item/shelf")
+	if err != nil {
+		t.Fatalf("ResolveModel: %v", err)
+	}
+	if _, ok := model.Elements[0].Faces["down"]; !ok {
+		t.Errorf("got faces %v, want the shelf_inventory model's \"down\" face, not shelf_body's", model.Elements[0].Faces)
+	}
+}
+
 func TestTextureURL_ResolvesExistingTexture(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFile(t, dir, "mod/textures/block/stone.png", "fake-png")

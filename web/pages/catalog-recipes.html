@@ -148,6 +148,12 @@
   const openGroups = new Map(); // modId -> VirtualWindow
 
   const tbody = document.getElementById('recipe-tbody');
+  // Browse mode gives each mod its own header+rows <tbody> pair so
+  // VirtualWindow has a stable container per group; a <tbody> cannot nest
+  // inside another <tbody>, so those pairs are appended as siblings of the
+  // anchor tbody within the table, tracked here so a re-render can remove them.
+  const table = tbody.closest('table');
+  let groupBodies = [];
   const countEl = document.getElementById('recipe-count');
   const searchEl = document.getElementById('recipe-search');
 
@@ -465,6 +471,8 @@
   }
 
   function renderModGroups(mods) {
+    groupBodies.forEach(b => b.remove());
+    groupBodies = [];
     if (!mods.length) {
       tbody.innerHTML = `<tr><td colspan="6" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_recipes')}</td></tr>`;
       return;
@@ -488,12 +496,13 @@
         toggleModGroup(m.mod_id, hdRow, rowsBody);
       });
 
-      tbody.appendChild(hdBody);
-      tbody.appendChild(rowsBody);
+      table.appendChild(hdBody);
+      table.appendChild(rowsBody);
+      groupBodies.push(hdBody, rowsBody);
     }
   }
 
-  tbody.addEventListener('click', async e => {
+  table.addEventListener('click', async e => {
     // expand-trigger or clickable recipe row
     const trigger = e.target.closest('.table-expand-trigger');
     const clickedRow = e.target.closest('tr[data-expand-row]');
@@ -552,7 +561,7 @@
   // so it has to detect which one it's looking at rather than assume either.
   searchEl.addEventListener('input', () => {
     const q = searchEl.value.trim().toLowerCase();
-    for (const hd of tbody.querySelectorAll('.table-group-hd')) {
+    for (const hd of table.querySelectorAll('.table-group-hd')) {
       const modId = hd.dataset.modGroup;
       const modName = hd.querySelector('.catalog-link')?.textContent?.toLowerCase() || '';
       const match = !q || modId.toLowerCase().includes(q) || modName.includes(q);
@@ -641,7 +650,7 @@
 
       // if urlMod is set, auto-expand it
       if (urlMod) {
-        const hd = tbody.querySelector(`.table-group-hd[data-mod-group="${CSS.escape(urlMod)}"]`);
+        const hd = table.querySelector(`.table-group-hd[data-mod-group="${CSS.escape(urlMod)}"]`);
         if (hd) {
           hd.classList.remove('collapsed');
           const rowsBody = hd.closest('tbody').nextElementSibling;

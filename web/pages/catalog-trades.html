@@ -124,6 +124,12 @@
   initHeader();
 
   const tbody = document.getElementById('trade-tbody');
+  // Each group gets its own header+rows <tbody> pair so VirtualWindow has a
+  // stable container per group; a <tbody> cannot nest inside another <tbody>,
+  // so those pairs are appended as siblings of the anchor tbody within the
+  // table, tracked here so a re-render can remove them.
+  const table = tbody.closest('table');
+  let groupBodies = [];
   const countEl = document.getElementById('trade-count');
   const searchEl = document.getElementById('trade-search');
 
@@ -252,6 +258,8 @@
     for (const vw of openGroups.values()) vw.destroy();
     openGroups.clear();
     groupRows.clear();
+    groupBodies.forEach(b => b.remove());
+    groupBodies = [];
 
     if (!trades.length) {
       tbody.innerHTML = `<tr><td colspan="8" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_trades')}</td></tr>`;
@@ -286,8 +294,9 @@
       const rowsBody = document.createElement('tbody');
       hdRow.addEventListener('click', () => toggleGroup(key, hdRow, rowsBody));
 
-      tbody.appendChild(hdBody);
-      tbody.appendChild(rowsBody);
+      table.appendChild(hdBody);
+      table.appendChild(rowsBody);
+      groupBodies.push(hdBody, rowsBody);
     }
   }
 

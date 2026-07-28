@@ -87,6 +87,12 @@
   initHeader();
 
   const tbody    = document.getElementById('fluid-tbody');
+  // Each mod gets its own header+rows <tbody> pair so VirtualWindow has a
+  // stable container per group; a <tbody> cannot nest inside another <tbody>,
+  // so those pairs are appended as siblings of the anchor tbody within the
+  // table, tracked here so a re-render can remove them.
+  const table    = tbody.closest('table');
+  let groupBodies = [];
   const countEl  = document.getElementById('fluid-count');
   const searchEl = document.getElementById('fluid-search');
   const urlMod   = new URLSearchParams(location.search).get('mod') || '';
@@ -154,6 +160,8 @@
     openGroups.clear();
     groupRows.clear();
 
+    groupBodies.forEach(b => b.remove());
+    groupBodies = [];
     tbody.innerHTML = '';
     if (!filtered.length) {
       tbody.innerHTML = `<tr><td colspan="2" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_fluids')}</td></tr>`;
@@ -182,8 +190,9 @@
         toggleGroup(modId, hdRow, rowsBody);
       });
 
-      tbody.appendChild(hdBody);
-      tbody.appendChild(rowsBody);
+      table.appendChild(hdBody);
+      table.appendChild(rowsBody);
+      groupBodies.push(hdBody, rowsBody);
     }
   }
 

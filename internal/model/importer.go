@@ -57,9 +57,12 @@ type ModMetadata struct {
 }
 
 type NormalizedRecipe struct {
-	SourceFile  string
-	RecipeType  string
-	ModID       string
+	SourceFile string
+	RecipeType string
+	ModID      string
+	// SourceModID is the mod whose modfile defines this recipe — may differ
+	// from ModID (the machine's mod) for addon-added recipes.
+	SourceModID string
 	MachineID   string
 	EUPerTick   int64
 	Duration    int

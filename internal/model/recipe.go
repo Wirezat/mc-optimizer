@@ -1,9 +1,11 @@
 package model
 
 type Recipe struct {
-	ID            string   `json:"id"`
-	MachineModID  string   `json:"machine_mod_id"`
-	MachineID     string   `json:"machine_id"`
+	ID           string `json:"id"`
+	MachineModID string `json:"machine_mod_id"`
+	MachineID    string `json:"machine_id"`
+	// SourceModID is the mod that added this recipe; can differ from MachineModID.
+	SourceModID   string   `json:"source_mod_id"`
 	MachineName   *string  `json:"machine_name,omitempty"`
 	Name          *string  `json:"name,omitempty"`
 	DurationTicks int      `json:"duration_ticks"`

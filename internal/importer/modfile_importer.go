@@ -226,7 +226,7 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 
 	// 8. Recipes.
 	for _, r := range def.Recipes {
-		norm := modRecipeToNormalized(r, def.ModID)
+		norm := ModRecipeToNormalized(r, def.ModID)
 		imported, err := imp.db.ImportRecipe(ctx, norm)
 		if err != nil {
 			warn("recipe %s:%s: %v", r.MachineModID, r.MachineID, err)
@@ -290,14 +290,16 @@ func underDir(dir, path string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-// modRecipeToNormalized converts a ModRecipeDef to the NormalizedRecipe the DB expects.
-func modRecipeToNormalized(r model.ModRecipeDef, sourceModID string) model.NormalizedRecipe {
+// ModRecipeToNormalized converts a ModRecipeDef to the NormalizedRecipe the DB expects.
+// sourceModID is the modfile the recipe was defined in, which may differ from r.MachineModID.
+func ModRecipeToNormalized(r model.ModRecipeDef, sourceModID string) model.NormalizedRecipe {
 	norm := model.NormalizedRecipe{
-		SourceFile: sourceModID + ".yml",
-		ModID:      r.MachineModID,
-		MachineID:  r.MachineID,
-		Duration:   r.DurationTicks,
-		Shape:      r.Shape,
+		SourceFile:  sourceModID + ".yml",
+		ModID:       r.MachineModID,
+		SourceModID: sourceModID,
+		MachineID:   r.MachineID,
+		Duration:    r.DurationTicks,
+		Shape:       r.Shape,
 	}
 	if r.EnergyPerTick != nil {
 		norm.EUPerTick = *r.EnergyPerTick

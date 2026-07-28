@@ -136,7 +136,7 @@ func (d *DB) ListMods(ctx context.Context) ([]*model.Mod, error) {
 		       m.description, m.author, m.license,
 		       m.url_source, m.url_modrinth, m.url_wiki, m.url_issues, m.url_discord,
 		       m.modrinth_slug,
-		       (SELECT COUNT(*) FROM recipes r WHERE r.machine_mod_id = m.mod_id) AS recipe_count
+		       (SELECT COUNT(*) FROM recipes r WHERE r.source_mod_id = m.mod_id) AS recipe_count
 		FROM mods m
 		ORDER BY m.name
 	`)
@@ -695,16 +695,19 @@ func (d *DB) UpdateRecipeName(ctx context.Context, recipeID string, name *string
 // machine mod/id and/or by an item or fluid that must appear among the recipe's
 // OUTPUTS (not inputs) — "how is this item/fluid produced", matching the
 // items/fluids/trades catalog pages' "name → recipes producing this" link convention.
+//
+// modID alone filters by source_mod_id; with machineID also set, modID+machineID
+// identify a specific machine (machine_mod_id+machine_id) instead.
 func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID, itemID, fluidModID, fluidID string) ([]*model.Recipe, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT r.id::text, r.machine_mod_id, r.machine_id,
+		SELECT r.id::text, r.machine_mod_id, r.machine_id, r.source_mod_id,
 		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
 		       r.name,
 		       r.duration_ticks, r.eu_per_tick, r.total_eu
 		FROM recipes r
 		LEFT JOIN machine_types mt ON mt.mod_id = r.machine_mod_id AND mt.machine_id = r.machine_id
-		WHERE ($1 = '' OR r.machine_mod_id = $1)
-		  AND ($2 = '' OR r.machine_id = $2)
+		WHERE ( ($2 <> '' AND r.machine_mod_id = $1 AND r.machine_id = $2)
+		     OR ($2 = ''  AND ($1 = '' OR r.source_mod_id = $1)) )
 		  AND ($3 = '' OR EXISTS (
 		        SELECT 1 FROM recipe_item_outputs rio
 		        WHERE rio.recipe_id = r.id AND rio.item_mod_id = $3 AND rio.item_id = $4
@@ -713,7 +716,7 @@ func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID
 		        SELECT 1 FROM recipe_fluid_outputs rfo
 		        WHERE rfo.recipe_id = r.id AND rfo.fluid_mod_id = $5 AND rfo.fluid_id = $6
 		      ))
-		ORDER BY r.machine_mod_id, r.machine_id
+		ORDER BY r.source_mod_id, r.machine_mod_id, r.machine_id
 	`, modID, machineID, itemModID, itemID, fluidModID, fluidID)
 	if err != nil {
 		return nil, fmt.Errorf("db: list recipes catalog: %w", err)
@@ -723,7 +726,7 @@ func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID
 	for rows.Next() {
 		rec := &model.Recipe{}
 		if err := rows.Scan(
-			&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.MachineName, &rec.Name,
+			&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.SourceModID, &rec.MachineName, &rec.Name,
 			&rec.DurationTicks, &rec.EUPerTick, &rec.TotalEU,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan recipe: %w", err)
@@ -735,7 +738,7 @@ func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID
 
 func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*model.Recipe, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT r.id::text, r.machine_mod_id, r.machine_id,
+		SELECT r.id::text, r.machine_mod_id, r.machine_id, r.source_mod_id,
 		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
 		       r.name, r.duration_ticks, r.eu_per_tick, r.total_eu, r.shape
 		FROM recipes r
@@ -745,7 +748,7 @@ func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*
 
 		UNION
 
-		SELECT r.id::text, mi.machine_mod_id, mi.machine_id,
+		SELECT r.id::text, mi.machine_mod_id, mi.machine_id, r.source_mod_id,
 		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
 		       r.name, r.duration_ticks, r.eu_per_tick, r.total_eu, r.shape
 		FROM recipes r
@@ -765,7 +768,7 @@ func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*
 	for rows.Next() {
 		rec := &model.Recipe{}
 		if err := rows.Scan(
-			&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.MachineName, &rec.Name,
+			&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.SourceModID, &rec.MachineName, &rec.Name,
 			&rec.DurationTicks, &rec.EUPerTick, &rec.TotalEU, &rec.Shape,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan recipe: %w", err)
@@ -804,11 +807,11 @@ func (d *DB) CreateRecipe(ctx context.Context, modID string, req *model.CreateRe
 	// 1. Insert recipe.
 	rec := &model.Recipe{}
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO recipes (id, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
-		RETURNING id::text, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu
+		INSERT INTO recipes (id, machine_mod_id, machine_id, source_mod_id, duration_ticks, eu_per_tick, total_eu)
+		VALUES (gen_random_uuid(), $1, $2, $1, $3, $4, $5)
+		RETURNING id::text, machine_mod_id, machine_id, source_mod_id, duration_ticks, eu_per_tick, total_eu
 	`, modID, req.MachineID, req.DurationTicks, req.EUPerTick, int64(req.DurationTicks)*req.EUPerTick,
-	).Scan(&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.DurationTicks, &rec.EUPerTick, &rec.TotalEU); err != nil {
+	).Scan(&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.SourceModID, &rec.DurationTicks, &rec.EUPerTick, &rec.TotalEU); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrConflict
 		}

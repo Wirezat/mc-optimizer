@@ -57,8 +57,8 @@
           <table class="table">
             <thead>
               <tr>
-                <th data-i18n="catalog.fluids.col.fluid_id"></th>
                 <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
+                <th data-i18n="catalog.fluids.col.fluid_id"></th>
               </tr>
             </thead>
             <tbody id="fluid-tbody">
@@ -102,7 +102,6 @@
   function fluidRowEl(fluid) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>
       <td>
         <a href="/catalog/recipes?fluid=${encodeURIComponent(fluid.mod_id + ':' + fluid.fluid_id)}"
            class="row-name-link">
@@ -111,15 +110,16 @@
             <span class="icontext-body"><span class="icontext-text">${esc(fluid.name || fluid.fluid_id)}</span></span>
           </span>
         </a>
-      </td>`;
+      </td>
+      <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>`;
     return [tr];
   }
 
   function skeletonRowEl() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><span class="skeleton-bar" style="width:40%;"></span></td>
-      <td><span class="skeleton-bar" style="width:60%;"></span></td>`;
+      <td><span class="skeleton-bar" style="width:70%;"></span></td>
+      <td><span class="skeleton-bar" style="width:40%;"></span></td>`;
     return [tr];
   }
 

@@ -128,10 +128,10 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 	}
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO recipes
-			(id, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu, content_hash, shape)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+			(id, machine_mod_id, machine_id, source_mod_id, duration_ticks, eu_per_tick, total_eu, content_hash, shape)
+		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
-	`, rec.ModID, rec.MachineID, rec.Duration, rec.EUPerTick, int64(rec.Duration)*rec.EUPerTick, rec.ContentHash, shape,
+	`, rec.ModID, rec.MachineID, rec.SourceModID, rec.Duration, rec.EUPerTick, int64(rec.Duration)*rec.EUPerTick, rec.ContentHash, shape,
 	).Scan(&recipeID); err != nil {
 		return false, fmt.Errorf("db: import recipe: insert recipe: %w", err)
 	}

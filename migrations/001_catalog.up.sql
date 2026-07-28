@@ -121,6 +121,8 @@ CREATE TABLE recipes (
     id             UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
     machine_mod_id TEXT   NOT NULL,
     machine_id     TEXT   NOT NULL,
+    -- The mod whose modfile defines this recipe; may differ from machine_mod_id.
+    source_mod_id  TEXT   NOT NULL REFERENCES mods(mod_id),
     name           TEXT,
     duration_ticks INT    NOT NULL,
     eu_per_tick    BIGINT,
@@ -132,6 +134,7 @@ CREATE TABLE recipes (
 
 CREATE UNIQUE INDEX recipes_content_hash_idx ON recipes (content_hash) WHERE content_hash IS NOT NULL;
 CREATE INDEX ON recipes (machine_mod_id, machine_id);
+CREATE INDEX ON recipes (source_mod_id);
 
 CREATE TABLE recipe_item_inputs (
     id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),

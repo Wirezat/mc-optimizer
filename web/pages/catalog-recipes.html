@@ -343,7 +343,7 @@
     let html = '';
     for (const r of recipes) {
       const expandId = 'rdetail-' + esc(r.id);
-      html += `<tr data-mod="${esc(r.machine_mod_id)}" data-expand-row="${expandId}" style="cursor:pointer;">
+      html += `<tr data-mod="${esc(r.source_mod_id)}" data-expand-row="${expandId}" style="cursor:pointer;">
         <td><span class="table-expand-trigger" data-expand="${expandId}">▸</span></td>
         <td style="max-width:160px;">
           <span class="cell-clamp cell-clamp--scroll"><span class="cell-clamp-inner"><a href="/catalog/machines?mod=${encodeURIComponent(r.machine_mod_id)}&machine=${encodeURIComponent(r.machine_id)}" class="catalog-link">${esc(r.machine_name || r.machine_id)}</a></span></span>
@@ -353,7 +353,7 @@
         <td class="td-muted">${fmt0(r.eu_per_tick)}</td>
         <td class="td-muted">${r.total_eu ? r.total_eu.toLocaleString() : '—'}</td>
       </tr>
-      <tr class="table-expand-row" id="${expandId}" data-recipe-id="${esc(r.id)}" data-mod="${esc(r.machine_mod_id)}">
+      <tr class="table-expand-row" id="${expandId}" data-recipe-id="${esc(r.id)}" data-mod="${esc(r.source_mod_id)}">
         <td colspan="6"><div class="table-expand-body" id="rbody-${esc(r.id)}">
           <span class="td-muted" style="font-size:var(--text-sm);">${t('catalog.empty.loading')}</span>
         </div></td>
@@ -388,7 +388,16 @@
   function recipeRowEls(r) {
     const tmp = document.createElement('tbody');
     tmp.innerHTML = recipeRows([r]);
-    return [...tmp.children]; // [summaryTr, detailTr]
+    const els = [...tmp.children]; // [summaryTr, detailTr]
+
+    // Rows added by later pagination miss ensureMachineLoaded's one-time DOM patch; pull from cache instead.
+    const full = machineCache.get(r.machine_mod_id + ':' + r.machine_id)?.get(r.id);
+    if (full) {
+      const outSummary = [...(full.item_outputs || []), ...(full.fluid_outputs || [])];
+      const el = els[0].querySelector('#summary-out-' + CSS.escape(r.id));
+      if (el) el.textContent = summaryList(outSummary) || '—';
+    }
+    return els;
   }
 
   function recipeSkeletonEls() {
@@ -440,8 +449,12 @@
     await vw.start();
     initCellClampScroll(rowsBody);
 
-    const machines = [...new Set(recipes.map(r => r.machine_id))];
-    for (const machineId of machines) ensureMachineLoaded(modId, machineId);
+    // A mod group's recipes can span several machine mods, so key by each recipe's own machine.
+    const machines = [...new Set(recipes.map(r => r.machine_mod_id + ':' + r.machine_id))];
+    for (const key of machines) {
+      const [mId, machId] = key.split(':');
+      ensureMachineLoaded(mId, machId);
+    }
   }
 
   async function loadModGroup(modId) {
@@ -580,8 +593,8 @@
 
     const byMod = new Map();
     for (const r of recipes) {
-      if (!byMod.has(r.machine_mod_id)) byMod.set(r.machine_mod_id, []);
-      byMod.get(r.machine_mod_id).push(r);
+      if (!byMod.has(r.source_mod_id)) byMod.set(r.source_mod_id, []);
+      byMod.get(r.source_mod_id).push(r);
     }
 
     let html = '';

@@ -148,12 +148,8 @@
   const openGroups = new Map(); // modId -> VirtualWindow
 
   const tbody = document.getElementById('recipe-tbody');
-  // Browse mode gives each mod its own header+rows <tbody> pair so
-  // VirtualWindow has a stable container per group; a <tbody> cannot nest
-  // inside another <tbody>, so those pairs are appended as siblings of the
-  // anchor tbody within the table, tracked here so a re-render can remove them.
   const table = tbody.closest('table');
-  let groupBodies = [];
+  let groupBodies = []; // sibling <tbody> pairs appended per mod (browse mode)
   const countEl = document.getElementById('recipe-count');
   const searchEl = document.getElementById('recipe-search');
 
@@ -389,10 +385,6 @@
     return byId;
   }
 
-  // One recipe's markup as real elements — recipeRows(recipes) (unchanged
-  // above) still serves renderFilteredRecipes, which renders a whole
-  // pre-filtered array as one string; this is the same markup, one recipe at
-  // a time, as elements VirtualWindow can append/prepend/remove individually.
   function recipeRowEls(r) {
     const tmp = document.createElement('tbody');
     tmp.innerHTML = recipeRows([r]);
@@ -427,10 +419,6 @@
 
   async function startModGroup(modId, hdRow, rowsBody) {
     const recipes = await loadModGroup(modId);
-    // Unlike the other catalog pages this load is genuinely async, so the
-    // group may have been collapsed again while the fetch was in flight —
-    // toggleModGroup saw no registered VirtualWindow to destroy, so nothing
-    // else stops this call from populating a collapsed group.
     if (hdRow.classList.contains('collapsed')) return;
     const countBadge = hdRow.querySelector('.mod-recipe-count');
     if (countBadge) countBadge.textContent = recipes.length;
@@ -447,10 +435,6 @@
       renderRow: recipeRowEls,
       renderSkeletonRow: recipeSkeletonEls,
     });
-    // A concurrent expand for the same group (collapse+expand while our fetch
-    // was in flight) may already have registered its own instance. Overwriting
-    // the map entry would orphan it — still registered on the shared ancestor
-    // scroll dispatcher, still rendering into this same tbody — so destroy it.
     openGroups.get(modId)?.destroy();
     openGroups.set(modId, vw);
     await vw.start();
@@ -460,8 +444,6 @@
     for (const machineId of machines) ensureMachineLoaded(modId, machineId);
   }
 
-  // Load and cache a mod's full recipe list. Browse mode only — machine/
-  // item/fluid filters never reach this path (see "Filtered mode" below).
   async function loadModGroup(modId) {
     if (modRecipeCache.has(modId)) return modRecipeCache.get(modId);
     const res = await apiFetch(`/api/recipes?mod=${encodeURIComponent(modId)}`);
@@ -554,11 +536,6 @@
     ioCache.set(recipeID, html);
   });
 
-  // Browse mode wraps each group as a header <tbody> (one <tr>) followed by
-  // a sibling rows <tbody> (VirtualWindow's container); filtered mode (see
-  // renderFilteredRecipes, untouched) still renders flat <tr> siblings in
-  // the one shared #recipe-tbody. Both DOM shapes reach this same listener,
-  // so it has to detect which one it's looking at rather than assume either.
   searchEl.addEventListener('input', () => {
     const q = searchEl.value.trim().toLowerCase();
     for (const hd of table.querySelectorAll('.table-group-hd')) {
@@ -567,13 +544,10 @@
       const match = !q || modId.toLowerCase().includes(q) || modName.includes(q);
       const hdBody = hd.closest('tbody');
       if (hdBody !== tbody) {
-        // Browse mode: header + rows are separate sibling <tbody>s.
         hdBody.hidden = !match;
         const rowsBody = hdBody.nextElementSibling;
         if (rowsBody) rowsBody.hidden = !match;
       } else {
-        // Filtered mode: header and its recipe row-pairs are flat <tr>
-        // siblings directly inside the shared tbody.
         hd.hidden = !match;
         let el = hd.nextElementSibling;
         while (el && !el.classList.contains('table-group-hd')) {

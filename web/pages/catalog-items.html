@@ -88,12 +88,8 @@
   initHeader();
 
   const tbody    = document.getElementById('item-tbody');
-  // Each mod gets its own header+rows <tbody> pair so VirtualWindow has a
-  // stable container per group; a <tbody> cannot nest inside another <tbody>,
-  // so those pairs are appended as siblings of the anchor tbody within the
-  // table, tracked here so a re-render can remove them.
   const table    = tbody.closest('table');
-  let groupBodies = [];
+  let groupBodies = []; // sibling <tbody> pairs appended per mod
   const countEl  = document.getElementById('item-count');
   const searchEl = document.getElementById('item-search');
   const urlMod   = new URLSearchParams(location.search).get('mod') || '';

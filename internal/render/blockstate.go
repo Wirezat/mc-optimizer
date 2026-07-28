@@ -17,8 +17,7 @@ type blockState struct {
 	Multipart []multipartEntry        `json:"multipart"`
 }
 
-// multipartEntry is one layer of a multipart blockstate. Only Apply.Model is
-// read; `when` is ignored since only the first entry is ever used.
+// multipartEntry is one layer of a multipart blockstate. Only Apply.Model is read.
 type multipartEntry struct {
 	Apply variantEntry `json:"apply"`
 }
@@ -48,9 +47,8 @@ func (v *variantEntry) UnmarshalJSON(data []byte) error {
 }
 
 // itemDefinition is vanilla's per-item model file (assets/<ns>/items/<id>.json,
-// 1.21.2+), read only for its simplest entry type "minecraft:model" — a bare
-// model reference. Other entry types (composite, select, condition, ...)
-// depend on item state this renderer doesn't have, so they're left unresolved.
+// 1.21.2+). Only its "minecraft:model" entry type (a bare model reference) is
+// read; other entry types (composite, select, condition, ...) are left unresolved.
 type itemDefinition struct {
 	Model itemModelEntry `json:"model"`
 }
@@ -62,9 +60,7 @@ type itemModelEntry struct {
 
 // resolveItemDefinition returns modID/itemID's model ref from its
 // items/<id>.json, or ok=false if the file is missing or not a bare
-// "minecraft:model" entry. Checked ahead of resolveBlockState: it points at
-// the model vanilla itself draws standalone, where a blockstate model may
-// assume a placement neighbour.
+// "minecraft:model" entry.
 func (l *Loader) resolveItemDefinition(modID, itemID string) (ref string, ok bool) {
 	path := filepath.Join(l.assetsDir, modID, "items", itemID+".json")
 	data, err := os.ReadFile(path)

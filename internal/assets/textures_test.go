@@ -69,8 +69,6 @@ func TestResolveItemTexture_Missing(t *testing.T) {
 	}
 }
 
-// modID/itemID come from the DB, not straight off a request, but a resolver
-// that turns them into a path should still refuse to walk out of assetsDir.
 func TestResolveItemTexture_RejectsEscapingSegments(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "secret.png")
@@ -124,9 +122,6 @@ func TestResolveFluidTexture_Missing(t *testing.T) {
 	}
 }
 
-// Some items have no sprite at all because the game draws a 3D model for them —
-// MI's pipes and cables. The resolver points those at the render endpoint, so a
-// caller can put the URL in an <img> without knowing which kind it got.
 func TestResolveItemTexture_ModelFallback(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "modern_industrialization/models/item/copper_cable.json")
@@ -141,9 +136,6 @@ func TestResolveItemTexture_ModelFallback(t *testing.T) {
 	}
 }
 
-// A mod can omit a block-item's own item model and let it fall back to the
-// block's blockstate; the resolver only needs the file to exist, the render
-// endpoint does the actual blockstate lookup.
 func TestResolveItemTexture_BlockStateFallback(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "mod/blockstates/plain_block.json")
@@ -158,7 +150,6 @@ func TestResolveItemTexture_BlockStateFallback(t *testing.T) {
 	}
 }
 
-// A model beats a flat texture file when both exist.
 func TestResolveItemTexture_ModelWinsOverTexture(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "mod/textures/item/thing.png")
@@ -170,8 +161,6 @@ func TestResolveItemTexture_ModelWinsOverTexture(t *testing.T) {
 	}
 }
 
-// Mods keep fluid art under textures/fluid/, but vanilla's own water and lava
-// live in textures/block/. Missing this leaves minecraft:water with no icon.
 func TestResolveFluidTexture_VanillaBlockFallback(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "minecraft/textures/block/water_still.png")
@@ -186,8 +175,6 @@ func TestResolveFluidTexture_VanillaBlockFallback(t *testing.T) {
 	}
 }
 
-// The mod layout wins where both exist, so a mod cannot be shadowed by an
-// unrelated block texture that happens to share the name.
 func TestResolveFluidTexture_FluidDirWinsOverBlock(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "mod/textures/fluid/steam_still.png")

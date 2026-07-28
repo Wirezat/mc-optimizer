@@ -124,12 +124,8 @@
   initHeader();
 
   const tbody = document.getElementById('trade-tbody');
-  // Each group gets its own header+rows <tbody> pair so VirtualWindow has a
-  // stable container per group; a <tbody> cannot nest inside another <tbody>,
-  // so those pairs are appended as siblings of the anchor tbody within the
-  // table, tracked here so a re-render can remove them.
   const table = tbody.closest('table');
-  let groupBodies = [];
+  let groupBodies = []; // sibling <tbody> pairs appended per group
   const countEl = document.getElementById('trade-count');
   const searchEl = document.getElementById('trade-search');
 
@@ -202,10 +198,6 @@
       <td>${itemCell(tr.result_mod_id, tr.result_item_id, tr.result_name)}${enchanted}</td>
       <td class="td-muted" style="text-align:right;">${tr.max_uses ?? '—'}</td>
       <td class="td-muted" style="text-align:right;">${tr.xp ?? '—'}</td>`;
-    // Per-row, not once per table: rows are built off-DOM as the virtual
-    // window scrolls, so the infocards' data-i18n text (the "view in catalog"
-    // link) has to be filled in here — the page-load applyI18n() ran long
-    // before this row existed.
     applyI18n(row);
     initInfocards(row);
     return [row];
@@ -266,9 +258,6 @@
       return;
     }
 
-    // Grouped by defining mod as well as profession: the trade_rebalance
-    // datapack redefines professions minecraft already has, so "armorer"
-    // alone would label two different groups identically.
     const groupOf = tr => tr.source_mod_id + ' ' + tr.profession;
     const byGroup = new Map();
     for (const tr of trades) {

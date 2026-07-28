@@ -13,9 +13,8 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/assets"
 )
 
-// Loader reads models and textures out of the extracted asset tree — the same
-// assets/<mod>/... layout the mod importer writes, so a model can reference any
-// texture any imported mod shipped.
+// Loader reads models and textures out of the extracted asset tree
+// (assets/<mod>/...).
 type Loader struct {
 	assetsDir string
 }
@@ -24,8 +23,7 @@ func NewLoader(assetsDir string) *Loader {
 	return &Loader{assetsDir: assetsDir}
 }
 
-// maxParentDepth caps parent chains. Vanilla nests a few deep; anything beyond
-// this is a cycle, and following it would hang the request.
+// maxParentDepth caps parent chains.
 const maxParentDepth = 8
 
 // ResolveModel returns ref's fully merged model (parent chain walked, item
@@ -59,8 +57,6 @@ func (l *Loader) LoadScene(ref string) (*Scene, error) {
 			}
 			tex, err := l.LoadTexture(path)
 			if err != nil {
-				// A missing texture drops its face rather than failing the whole
-				// icon: a model is still worth drawing without one of its sides.
 				continue
 			}
 			textures[path] = tex
@@ -73,8 +69,6 @@ func (l *Loader) loadModelChain(ref string, depth int) (*Model, error) {
 	if depth > maxParentDepth {
 		return nil, fmt.Errorf("render: model %q: parent chain too deep, likely a cycle", ref)
 	}
-	// Checked on every hop, not just the one that came from the URL: a model's
-	// `parent` is content, and a `..` in it would otherwise walk out of the tree.
 	if err := SanitizeRef(ref); err != nil {
 		return nil, err
 	}
@@ -82,8 +76,7 @@ func (l *Loader) loadModelChain(ref string, depth int) (*Model, error) {
 	path := filepath.Join(l.assetsDir, modID, "models", filepath.FromSlash(rel)+".json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		// Only tried at the top of the chain: a `parent` is always a literal
-		// model reference a mod wrote, never a block ID to look up.
+		// Only tried at the top of the chain.
 		if depth == 0 {
 			blockID := rel
 			if i := strings.LastIndexByte(rel, '/'); i >= 0 {
@@ -151,8 +144,6 @@ func (l *Loader) TextureURL(ref string) (url string, ok bool) {
 
 // LoadTexture decodes one texture by its namespaced reference.
 func (l *Loader) LoadTexture(ref string) (*Texture, error) {
-	// A texture reference comes out of a model's own `textures` map, so it is
-	// content and gets the same check the model reference did.
 	if err := SanitizeRef(ref); err != nil {
 		return nil, err
 	}
@@ -185,9 +176,7 @@ func (l *Loader) LoadTexture(ref string) (*Texture, error) {
 	}, nil
 }
 
-// SanitizeRef rejects references that would escape the asset tree, checked
-// on every ref that becomes a path (model parents, texture names), not just
-// the one from the URL.
+// SanitizeRef rejects references that would escape the asset tree.
 func SanitizeRef(ref string) error {
 	if ref == "" {
 		return fmt.Errorf("render: empty model reference")

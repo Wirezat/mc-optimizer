@@ -74,10 +74,6 @@ func TestResolveBlockState_VariantListTakesFirst(t *testing.T) {
 	}
 }
 
-// A block with no "variants" at all — only "multipart", the format newer
-// vanilla blocks (shelves, and others with several independently-placed
-// layers) use even for their base placement state. The first entry stands in
-// for the whole thing.
 func TestResolveBlockState_MultipartTakesFirstEntry(t *testing.T) {
 	dir := t.TempDir()
 	writeBlockstateFixture(t, dir, "mod/blockstates/shelf.json",
@@ -96,8 +92,6 @@ func TestResolveBlockState_MultipartTakesFirstEntry(t *testing.T) {
 	}
 }
 
-// The simple, unambiguous item-definition case: a bare "minecraft:model"
-// entry naming one model, the format a shelf uses for its standalone icon.
 func TestResolveItemDefinition_ModelEntry(t *testing.T) {
 	dir := t.TempDir()
 	writeBlockstateFixture(t, dir, "mod/items/shelf.json",

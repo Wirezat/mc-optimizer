@@ -254,9 +254,6 @@ func TestResolveTexture(t *testing.T) {
 	}
 }
 
-// Glass and its stained variants write their texture as an object carrying a
-// translucency-sort hint alongside the sprite, not a bare string — a real
-// model this renderer must still parse rather than reject outright.
 func TestParseModelTextureWithTranslucencyHint(t *testing.T) {
 	data := []byte(`{
 		"parent": "minecraft:block/cube_all",

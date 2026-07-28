@@ -184,14 +184,19 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 		})
 	}
 
-	// Fluids
+	// Fluids. id can be "mod:fluid" — a modfile can catalog another mod's fluid
+	// (e.g. MI listing vanilla lava/water) to attach texture/name info to it.
 	for _, r := range raw.Fluids {
 		if isSentinel(r.ID) {
 			continue
 		}
+		fluidModID, fluidID, err := splitRef(r.ID, raw.ModID)
+		if err != nil {
+			return nil, fmt.Errorf("modfile: fluid id %q: %w", r.ID, err)
+		}
 		def.Fluids = append(def.Fluids, model.FluidDef{
-			ModID:   raw.ModID,
-			FluidID: r.ID,
+			ModID:   fluidModID,
+			FluidID: fluidID,
 			LangKey: strOrSentinel(r.LangKey),
 		})
 	}

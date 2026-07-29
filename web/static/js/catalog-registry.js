@@ -21,6 +21,14 @@ let   _loaded  = null;        // in-flight or settled load promise
 
 const keyFor = (modID, id, isFluid) => `${isFluid ? 'fluid:' : ''}${modID}:${id}`;
 
+// Items with a baked-in enchantment glint regardless of actual enchantments —
+// vanilla hardcodes this per-item rather than exposing it as data, so it's a
+// fixed list here rather than something read off the catalog.
+const GLINT_ITEMS = new Set([
+    keyFor('minecraft', 'enchanted_golden_apple', false),
+    keyFor('minecraft', 'enchanted_book', false),
+]);
+
 // Animated textures are vertical strips of frames in one file — fluids above
 // all. These wirezat-ui classes present a strip: one holds its first cell, the
 // other plays through them. Deliberately not exported: iconImageHTML is the one
@@ -197,8 +205,19 @@ export function iconImageHTML(entry, { cls = '', placeholder = true, dataset = n
     // onerror clears the src rather than hiding the element, so a texture that
     // vanished between catalog load and render degrades to the same empty box
     // an unknown one gets.
-    return `<img${classAttr}${styleAttr} src="${esc(entry.textureUrl)}"${data}` +
+    const img = `<img${classAttr}${styleAttr} src="${esc(entry.textureUrl)}"${data}` +
            ` alt="" loading="lazy" decoding="async" onerror="this.removeAttribute('src')">`;
+
+    if (!GLINT_ITEMS.has(keyFor(entry.modID, entry.id, entry.isFluid))) return img;
+
+    // wui-ui's .glint is a plain sweep overlay with no size opinion of its
+    // own — sharing the slot's own class on the wrapper (rather than
+    // inventing a new one) makes it inherit that slot's sizing exactly,
+    // fixed-px or percentage-of-parent alike, with no separate case needed.
+    // Only cls, not sheetCls: object-fit/object-position are img-only and
+    // meaningless on the wrapper.
+    const wrapCls = esc(cls ? `${cls} glint` : 'glint');
+    return `<span class="${wrapCls}">${img}</span>`;
 }
 
 /**

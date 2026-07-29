@@ -700,23 +700,50 @@ func (d *DB) UpdateRecipeName(ctx context.Context, recipeID string, name *string
 // identify a specific machine (machine_mod_id+machine_id) instead.
 func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID, itemID, fluidModID, fluidID string) ([]*model.Recipe, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT r.id::text, r.machine_mod_id, r.machine_id, r.source_mod_id,
-		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
-		       r.name,
-		       r.duration_ticks, r.eu_per_tick, r.total_eu
-		FROM recipes r
-		LEFT JOIN machine_types mt ON mt.mod_id = r.machine_mod_id AND mt.machine_id = r.machine_id
-		WHERE ( ($2 <> '' AND r.machine_mod_id = $1 AND r.machine_id = $2)
-		     OR ($2 = ''  AND ($1 = '' OR r.source_mod_id = $1)) )
-		  AND ($3 = '' OR EXISTS (
-		        SELECT 1 FROM recipe_item_outputs rio
-		        WHERE rio.recipe_id = r.id AND rio.item_mod_id = $3 AND rio.item_id = $4
-		      ))
-		  AND ($5 = '' OR EXISTS (
-		        SELECT 1 FROM recipe_fluid_outputs rfo
-		        WHERE rfo.recipe_id = r.id AND rfo.fluid_mod_id = $5 AND rfo.fluid_id = $6
-		      ))
-		ORDER BY r.source_mod_id, r.machine_mod_id, r.machine_id
+		SELECT id, machine_mod_id, machine_id, source_mod_id, machine_name, name,
+		       duration_ticks, eu_per_tick, total_eu
+		FROM (
+			SELECT r.id::text AS id, r.machine_mod_id, r.machine_id, r.source_mod_id,
+			       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name) AS machine_name,
+			       r.name,
+			       r.duration_ticks, r.eu_per_tick, r.total_eu
+			FROM recipes r
+			LEFT JOIN machine_types mt ON mt.mod_id = r.machine_mod_id AND mt.machine_id = r.machine_id
+			WHERE ( ($2 <> '' AND r.machine_mod_id = $1 AND r.machine_id = $2)
+			     OR ($2 = ''  AND ($1 = '' OR r.source_mod_id = $1)) )
+			  AND ($3 = '' OR EXISTS (
+			        SELECT 1 FROM recipe_item_outputs rio
+			        WHERE rio.recipe_id = r.id AND rio.item_mod_id = $3 AND rio.item_id = $4
+			      ))
+			  AND ($5 = '' OR EXISTS (
+			        SELECT 1 FROM recipe_fluid_outputs rfo
+			        WHERE rfo.recipe_id = r.id AND rfo.fluid_mod_id = $5 AND rfo.fluid_id = $6
+			      ))
+
+			UNION
+
+			-- Interface-inherited recipes: only surfaced when a specific machine
+			-- is picked (mod-level browsing keeps showing pure attribution, per
+			-- the "attribute recipes to the mod that added them" fix — this is
+			-- purely additive for the machine drill-down view).
+			SELECT r.id::text AS id, mi.machine_mod_id, mi.machine_id, r.source_mod_id,
+			       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name) AS machine_name,
+			       r.name,
+			       r.duration_ticks, r.eu_per_tick, r.total_eu
+			FROM recipes r
+			JOIN machine_interfaces mi ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
+			LEFT JOIN machine_types mt ON mt.mod_id = mi.machine_mod_id AND mt.machine_id = mi.machine_id
+			WHERE $2 <> '' AND mi.machine_mod_id = $1 AND mi.machine_id = $2
+			  AND ($3 = '' OR EXISTS (
+			        SELECT 1 FROM recipe_item_outputs rio
+			        WHERE rio.recipe_id = r.id AND rio.item_mod_id = $3 AND rio.item_id = $4
+			      ))
+			  AND ($5 = '' OR EXISTS (
+			        SELECT 1 FROM recipe_fluid_outputs rfo
+			        WHERE rfo.recipe_id = r.id AND rfo.fluid_mod_id = $5 AND rfo.fluid_id = $6
+			      ))
+		) sub
+		ORDER BY source_mod_id, machine_mod_id, machine_id
 	`, modID, machineID, itemModID, itemID, fluidModID, fluidID)
 	if err != nil {
 		return nil, fmt.Errorf("db: list recipes catalog: %w", err)

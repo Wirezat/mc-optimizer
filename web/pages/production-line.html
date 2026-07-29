@@ -297,9 +297,10 @@
     _pl = await res.json();
     if (tRes?.ok) _tiers = await tRes.json();
 
-    document.title = 'MC Optimizer — ' + _pl.name;
-    document.getElementById('page-title').textContent = _pl.name;
-    document.getElementById('bc-pl').textContent      = _pl.name;
+    const plTitle = _pl.target_item_name || _pl.target_item_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    document.title = 'MC Optimizer — ' + plTitle;
+    document.getElementById('page-title').textContent = plTitle;
+    document.getElementById('bc-pl').textContent      = plTitle;
 
     if (_pl.factory_id) {
       const fRes = await apiFetch('/api/factories/' + _pl.factory_id);

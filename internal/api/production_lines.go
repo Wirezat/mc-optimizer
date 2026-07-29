@@ -394,7 +394,6 @@ func ConfirmProductionLineHandler(database *db.DB, svc *service.PLService) http.
 
 		var body struct {
 			DraftID string `json:"draft_id"`
-			Name    string `json:"name"`
 		}
 		if !decodeJSON(w, r, &body) {
 			return
@@ -404,15 +403,9 @@ func ConfirmProductionLineHandler(database *db.DB, svc *service.PLService) http.
 			errBadRequest(w, "draft_id must be a valid UUID")
 			return
 		}
-		body.Name = strings.TrimSpace(body.Name)
-		if body.Name == "" {
-			errBadRequest(w, "name is required")
-			return
-		}
 
 		detail, err := svc.Confirm(r.Context(), factoryID, service.ConfirmInput{
 			DraftID: draftID,
-			Name:    body.Name,
 		})
 		if err != nil {
 			switch {
@@ -655,40 +648,6 @@ func DeleteProductionLineHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		if err := database.DeleteProductionLine(r.Context(), plID); err != nil {
-			if errors.Is(err, db.ErrNotFound) {
-				errNotFound(w)
-			} else {
-				errInternal(w, err)
-			}
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-// RenamePLHandler updates the name of a production line.
-func RenamePLHandler(database *db.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID := userIDFromContext(r.Context())
-		plID, ok := parseUUIDParam(w, r, "line_id")
-		if !ok {
-			return
-		}
-		if err := requirePLOwner(r, w, database, plID, userID); err != nil {
-			return
-		}
-		var body struct {
-			Name string `json:"name"`
-		}
-		if !decodeJSON(w, r, &body) {
-			return
-		}
-		body.Name = strings.TrimSpace(body.Name)
-		if body.Name == "" {
-			errBadRequest(w, "name is required")
-			return
-		}
-		if err := database.RenameProductionLine(r.Context(), plID, body.Name); err != nil {
 			if errors.Is(err, db.ErrNotFound) {
 				errNotFound(w)
 			} else {

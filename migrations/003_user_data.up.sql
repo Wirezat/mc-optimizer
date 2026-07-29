@@ -28,7 +28,6 @@ CREATE TABLE production_lines (
     factory_id     UUID    REFERENCES factories(id) ON DELETE CASCADE,
     pl_group_id    UUID    REFERENCES pl_groups(id) ON DELETE SET NULL,
     parent_pl_id   UUID    REFERENCES production_lines(id) ON DELETE SET NULL,
-    name           TEXT    NOT NULL,
     target_mod_id  TEXT    NOT NULL,
     target_item_id TEXT    NOT NULL,
     rate_num       INT     NOT NULL,

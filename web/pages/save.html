@@ -237,7 +237,7 @@
       });
       const lines = res && res.ok ? (await res.json()).production_lines : [];
       if (lines.length > 0) {
-        const list = lines.map(pl => `<li>${esc(pl.factory_name)} — ${esc(pl.name)}</li>`).join('');
+        const list = lines.map(pl => `<li>${esc(pl.factory_name)} — ${esc(pl.target_item_name)}</li>`).join('');
         openGenericModal({
           name:         'mods-confirm',
           title:        t('save.mods_confirm.title'),

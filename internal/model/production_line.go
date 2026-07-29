@@ -11,7 +11,6 @@ type ProductionLine struct {
 	ID               uuid.UUID       `json:"id"`
 	FactoryID        *uuid.UUID      `json:"factory_id,omitempty"`
 	ParentPLID       *uuid.UUID      `json:"parent_pl_id,omitempty"`
-	Name             string          `json:"name"`
 	TargetModID      string          `json:"target_mod_id"`
 	TargetItemID     string          `json:"target_item_id"`
 	TargetIsFluid    bool            `json:"target_is_fluid"`

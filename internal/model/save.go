@@ -31,10 +31,10 @@ type PLGroup struct {
 }
 
 type DependentProductionLine struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	FactoryID   uuid.UUID `json:"factory_id"`
-	FactoryName string    `json:"factory_name"`
+	ID             uuid.UUID `json:"id"`
+	TargetItemName string    `json:"target_item_name"`
+	FactoryID      uuid.UUID `json:"factory_id"`
+	FactoryName    string    `json:"factory_name"`
 }
 
 type FactorySource struct {

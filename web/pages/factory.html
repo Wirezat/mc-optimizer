@@ -204,7 +204,6 @@
                     <col class="col-check" />
                     <col class="col-warn" />
                     <col />
-                    <col />
                     <col class="col-rate" />
                     <col class="col-actions" />
                   </colgroup>
@@ -213,14 +212,13 @@
                       <th class="col-drag"></th>
                       <th class="col-check"><input type="checkbox" id="check-all" data-i18n-title="common.select_all" /></th>
                       <th class="col-warn"></th>
-                      <th data-i18n="factory.pl.col.name"></th>
                       <th data-i18n="factory.pl.col.target"></th>
                       <th data-i18n="factory.pl.col.rate"></th>
                       <th class="col-actions"></th>
                     </tr>
                   </thead>
                   <tbody id="pl-tbody">
-                    <tr><td colspan="7" class="td-faint" style="padding:var(--gap-control) var(--pad-cell);" data-i18n="common.loading"></td></tr>
+                    <tr><td colspan="6" class="td-faint" style="padding:var(--gap-control) var(--pad-cell);" data-i18n="common.loading"></td></tr>
                   </tbody>
                 </table>
               </div>
@@ -432,13 +430,7 @@
       <td class="col-drag"></td>
       <td class="col-check"></td>
       <td class="col-warn"></td>
-      <td>
-        <div class="td-editable bulk-writable" data-wui-field="name" data-wui-bulk-enumerate>
-          <span class="td-val td-faint" data-bulk-count></span>
-          <input class="td-input" type="text" placeholder="${esc(t('factory.pl.bulk_name_placeholder'))}" />
-        </div>
-      </td>
-      <td></td>
+      <td><span class="td-faint" data-bulk-count></span></td>
       <td></td>
       <td class="col-actions">
         <button class="btn btn-icon btn-sm btn-icon-color" style="--_icon-color:var(--danger)" data-bulk-delete title="${esc(t('common.delete'))}">🗑</button>
@@ -460,7 +452,7 @@
 
     if (!_pls || _pls.length === 0) {
       plTbody.innerHTML = bulkRowHTML() +
-        Array(5).fill('<tr><td colspan="7" style="height:2.2rem;"></td></tr>').join('');
+        Array(5).fill('<tr><td colspan="6" style="height:2.2rem;"></td></tr>').join('');
       bulkRowCtl = initBulkRow(plTable);
       plTbody.querySelector('[data-bulk-count]').dataset.bulkCountTpl = '{n} ' + t('factory.pl.selected');
       bulkRowCtl.refresh();
@@ -499,7 +491,7 @@
           <td class="col-drag"><span class="drag-handle" title="${esc(t('factory.pl.drag_group'))}">⠿</span></td>
           <td class="col-check"></td>
           <td class="col-warn">${groupModWarn}</td>
-          <td colspan="4">
+          <td colspan="3">
             <div class="group-hd-inner">
               <span class="group-hd-arrow">▾</span>
               <span class="group-hd-name">${esc(g.name)}</span>
@@ -510,14 +502,14 @@
           </td>
         </tr>`;
         for (const pl of pls) html += plRow(pl, g.id);
-        html += `<tr class="row-spacer"><td colspan="7"></td></tr>`;
+        html += `<tr class="row-spacer"><td colspan="6"></td></tr>`;
       } else {
         html += plRow(entry.pl);
       }
     }
 
     // End-zone: always-visible drop target for "ungrouped at end of list"
-    html += `<tr class="wui-drop-zone-end" data-wui-drop-zone-end><td colspan="7"></td></tr>`;
+    html += `<tr class="wui-drop-zone-end" data-wui-drop-zone-end><td colspan="6"></td></tr>`;
 
     plTbody.innerHTML = html;
     document.getElementById('check-all').checked = false;
@@ -555,16 +547,11 @@
     const groupAttr  = groupId ? ` data-group="${esc(groupId)}"` : '';
     const chkCls     = archived ? ' pl-archived-check' : '';
     const delBtn     = archived ? '' : `<button class="btn btn-icon btn-sm btn-icon-color" style="--_icon-color:var(--danger)" data-plid="${esc(pl.id)}" data-action="delete" title="${esc(t('factory.pl.confirm_delete_single'))}">🗑</button>`;
-    return `<tr data-plid="${esc(pl.id)}" data-id="${esc(pl.id)}"${rowCls}${groupAttr}>
+    const search = esc((pl.target_item_name || pl.target_item_id || '').toLowerCase());
+    return `<tr data-plid="${esc(pl.id)}" data-id="${esc(pl.id)}" data-search="${search}"${rowCls}${groupAttr}>
       <td class="col-drag"><span class="drag-handle" title="${esc(t('factory.pl.drag_reorder'))}">⠿</span></td>
       <td class="col-check"><input type="checkbox" class="pl-check${chkCls}" data-id="${esc(pl.id)}" title="${esc(t('common.select_all'))}" /></td>
       <td class="col-warn">${pl.mod_missing ? modMissingBadge() : ''}</td>
-      <td>
-        <div class="td-editable" data-wui-field="name">
-          <span class="td-val">${esc(pl.name)}</span>
-          <input class="td-input" type="text" value="${esc(pl.name)}" />
-        </div>
-      </td>
       <td>${itemHtml(pl.target_item_id, pl.target_item_name, pl.target_mod_id, 'td-muted', pl.target_is_fluid)}</td>
       <td>${rateHtml(pl.rate_num, pl.rate_den, pl.time_unit, 'pl-rate-val')}${euRollupHtml(pl)}</td>
       <td class="col-actions">
@@ -810,32 +797,6 @@
     window.location.href = '/production-lines/' + row.dataset.plid;
   });
 
-  // ── Inline cell write → PATCH name ────────────────────
-  plTable.addEventListener('wui:cell-write', async e => {
-    const { field, value, row } = e.detail;
-    if (field !== 'name') return;
-    const plid = row.dataset.plid;
-    if (!plid) return;
-    await apiFetch('/api/production-lines/' + plid, {
-      method: 'PATCH', body: JSON.stringify({ name: value }),
-    });
-    const pl = _pls.find(p => p.id === plid);
-    if (pl) pl.name = value;
-  });
-
-  // ── Bulk write → PATCH name ────────────────────────────
-  plTable.addEventListener('wui:bulk-write', async e => {
-    const { field, value, row } = e.detail;
-    if (field !== 'name') return;
-    const plid = row.dataset.plid;
-    if (!plid) return;
-    await apiFetch('/api/production-lines/' + plid, {
-      method: 'PATCH', body: JSON.stringify({ name: value }),
-    });
-    const pl = _pls.find(p => p.id === plid);
-    if (pl) pl.name = value;
-  });
-
   // ── Archived toggle ────────────────────────────────────
   document.getElementById('archived-toggle').addEventListener('click', function() {
     this.classList.toggle('active');
@@ -889,8 +850,7 @@
       }
       let anyMatch = false;
       plRows.forEach(r => {
-        const name  = r.querySelector('.td-val')?.textContent.toLowerCase() ?? '';
-        const match = !q || name.includes(q);
+        const match = !q || (r.dataset.search ?? '').includes(q);
         r.style.display = match ? '' : 'none';
         if (match) anyMatch = true;
       });
@@ -904,8 +864,7 @@
         sib = sib.previousElementSibling;
       }
       if (sib?.classList.contains('table-group-hd')) return; // handled above
-      const name  = r.querySelector('.td-val')?.textContent.toLowerCase() ?? '';
-      const match = !q || name.includes(q);
+      const match = !q || (r.dataset.search ?? '').includes(q);
       r.style.display = match ? '' : 'none';
     });
   });
@@ -917,13 +876,16 @@
     new WuiAutocomplete({
       inputEl:   filterEl,
       dropEl:    document.getElementById('pl-filter-ac'),
-      primary:   pl => pl.name,
-      secondary: pl => pl.target_item_name || pl.target_item_id,
+      primary:   pl => pl.target_item_name || pl.target_item_id,
+      secondary: pl => fmtRateFrac(pl.rate_num, pl.rate_den) + '/' + pl.time_unit,
       fetch(q, offset) {
-        const rows = wuiFilter(_pls, q, ['name', 'target_item_name', 'target_item_id']);
+        const rows = wuiFilter(_pls, q, ['target_item_name', 'target_item_id']);
         return Promise.resolve({ rows: rows.slice(offset, offset + 50), hasMore: offset + 50 < rows.length });
       },
-      onSelect(pl) { filterEl.value = pl.name; filterEl.dispatchEvent(new Event('input')); },
+      onSelect(pl) {
+        filterEl.value = pl.target_item_name || pl.target_item_id;
+        filterEl.dispatchEvent(new Event('input'));
+      },
     });
   })();
 

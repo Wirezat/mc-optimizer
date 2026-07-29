@@ -39,12 +39,19 @@ func (d *DB) GetDependentProductionLines(ctx context.Context, saveID uuid.UUID, 
 		return nil, nil
 	}
 	rows, err := d.Pool.Query(ctx, `
-		SELECT DISTINCT pl.id, pl.name, f.id, f.name
+		SELECT DISTINCT pl.id,
+		       COALESCE(
+		         (SELECT name FROM translations WHERE lang='en_us' AND lang_key='item.'||pl.target_mod_id||'.'||pl.target_item_id),
+		         (SELECT name FROM translations WHERE lang='en_us' AND lang_key='fluid.'||pl.target_mod_id||'.'||pl.target_item_id),
+		         (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||pl.target_mod_id||'.'||pl.target_item_id),
+		         ''
+		       ) AS target_item_name,
+		       f.id, f.name
 		FROM production_lines pl
 		JOIN factories f ON f.id = pl.factory_id
 		JOIN machine_groups mg ON mg.pl_id = pl.id
 		WHERE f.save_id = $1 AND mg.machine_mod_id = ANY($2)
-		ORDER BY f.name, pl.name
+		ORDER BY f.name, target_item_name
 	`, saveID, modIDs)
 	if err != nil {
 		return nil, fmt.Errorf("db: get dependent production lines: %w", err)
@@ -54,7 +61,7 @@ func (d *DB) GetDependentProductionLines(ctx context.Context, saveID uuid.UUID, 
 	var out []*model.DependentProductionLine
 	for rows.Next() {
 		dpl := &model.DependentProductionLine{}
-		if err := rows.Scan(&dpl.ID, &dpl.Name, &dpl.FactoryID, &dpl.FactoryName); err != nil {
+		if err := rows.Scan(&dpl.ID, &dpl.TargetItemName, &dpl.FactoryID, &dpl.FactoryName); err != nil {
 			return nil, fmt.Errorf("db: scan dependent production line: %w", err)
 		}
 		out = append(out, dpl)

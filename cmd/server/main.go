@@ -209,7 +209,6 @@ func run() error {
 	mux.Handle("GET /api/factories/{factory_id}/production-lines", protected(api.ListProductionLinesHandler(database)))
 
 	mux.Handle("GET /api/production-lines/{line_id}", protected(api.GetProductionLineHandler(database)))
-	mux.Handle("PATCH /api/production-lines/{line_id}", protected(api.RenamePLHandler(database)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/status", protected(api.UpdateProductionLineStatusHandler(database)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/mark-built", protected(api.MarkProductionLineBuiltHandler(database)))
 	mux.Handle("POST /api/production-lines/{line_id}/resolve", protected(api.ResolveProductionLineHandler(database, plSvc)))

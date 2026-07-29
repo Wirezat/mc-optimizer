@@ -14,7 +14,7 @@ import (
 // Results are ordered by group position then by the line's own position within its group.
 func (d *DB) ListProductionLinesByFactory(ctx context.Context, factoryID uuid.UUID) ([]*model.ProductionLine, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT pl.id, pl.factory_id, pl.parent_pl_id, pl.name,
+		SELECT pl.id, pl.factory_id, pl.parent_pl_id,
 		       pl.target_mod_id, pl.target_item_id,
 		       pl.rate_num, pl.rate_den, pl.time_unit,
 		       pl.optimize_mode, pl.status, pl.pl_group_id, pl.position,
@@ -50,7 +50,7 @@ func (d *DB) ListProductionLinesByFactory(ctx context.Context, factoryID uuid.UU
 	for rows.Next() {
 		pl := &model.ProductionLine{}
 		if err := rows.Scan(
-			&pl.ID, &pl.FactoryID, &pl.ParentPLID, &pl.Name,
+			&pl.ID, &pl.FactoryID, &pl.ParentPLID,
 			&pl.TargetModID, &pl.TargetItemID,
 			&pl.RateNum, &pl.RateDen, &pl.TimeUnit,
 			&pl.OptimizeMode, &pl.Status, &pl.PLGroupID, &pl.Position,
@@ -67,7 +67,7 @@ func (d *DB) ListProductionLinesByFactory(ctx context.Context, factoryID uuid.UU
 func (d *DB) GetProductionLine(ctx context.Context, id uuid.UUID) (*model.ProductionLine, error) {
 	pl := &model.ProductionLine{}
 	err := d.Pool.QueryRow(ctx, `
-		SELECT id, factory_id, parent_pl_id, name,
+		SELECT id, factory_id, parent_pl_id,
 		       target_mod_id, target_item_id,
 		       rate_num, rate_den, time_unit,
 		       optimize_mode, status, pl_group_id, position,
@@ -81,7 +81,7 @@ func (d *DB) GetProductionLine(ctx context.Context, id uuid.UUID) (*model.Produc
 		FROM production_lines
 		WHERE id = $1
 	`, id).Scan(
-		&pl.ID, &pl.FactoryID, &pl.ParentPLID, &pl.Name,
+		&pl.ID, &pl.FactoryID, &pl.ParentPLID,
 		&pl.TargetModID, &pl.TargetItemID,
 		&pl.RateNum, &pl.RateDen, &pl.TimeUnit,
 		&pl.OptimizeMode, &pl.Status, &pl.PLGroupID, &pl.Position,
@@ -211,20 +211,6 @@ func (d *DB) UpdateProductionLineStatus(ctx context.Context, id uuid.UUID, statu
 	)
 	if err != nil {
 		return fmt.Errorf("db: update production line status: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-func (d *DB) RenameProductionLine(ctx context.Context, id uuid.UUID, name string) error {
-	tag, err := d.Pool.Exec(ctx,
-		`UPDATE production_lines SET name = $2 WHERE id = $1`,
-		id, name,
-	)
-	if err != nil {
-		return fmt.Errorf("db: rename production line: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
@@ -490,12 +476,12 @@ func (d *DB) ConfirmSolverDraft(
 	pl.ID = uuid.New()
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO production_lines
-			(id, factory_id, parent_pl_id, name,
+			(id, factory_id, parent_pl_id,
 			 target_mod_id, target_item_id,
 			 rate_num, rate_den, time_unit,
 			 optimize_mode, status, position, solve_request)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-	`, pl.ID, pl.FactoryID, pl.ParentPLID, pl.Name,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+	`, pl.ID, pl.FactoryID, pl.ParentPLID,
 		pl.TargetModID, pl.TargetItemID,
 		pl.RateNum, pl.RateDen, pl.TimeUnit,
 		pl.OptimizeMode, pl.Status, pl.Position, pl.SolveRequest,
@@ -569,7 +555,7 @@ func (d *DB) GetPLSolveRequest(ctx context.Context, plID uuid.UUID) ([]byte, err
 
 // ReplaceProductionLineContents re-solves a production line in place: it updates the line's
 // rate/time-unit/mode and replaces all machine groups and IO entries in a single transaction.
-// The line's id, name, position, and status are preserved. New groups are inserted as given
+// The line's id, position, and status are preserved. New groups are inserted as given
 // (caller sets status, typically "planned"). Returns the updated detail.
 func (d *DB) ReplaceProductionLineContents(
 	ctx context.Context,

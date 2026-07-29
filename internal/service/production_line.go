@@ -165,7 +165,6 @@ func (s *PLService) SetGroupUpgrade(ctx context.Context, groupID uuid.UUID, tier
 // ConfirmInput carries the parsed body from the confirm endpoint.
 type ConfirmInput struct {
 	DraftID uuid.UUID
-	Name    string
 }
 
 // Confirm promotes a solver draft to a live production line.
@@ -199,7 +198,6 @@ func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input Conf
 	}
 	pl := &model.ProductionLine{
 		FactoryID:    &factoryID,
-		Name:         input.Name,
 		TargetModID:  payload.Request.TargetItem.ModID,
 		TargetItemID: payload.Request.TargetItem.ItemID,
 		RateNum:      int(payload.Request.TargetRate.Num),
@@ -297,7 +295,7 @@ type ResolveInput struct {
 
 // Resolve re-solves an existing production line (e.g. to produce more output) using its
 // stored solver request, with the given overrides applied, and replaces its machine groups
-// and IO in place. The line keeps its id, name, position, and status; new groups are
+// and IO in place. The line keeps its id, position, and status; new groups are
 // "planned" (build progress resets). Returns the updated detail.
 func (s *PLService) Resolve(ctx context.Context, plID uuid.UUID, in ResolveInput) (*model.ProductionLineDetail, error) {
 	raw, err := s.db.GetPLSolveRequest(ctx, plID)

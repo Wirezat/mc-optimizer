@@ -449,13 +449,6 @@
             </div>
           </div>
           <div class="confirm-bar">
-            <div class="field">
-              <label class="field-label" data-i18n="solve.pl_name_label">Production Line Name</label>
-              <input class="input" id="pl-name"
-                data-i18n-placeholder="solve.pl_name_placeholder"
-                placeholder="e.g. Iron Ingots × 16/s"
-                autocomplete="off" style="width:100%;" />
-            </div>
             <button class="btn btn-primary" id="confirm-btn" style="align-self:flex-end;"></button>
             <span class="status-msg" id="confirm-status" style="align-self:center;"></span>
           </div>
@@ -499,7 +492,6 @@
   let _upgradeMode    = 'off'; // 'off' | 'auto' | 'fixed'
   let _tiers          = [];
   let _draftID        = null;
-  let _plNameDirty    = false; // true once the user has typed into pl-name themselves
   let _reqSeq         = 0; // bumped on every doDiscover/doSolve call; guards against out-of-order responses
   let _overrides      = {};
   let _tagOverrides   = {};
@@ -643,8 +635,6 @@
           _stopPoints   = new Set();
           _chainItems   = [];
           _neededRates  = new Map();
-          _plNameDirty  = false;
-          document.getElementById('pl-name').value = '';
           hideChain();
           hideResult();
         }
@@ -776,8 +766,6 @@
   document.getElementById('upg-tier').addEventListener('change', reSolveIfShown);
   document.getElementById('upg-count').addEventListener('change', reSolveIfShown);
   document.getElementById('upg-auto-tier').addEventListener('change', reSolveIfShown);
-  document.getElementById('pl-name').addEventListener('keydown', e => { if (e.key === 'Enter') doConfirm(); });
-  document.getElementById('pl-name').addEventListener('input', () => { _plNameDirty = true; });
 
   // Popover.js owns the floating panel itself (positioning + DOM removal on
   // outside-click/Escape); this listener only keeps the page-local "which
@@ -1283,18 +1271,9 @@
       || _targetItem?.ItemID || '';
     renderResult(data.result, unit, itemName);
 
-    if (!_plNameDirty) {
-      const pretty = /[A-Z\s]/.test(itemName) ? itemName : itemName.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
-      const rateStr = document.getElementById('rate-num').value || '?';
-      document.getElementById('pl-name').value = _mode === 'AUTO'
-        ? pretty
-        : `${pretty} × ${rateStr}/${unit}`;
-    }
-
     if (firstShow) {
       showResult();
       resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      document.getElementById('pl-name').focus();
     }
   }
 
@@ -1512,8 +1491,6 @@
   }
 
   async function doConfirm() {
-    const name = document.getElementById('pl-name').value.trim();
-    if (!name)     { showStatus('confirm-status','err', t('msg.name_required')); return; }
     if (!_draftID) { showStatus('confirm-status','err', t('msg.run_solver_first')); return; }
 
     document.getElementById('confirm-btn').disabled = true;
@@ -1521,7 +1498,7 @@
 
     const res = await apiFetch('/api/factories/'+_factoryID+'/production-line/confirm', {
       method: 'POST',
-      body: JSON.stringify({ draft_id: _draftID, name }),
+      body: JSON.stringify({ draft_id: _draftID }),
     });
 
     if (!res?.ok) {

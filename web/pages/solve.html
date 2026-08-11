@@ -131,7 +131,7 @@
       padding: 2px var(--gap-inline);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      background: var(--bg-page);
+      background: var(--bg);
       color: var(--text-muted);
       cursor: pointer;
       white-space: nowrap;
@@ -162,7 +162,7 @@
       padding: 2px var(--gap-inline);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      background: var(--bg-page);
+      background: var(--bg);
       color: var(--text-faint);
       cursor: pointer;
       white-space: nowrap;
@@ -177,7 +177,7 @@
       gap: var(--gap-section);
       flex-wrap: wrap;
       padding: var(--gap-control) var(--pad-container);
-      background: var(--bg-page);
+      background: var(--bg);
       border-bottom: 1px solid var(--border);
     }
     .stat { display: flex; flex-direction: column; gap: 2px; }
@@ -257,7 +257,7 @@
       border: 1px solid var(--border);
       border-left: 3px solid var(--accent);
       border-radius: var(--radius);
-      background: var(--bg-raised);
+      background: var(--bg-hover);
       font-size: var(--text-sm);
       color: var(--text-muted);
     }
@@ -267,7 +267,7 @@
       display: flex; gap: var(--gap-control); align-items: flex-end; flex-wrap: wrap;
       padding: var(--gap-control) var(--pad-container);
       border-top: 1px solid var(--border);
-      background: var(--bg-page);
+      background: var(--bg);
     }
     .confirm-bar .field { flex: 1; min-width: 200px; }
   </style>
@@ -1041,7 +1041,6 @@
     }
 
     const nodes = [];
-    const edges = [];
     for (const ci of _chainItems) {
       const key = itemKey(ci.Item);
 
@@ -1080,6 +1079,33 @@
         ? (_machineNames[chosen.MachineMod + ':' + chosen.MachineID] || chosen.MachineID)
         : tag ? tag.text
         : (_stopPoints.has(key) ? t('solve.chain.stopped') : t('solve.chain.pick_recipe'));
+      // dependsOn replaces the old separate edges[] array — this node
+      // declares its own dependencies (consumer→dependency), matching
+      // renderGraph()'s per-node model (Task 11).
+      const dependsOn = [];
+      if (chosen) {
+        for (const inStr of (chosen.Inputs || [])) {
+          let toKey = null, title = '';
+          if (inStr.startsWith('#')) {
+            // Tag input — resolved to a concrete item by the backend. Drawn as a
+            // normal solid edge (tag origin only via tooltip) so every input has
+            // an unbroken line into its consumer.
+            const res = _tagResolutions[inStr];
+            if (res?.Chosen) {
+              toKey = itemKey(res.Chosen);
+              title = inStr;
+            }
+          } else if (inStr.startsWith('~')) {
+            const cand = pickCandidate(byFluidId.get(inStr.slice(1)), ci.Level);
+            if (cand) toKey = itemKey(cand.Item);
+          } else {
+            const cand = pickCandidate(byItemId.get(inStr), ci.Level);
+            if (cand) toKey = itemKey(cand.Item);
+          }
+          if (toKey && toKey !== key) dependsOn.push({ to: toKey, title });
+        }
+      }
+
       nodes.push({
         id: key,
         level: ci.Level,
@@ -1089,33 +1115,12 @@
         kind,
         warn: _cycleNodes.has(key) || ci.ModRestricted,
         labels: pickable ? [{ text: labelText, cls: tag?.cls, menu: buildRecipeMenu(ci, key, { withStop: ci.Level !== 0 }) }] : null,
+        dependsOn,
       });
-
-      if (!chosen) continue;
-      for (const inStr of (chosen.Inputs || [])) {
-        let toKey = null, title = '';
-        if (inStr.startsWith('#')) {
-          // Tag input — resolved to a concrete item by the backend. Drawn as a
-          // normal solid edge (tag origin only via tooltip) so every input has
-          // an unbroken line into its consumer.
-          const res = _tagResolutions[inStr];
-          if (res?.Chosen) {
-            toKey = itemKey(res.Chosen);
-            title = inStr;
-          }
-        } else if (inStr.startsWith('~')) {
-          const cand = pickCandidate(byFluidId.get(inStr.slice(1)), ci.Level);
-          if (cand) toKey = itemKey(cand.Item);
-        } else {
-          const cand = pickCandidate(byItemId.get(inStr), ci.Level);
-          if (cand) toKey = itemKey(cand.Item);
-        }
-        if (toKey && toKey !== key) edges.push({ from: key, to: toKey, title });
-      }
     }
 
     const holder = document.createElement('div');
-    renderGraph(holder, { nodes, edges }, {
+    renderGraph(holder, { nodes }, {
       fullscreenLabel: t('common.fullscreen'),
       onMenuAction: (node, action) => selectChainOverride(node.id, action),
     });

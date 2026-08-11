@@ -19,7 +19,7 @@
       --welcome-avatar-size: 52px;
       background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius);
       padding: var(--pad-card);
       max-width: 480px;
       display: flex;
@@ -37,7 +37,7 @@
       justify-content: center;
       font-size: var(--text-xl);
       font-weight: var(--weight-bold);
-      color: var(--accent-dark);
+      color: var(--accent);
     }
     .welcome-name {
       font-size: var(--text-lg);
@@ -81,7 +81,7 @@
     .account-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius);
       overflow: hidden;
     }
     .account-card-header {
@@ -163,9 +163,9 @@
           </div>
         </div>
 
-        <nav class="tabs-bar">
-          <button class="tab-btn active" data-tab="main" data-i18n="personal.tab.main"></button>
-          <button class="tab-btn" data-tab="account" data-i18n="personal.tab.account"></button>
+        <nav class="wui-tabs">
+          <button class="wui-tab active" data-tab="main" data-i18n="personal.tab.main"></button>
+          <button class="wui-tab" data-tab="account" data-i18n="personal.tab.account"></button>
         </nav>
 
         <!-- ── Tab: Overview ──────────────────────────────────────────────── -->

@@ -6,6 +6,7 @@
   <title>MC Optimizer — Machines</title>
   <link rel="stylesheet" href="/static/ui/index.css" />
   <link rel="stylesheet" href="/static/css/theme.css" />
+  <link rel="stylesheet" href="/static/css/catalog-common.css" />
   <script>
     (function(){
       const s = localStorage.getItem('theme');
@@ -14,18 +15,9 @@
     })();
   </script>
   <style>
-    .row-name-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
-    .row-name-link:hover { color: var(--accent); border-color: var(--accent); }
-    .recipe-count-link { color: var(--text-muted); text-decoration: none; font-size: var(--text-sm); }
-    .recipe-count-link:hover { color: var(--accent); }
     /* placeholder text for empty inline-editable fields — inline-edit.css has no
        placeholder mechanism, so this stays page-specific */
     .field-editable[data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--text-faint); pointer-events: none; }
-    .group-toggle { cursor: pointer; user-select: none; font-size: .7em; opacity: .5; padding-right: 4px; }
-    .catalog-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
-    .catalog-link:hover { color: var(--accent); border-color: var(--accent); }
-    .table-group-hd.collapsed .group-toggle::before { content: '▸'; }
-    .group-toggle::before { content: '▾'; }
   </style>
 </head>
 <body class="app-shell">

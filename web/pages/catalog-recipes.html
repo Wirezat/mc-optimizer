@@ -6,6 +6,7 @@
   <title>MC Optimizer — Recipes</title>
   <link rel="stylesheet" href="/static/ui/index.css" />
   <link rel="stylesheet" href="/static/css/theme.css" />
+  <link rel="stylesheet" href="/static/css/catalog-common.css" />
   <script>
     (function(){
       const s = localStorage.getItem('theme');
@@ -14,22 +15,7 @@
     })();
   </script>
   <style>
-    .catalog-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
-    .catalog-link:hover { color: var(--accent); border-color: var(--accent); }
     .table-expand-trigger.open { display: inline-block; transform: rotate(90deg); }
-    .recipe-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-container); }
-    .detail-section-title {
-      font-size: var(--text-xs); font-weight: var(--weight-semibold);
-      color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em;
-      margin-bottom: var(--gap-inline);
-    }
-    .detail-io-row { display: flex; align-items: baseline; gap: var(--gap-inline); font-size: var(--text-sm); padding: 2px 0; }
-    .detail-io-amount { color: var(--text-muted); min-width: 36px; text-align: right; font-family: var(--font-mono); }
-    .detail-io-sub { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-faint); margin-left: 4px; }
-    .detail-io-prob { font-size: var(--text-xs); color: var(--accent); }
-    .group-toggle { cursor: pointer; user-select: none; font-size: .7em; opacity: .5; padding-right: 4px; }
-    .group-toggle::before { content: '▾'; }
-    .table-group-hd.collapsed .group-toggle::before { content: '▸'; }
     .crafting-layout { display: flex; align-items: flex-start; gap: var(--gap-container); }
     .crafting-grid { display: grid; gap: 2px; flex-shrink: 0; }
     .crafting-cell { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-hover); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); color: var(--text-muted); text-align: center; line-height: 1.2; overflow: hidden; }

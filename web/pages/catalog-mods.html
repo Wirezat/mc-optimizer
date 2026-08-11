@@ -20,9 +20,8 @@
       margin-bottom: var(--gap-container);
     }
     .mod-description { font-size: var(--text-sm); color: var(--text-base); margin: 0 0 var(--gap-inline); line-height: 1.5; }
+    .mod-description.field-editable { white-space: pre-wrap; word-break: break-word; }
     .mod-ext-links   { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-    .mod-meta-grid   { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: var(--text-sm); align-content: start; min-width: 160px; }
-    .mod-meta-key    { color: var(--text-faint); white-space: nowrap; }
     .mod-catalog-badges { display: flex; gap: 6px; flex-wrap: wrap; }
     .mod-catalog-badges a { text-decoration: none; }
     .table-expand-trigger.open { display: inline-block; transform: rotate(90deg); }
@@ -31,12 +30,9 @@
     .link-icon { display: inline-block; font-size: .7em; opacity: .65; margin-right: 3px; letter-spacing: 0; font-style: normal; }
     .link-icon-add { opacity: .35; }
 
-    /* admin inline editable (description, author, license) */
-    .mod-inline-edit { border-radius: var(--radius-sm); padding: 1px 3px; cursor: text; outline: none; transition: background .1s; }
-    .mod-inline-edit:hover { background: var(--bg-hover); }
-    .mod-inline-edit[contenteditable="true"] { background: var(--bg-hover); box-shadow: 0 0 0 1px var(--accent); }
-    .mod-inline-edit:empty::before { content: attr(data-placeholder); color: var(--text-faint); pointer-events: none; }
-    .mod-description.mod-inline-edit { display: block; white-space: pre-wrap; word-break: break-word; }
+    /* placeholder text for empty inline-editable fields — inline-edit.css has no
+       placeholder mechanism, so this stays page-specific */
+    .field-editable[data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--text-faint); pointer-events: none; }
 
     /* link editing */
     .mod-link-empty .mod-link-add { opacity: .5; border-style: dashed; }
@@ -130,6 +126,7 @@
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { initClickToEdit } from '/static/ui/js/table-features.js';
+  import { initInlineEdit } from '/static/ui/js/inline-edit.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
 
@@ -221,7 +218,7 @@
     // Description — inline-editable for admin
     const descPlaceholder = esc(t('catalog.mods.detail.no_description'));
     const desc = admin
-      ? `<div class="mod-description mod-inline-edit" contenteditable="false"
+      ? `<div class="mod-description field-editable"
            data-field="description" data-mod-id="${esc(m.mod_id)}"
            data-placeholder="${descPlaceholder}">${esc(m.description ?? '')}</div>`
       : (m.description
@@ -263,21 +260,23 @@
 
     // Meta grid — author/license inline-editable for admin
     const authorHTML = (m.author || admin)
-      ? `<span class="mod-meta-key">${t('catalog.mods.detail.author')}</span>` +
+      ? `<div class="detail-row"><span class="detail-key">${t('catalog.mods.detail.author')}</span><span class="detail-val">` +
         (admin
-          ? `<span class="mod-inline-edit" contenteditable="false" data-field="author"
+          ? `<span class="field-editable" data-inline data-field="author"
                data-mod-id="${esc(m.mod_id)}" data-placeholder="—">${esc(m.author ?? '')}</span>`
-          : `<span>${esc(m.author)}</span>`)
+          : esc(m.author)) +
+        `</span></div>`
       : '';
     const licenseHTML = (m.license || admin)
-      ? `<span class="mod-meta-key">${t('catalog.mods.detail.license')}</span>` +
+      ? `<div class="detail-row"><span class="detail-key">${t('catalog.mods.detail.license')}</span><span class="detail-val">` +
         (admin
-          ? `<span class="mod-inline-edit" contenteditable="false" data-field="license"
+          ? `<span class="field-editable" data-inline data-field="license"
                data-mod-id="${esc(m.mod_id)}" data-placeholder="—">${esc(m.license ?? '')}</span>`
-          : `<span>${esc(m.license)}</span>`)
+          : esc(m.license)) +
+        `</span></div>`
       : '';
-    const energyHTML = `<span class="mod-meta-key">${t('catalog.mods.detail.energy')}</span>
-      <span><span class="badge badge-neutral">${esc(m.energy_type)}</span></span>`;
+    const energyHTML = `<div class="detail-row"><span class="detail-key">${t('catalog.mods.detail.energy')}</span>
+      <span class="detail-val"><span class="badge badge-neutral">${esc(m.energy_type)}</span></span></div>`;
     const metaRows = [authorHTML, licenseHTML, energyHTML].filter(Boolean).join('');
 
     return `
@@ -287,7 +286,7 @@
           ${linksHTML}
           ${fetchHTML}
         </div>
-        <div class="mod-meta-grid">${metaRows}</div>
+        <div class="detail-grid">${metaRows}</div>
       </div>
       <div class="mod-catalog-badges">
         <a href="/catalog/items?mod=${encodeURIComponent(m.mod_id)}" class="badge badge-neutral"
@@ -348,8 +347,10 @@
       btn.addEventListener('click', () => doFetch(btn));
     });
 
-    // Contenteditable fields (description, author, license)
-    container.querySelectorAll('.mod-inline-edit[contenteditable="false"]').forEach(el => {
+    // Description — multiline contenteditable. Kept hand-rolled: inline-edit.js
+    // always commits on Enter (no newline support), which would break multi-line
+    // editing of a free-text description. See task-5-report.md.
+    container.querySelectorAll('.mod-description.field-editable').forEach(el => {
       if (el.dataset.fieldReady) return;
       el.dataset.fieldReady = '1';
 
@@ -383,11 +384,29 @@
 
       el.addEventListener('blur', commit);
       el.addEventListener('keydown', e => {
-        const multiline = el.tagName === 'DIV';
-        if (e.key === 'Enter' && !multiline) { e.preventDefault(); commit(); }
         if (e.key === 'Escape') { el.innerText = original; el.contentEditable = 'false'; }
       });
     });
+
+    // Author / license — single-line fields, use the shared inline-edit.js helper
+    container.querySelectorAll('.field-editable[data-inline][data-mod-id]').forEach(el => {
+      if (el.dataset.commitReady) return;
+      el.dataset.commitReady = '1';
+      el.addEventListener('inline-commit', async e => {
+        const val = e.detail.value.trim();
+        const field = el.dataset.field;
+        const modID = el.dataset.modId;
+        const mod = allMods.find(m => m.mod_id === modID);
+        if (!mod) return;
+        if (val === (mod[field] ?? '')) return;
+        const prev = mod[field];
+        mod[field] = val || null;
+        const ok = await saveMod(mod);
+        if (!ok) { mod[field] = prev; el.textContent = prev ?? ''; }
+        else refreshExpandView(modID);
+      });
+    });
+    initInlineEdit(container);
 
     // Link URL editing — click link to edit, "+" to add missing
     container.querySelectorAll('.mod-link-wrap').forEach(wrap => {

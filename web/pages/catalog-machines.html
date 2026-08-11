@@ -18,10 +18,9 @@
     .row-name-link:hover { color: var(--accent); border-color: var(--accent); }
     .recipe-count-link { color: var(--text-muted); text-decoration: none; font-size: var(--text-sm); }
     .recipe-count-link:hover { color: var(--accent); }
-    .energy-edit { cursor: text; border-radius: var(--radius-sm); padding: 1px 3px; outline: none; }
-    .energy-edit:hover { background: var(--bg-hover); }
-    .energy-edit[contenteditable="true"] { background: var(--bg-hover); box-shadow: 0 0 0 1px var(--accent); }
-    .energy-edit:empty::before { content: '—'; color: var(--text-faint); pointer-events: none; }
+    /* placeholder text for empty inline-editable fields — inline-edit.css has no
+       placeholder mechanism, so this stays page-specific */
+    .field-editable[data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--text-faint); pointer-events: none; }
     .group-toggle { cursor: pointer; user-select: none; font-size: .7em; opacity: .5; padding-right: 4px; }
     .catalog-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
     .catalog-link:hover { color: var(--accent); border-color: var(--accent); }
@@ -83,6 +82,7 @@
 
 <script type="module">
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
+  import { attachInlineEdit } from '/static/ui/js/inline-edit.js';
   import { guard, apiFetch, isAdmin, getUser } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
@@ -111,37 +111,20 @@
 
   function wireEnergyEdit(cell, machine) {
     if (!admin) return;
-    cell.addEventListener('click', () => {
-      if (cell.contentEditable === 'true') return;
-      const prev = cell.textContent.trim();
-      cell.contentEditable = 'true';
-      cell.focus();
-      const r = document.createRange();
-      r.selectNodeContents(cell); r.collapse(false);
-      getSelection()?.removeAllRanges(); getSelection()?.addRange(r);
-
-      const commit = async () => {
-        if (cell.contentEditable !== 'true') return;
-        cell.contentEditable = 'false';
-        const raw = cell.textContent.trim().replace(/[^\d]/g, '');
-        const val = raw ? parseInt(raw, 10) : 0;
-        cell.textContent = val || '';
-        if (val === (machine.max_eu_per_tick || 0)) return;
-        const prevVal = machine.max_eu_per_tick;
-        machine.max_eu_per_tick = val;
-        const res = await apiFetch(`/api/mods/${encodeURIComponent(machine.mod_id)}/machines/${encodeURIComponent(machine.machine_id)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ max_eu_per_tick: val }),
-        });
-        if (!res?.ok) { machine.max_eu_per_tick = prevVal; cell.textContent = prevVal || ''; }
-      };
-
-      cell.addEventListener('blur', commit, { once: true });
-      cell.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); cell.blur(); }
-        if (e.key === 'Escape') { cell.textContent = prev; cell.contentEditable = 'false'; }
-      }, { once: true });
+    attachInlineEdit(cell);
+    cell.addEventListener('inline-commit', async e => {
+      const raw = (e.detail.value || '').replace(/[^\d]/g, '');
+      const val = raw ? parseInt(raw, 10) : 0;
+      cell.textContent = val || '';
+      if (val === (machine.max_eu_per_tick || 0)) return;
+      const prevVal = machine.max_eu_per_tick;
+      machine.max_eu_per_tick = val;
+      const res = await apiFetch(`/api/mods/${encodeURIComponent(machine.mod_id)}/machines/${encodeURIComponent(machine.machine_id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ max_eu_per_tick: val }),
+      });
+      if (!res?.ok) { machine.max_eu_per_tick = prevVal; cell.textContent = prevVal || ''; }
     });
   }
 
@@ -153,13 +136,13 @@
       <td><a href="${esc(recipesUrl)}" class="row-name-link">${esc(m.name || m.machine_id)}</a></td>
       <td class="td-mono td-muted">${esc(m.machine_id)}</td>
       <td>${admin
-        ? `<span class="energy-edit td-muted" contenteditable="false" data-placeholder="—">${esc(energyVal)}</span>`
+        ? `<span class="field-editable td-muted" data-inline data-placeholder="—">${esc(energyVal)}</span>`
         : `<span class="td-muted">${energyVal || '—'}</span>`}</td>
       <td><span class="badge badge-neutral">${esc(m.energy_type || '—')}</span></td>
       <td>${m.recipe_count
         ? `<a href="${esc(recipesUrl)}" class="recipe-count-link">${m.recipe_count}</a>`
         : `<span class="td-muted">—</span>`}</td>`;
-    const energyCell = tr.querySelector('.energy-edit');
+    const energyCell = tr.querySelector('.field-editable');
     if (energyCell) wireEnergyEdit(energyCell, m);
     return [tr];
   }

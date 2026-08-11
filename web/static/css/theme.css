@@ -1,13 +1,12 @@
 /* mc_optimizer / theme.css
    Color tokens for wirezatUI. Accent: copper.
-   Surface style: flat (bg = bg-page = bg-card — borders carry hierarchy, no card elevation).
+   Surface style: flat (bg = bg-card — borders carry hierarchy, no card elevation).
    Load after: /static/ui/index.css
 */
 
 :root {
     /* Accent — copper */
     --accent:           #b45309;
-    --accent-dark:      #92400e;
     --accent-text:      #fffbeb;
     --accent-muted:     #fef3c7;
 
@@ -22,10 +21,8 @@
 
     /* Surfaces — flat style */
     --bg:               #f0f0ee;
-    --bg-page:          #f0f0ee;
     --bg-card:          #f0f0ee;
     --bg-hover:         #e6e6e4;
-    --surface-raised:   #fafaf8;
 
     /* Semantic */
     --danger:           #c0392b;
@@ -44,7 +41,6 @@
 html.dark {
     /* Accent — copper (lighter for dark backgrounds) */
     --accent:           #d97706;
-    --accent-dark:      #b45309;
     --accent-text:      #fffbeb;
     --accent-muted:     #1c1200;
 
@@ -59,10 +55,8 @@ html.dark {
 
     /* Surfaces */
     --bg:               #0f0e0d;
-    --bg-page:          #0f0e0d;
     --bg-card:          #0f0e0d;
     --bg-hover:         #1c1b19;
-    --surface-raised:   #1a1a18;
 
     /* Semantic */
     --danger:           #e57373;

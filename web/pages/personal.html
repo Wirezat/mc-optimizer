@@ -16,7 +16,6 @@
   <style>
     /* ── Welcome card ──────────────────────────────────────────────────────── */
     .welcome-card {
-      --welcome-avatar-size: 52px;
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -26,18 +25,12 @@
       flex-direction: column;
       gap: var(--gap-control);
     }
-    .welcome-avatar {
-      width: var(--welcome-avatar-size);
-      height: var(--welcome-avatar-size);
-      border-radius: var(--radius-pill);
-      background: var(--accent-muted);
-      border: 2px solid var(--accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    /* Page-specific size: wui-avatar's default is 28px, this welcome header
+       needs a larger identity avatar. */
+    #welcome-avatar {
+      width: 52px;
+      height: 52px;
       font-size: var(--text-xl);
-      font-weight: var(--weight-bold);
-      color: var(--accent);
     }
     .welcome-name {
       font-size: var(--text-lg);
@@ -49,78 +42,6 @@
       color: var(--text-faint);
       line-height: 1.6;
     }
-    .welcome-meta {
-      padding-top: var(--gap-control);
-      border-top: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      gap: var(--gap-inline);
-    }
-    .meta-row {
-      display: flex;
-      gap: var(--gap-control);
-      font-size: var(--text-sm);
-    }
-    .meta-label {
-      color: var(--text-faint);
-      width: 100px;
-      flex-shrink: 0;
-    }
-    .meta-value {
-      color: var(--text);
-      font-weight: var(--weight-medium);
-    }
-
-    /* ── Account forms ─────────────────────────────────────────────────────── */
-    .account-section {
-      max-width: 400px;
-      display: flex;
-      flex-direction: column;
-      gap: var(--gap-section);
-    }
-    .account-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .account-card-header {
-      padding: var(--gap-control) var(--pad-card);
-      border-bottom: 1px solid var(--border);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-semibold);
-      color: var(--text);
-    }
-    .account-card-body {
-      padding: var(--pad-card);
-      display: flex;
-      flex-direction: column;
-      gap: var(--gap-control);
-    }
-
-    /* ── Password match indicator ──────────────────────────────────────────── */
-    .input-wrap {
-      position: relative;
-    }
-    .input-wrap .input {
-      padding-right: 2rem;
-    }
-    .input-indicator {
-      position: absolute;
-      right: var(--gap-control);
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-bold);
-      pointer-events: none;
-    }
-    .input-wrap-ok  .input-indicator { color: var(--success); }
-    .input-wrap-err .input-indicator { color: var(--danger); }
-
-    /* ── Inline form feedback ──────────────────────────────────────────────── */
-    .status-msg     { font-size: var(--text-sm); min-height: 1.2em; }
-    .status-msg.ok  { color: var(--success); }
-    .status-msg.err { color: var(--danger); }
   </style>
 </head>
 <body class="app-shell">
@@ -171,21 +92,21 @@
         <!-- ── Tab: Overview ──────────────────────────────────────────────── -->
         <div data-tab-panel="main">
           <div class="welcome-card">
-            <div class="welcome-avatar" id="welcome-avatar">?</div>
+            <div class="wui-avatar" id="welcome-avatar">?</div>
             <div class="welcome-name" id="welcome-name">…</div>
             <div class="welcome-sub" data-i18n="personal.welcome"></div>
-            <div class="welcome-meta">
-              <div class="meta-row">
-                <span class="meta-label" data-i18n="personal.meta.username"></span>
-                <span class="meta-value" id="welcome-username">…</span>
+            <div class="detail-grid" style="padding-top:var(--gap-control);border-top:1px solid var(--border)">
+              <div class="detail-row">
+                <span class="detail-key" data-i18n="personal.meta.username"></span>
+                <span class="detail-val" id="welcome-username">…</span>
               </div>
-              <div class="meta-row">
-                <span class="meta-label" data-i18n="personal.meta.role"></span>
-                <span class="meta-value" id="welcome-role">…</span>
+              <div class="detail-row">
+                <span class="detail-key" data-i18n="personal.meta.role"></span>
+                <span class="detail-val" id="welcome-role">…</span>
               </div>
-              <div class="meta-row">
-                <span class="meta-label" data-i18n="personal.meta.since"></span>
-                <span class="meta-value" id="welcome-since">…</span>
+              <div class="detail-row">
+                <span class="detail-key" data-i18n="personal.meta.since"></span>
+                <span class="detail-val" id="welcome-since">…</span>
               </div>
             </div>
           </div>
@@ -193,11 +114,11 @@
 
         <!-- ── Tab: Account ───────────────────────────────────────────────── -->
         <div data-tab-panel="account" hidden>
-          <div class="account-section">
+          <div style="max-width:400px;display:flex;flex-direction:column;gap:var(--gap-section);">
 
-            <div class="account-card">
-              <div class="account-card-header" data-i18n="personal.username.title"></div>
-              <div class="account-card-body">
+            <div class="container">
+              <div class="container-header"><span class="container-title" data-i18n="personal.username.title"></span></div>
+              <div class="container-body">
                 <form id="form-username">
                   <div class="field">
                     <label class="field-label" data-i18n="personal.username.label"></label>
@@ -213,9 +134,9 @@
               </div>
             </div>
 
-            <div class="account-card">
-              <div class="account-card-header" data-i18n="personal.password.title"></div>
-              <div class="account-card-body">
+            <div class="container">
+              <div class="container-header"><span class="container-title" data-i18n="personal.password.title"></span></div>
+              <div class="container-body">
                 <form id="form-password">
                   <div class="field">
                     <label class="field-label" data-i18n="personal.password.current"></label>
@@ -234,7 +155,7 @@
                       <input class="input" type="password" name="confirm_password" id="pw-confirm"
                         required autocomplete="new-password"
                         data-i18n-placeholder="personal.password.placeholder_confirm" />
-                      <span class="input-indicator" id="pw-match-icon"></span>
+                      <span class="end-icon" id="pw-match-icon"></span>
                     </div>
                   </div>
                   <div style="display:flex; align-items:center; gap:var(--gap-control); margin-top:var(--gap-control);">
@@ -335,21 +256,23 @@
   });
 
   function checkPwMatch() {
-    const pw1  = document.getElementById('pw-new').value;
-    const pw2  = document.getElementById('pw-confirm').value;
-    const icon = document.getElementById('pw-match-icon');
-    const wrap = document.getElementById('pw-confirm-wrap');
-    if (!pw2) { icon.textContent = ''; wrap.className = 'input-wrap'; return; }
+    const pw1   = document.getElementById('pw-new').value;
+    const pw2   = document.getElementById('pw-confirm').value;
+    const icon  = document.getElementById('pw-match-icon');
+    const input = document.getElementById('pw-confirm');
+    if (!pw2) { icon.textContent = ''; icon.className = 'end-icon'; input.classList.remove('has-end-icon'); return; }
     const ok = pw1 === pw2;
     icon.textContent = ok ? '✓' : '✗';
-    wrap.className = 'input-wrap ' + (ok ? 'input-wrap-ok' : 'input-wrap-err');
+    icon.className = 'end-icon ' + (ok ? 'ok' : 'bad');
+    input.classList.add('has-end-icon');
   }
 
   document.getElementById('pw-new').addEventListener('input', checkPwMatch);
   document.getElementById('pw-confirm').addEventListener('input', checkPwMatch);
   document.getElementById('form-password').addEventListener('reset', () => {
     document.getElementById('pw-match-icon').textContent = '';
-    document.getElementById('pw-confirm-wrap').className = 'input-wrap';
+    document.getElementById('pw-match-icon').className = 'end-icon';
+    document.getElementById('pw-confirm').classList.remove('has-end-icon');
   });
 
   function fmtDate(iso) {

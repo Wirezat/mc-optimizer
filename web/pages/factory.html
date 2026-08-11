@@ -48,16 +48,19 @@
 
     /* ── Tri-state status button ──────────────────────────────────────────── */
     .pl-tri-btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 46px; height: var(--h-btn-sm); flex-shrink: 0;
-      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: var(--h-btn-sm);
       border-radius: var(--radius);
       border: 1px solid transparent;
-      cursor: pointer; font-size: 13px; white-space: nowrap;
+      font-size: 14px;
+      cursor: pointer;
       transition: background .12s, border-color .12s;
     }
     .tri-cur { display: inline; }
-    .tri-nxt { display: none; font-size: 11px; letter-spacing: -.5px; }
+    .tri-nxt { display: none; font-size: 10px; letter-spacing: -.5px; }
     .pl-tri-btn:hover .tri-cur { display: none; }
     .pl-tri-btn:hover .tri-nxt { display: inline; }
 
@@ -92,32 +95,11 @@
       background: var(--bg-hover); border-color: var(--border-strong); color: var(--text);
     }
 
-    /* ── Custom checkboxes ────────────────────────────────────────────────── */
-    #pl-table input[type="checkbox"] {
-      appearance: none; -webkit-appearance: none;
-      width: 15px; height: 15px;
-      border: 1.5px solid var(--text-muted); border-radius: 3px;
-      background: transparent; cursor: pointer;
-      vertical-align: middle; flex-shrink: 0;
-      transition: background .12s, border-color .12s;
-    }
-    #pl-table input[type="checkbox"]:checked {
-      background: var(--accent);
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%23fff' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-      background-size: 12px; background-position: center; background-repeat: no-repeat;
-    }
-    #pl-table input[type="checkbox"]:hover:not(:checked) { background: var(--accent-muted); }
-
     /* Drag handle always readable on group header rows (not just on hover) */
     #pl-table .table-group-hd .drag-handle { color: var(--text-muted); }
 
-    /* ── Context menu ─────────────────────────────────────────────────────── */
-    .ctx-menu { position: fixed; z-index: 1000; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.15); min-width: 160px; padding: var(--gap-icon) 0; display: none; }
-    .ctx-menu.open { display: block; }
-    .ctx-item { padding: var(--gap-inline) var(--pad-btn); font-size: var(--text-sm); cursor: pointer; position: relative; white-space: nowrap; color: var(--text); }
-    .ctx-item:hover { background: var(--accent-muted); color: var(--accent); }
-    .ctx-item.danger:hover { background: var(--danger-muted); color: var(--danger); }
-    .ctx-sep { height: 1px; background: var(--border); margin: var(--gap-icon) 0; }
+    /* ── Context menu: nested-submenu positioning only (no wui equivalent) ── */
+    .ctx-has-sub { position: relative; }
     .ctx-has-sub::after { content: '▸'; position: absolute; right: var(--gap-field); opacity: .5; font-size: 10px; }
     .ctx-sub { display: none; position: absolute; left: 100%; top: -4px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.15); min-width: 150px; padding: var(--gap-icon) 0; z-index: 1001; }
     .ctx-has-sub:hover .ctx-sub { display: block; }
@@ -291,12 +273,13 @@
   </div>
 </div>
 
-<div class="ctx-menu" id="ctx-menu">
-  <div class="ctx-item ctx-has-sub" data-i18n="factory.pl.to_group">
+<div class="dropdown-panel" id="ctx-menu">
+  <div class="dropdown-item ctx-has-sub">
+    <span data-i18n="factory.pl.to_group"></span>
     <div class="ctx-sub" id="ctx-group-sub"></div>
   </div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item danger" id="ctx-delete-item" data-i18n="common.delete"></div>
+  <div class="dropdown-divider"></div>
+  <div class="dropdown-item danger" id="ctx-delete-item" data-i18n="common.delete"></div>
 </div>
 
 <script type="module">
@@ -746,9 +729,11 @@
       await reload();
     });
     const menu = document.getElementById('ctx-menu');
-    menu.style.left = e.clientX + 'px';
-    menu.style.top  = e.clientY + 'px';
-    menu.classList.add('open');
+    menu.style.left  = e.clientX + 'px';
+    menu.style.top   = e.clientY + 'px';
+    menu.style.right = 'auto'; // .dropdown-panel's base `right:0` would otherwise
+                                // stretch the panel from the cursor to that edge
+    menu.classList.add('dropdown-panel-floating', 'open');
   });
 
   document.getElementById('ctx-delete-item').addEventListener('click', async () => {
@@ -892,10 +877,10 @@
   // ── Group submenu builder ─────────────────────────────
   function buildGroupSub(container, callback) {
     container.innerHTML =
-      _groups.map(g => `<div class="ctx-item" data-gid="${esc(g.id)}">${esc(g.name)}</div>`).join('') +
-      '<div class="ctx-sep"></div>' +
-      `<div class="ctx-item" data-gid="__ungroup__">${esc(t('factory.pl.ungroup'))}</div>` +
-      `<div class="ctx-item" data-gid="__new__">${esc(t('factory.pl.new_group'))}</div>`;
+      _groups.map(g => `<div class="dropdown-item" data-gid="${esc(g.id)}">${esc(g.name)}</div>`).join('') +
+      '<div class="dropdown-divider"></div>' +
+      `<div class="dropdown-item" data-gid="__ungroup__">${esc(t('factory.pl.ungroup'))}</div>` +
+      `<div class="dropdown-item" data-gid="__new__">${esc(t('factory.pl.new_group'))}</div>`;
 
     container.querySelectorAll('[data-gid]').forEach(item => {
       item.addEventListener('click', async e => {
@@ -923,14 +908,20 @@
   }
 
   document.addEventListener('click', e => {
-    if (!e.target.closest('.ctx-menu')) closeAllMenus();
+    if (!e.target.closest('#ctx-menu')) closeAllMenus();
   });
   document.addEventListener('contextmenu', e => {
     if (!e.target.closest('#pl-tbody')) closeAllMenus();
   });
+  // dropdown.js's global Escape handler only strips `.open`, which isn't enough
+  // to hide this menu once `.dropdown-panel-floating` is on it (that class forces
+  // display:flex unconditionally) — so this menu needs its own Escape handling.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeAllMenus();
+  });
 
   function closeAllMenus() {
-    document.querySelectorAll('.ctx-menu').forEach(m => m.classList.remove('open'));
+    document.getElementById('ctx-menu')?.classList.remove('dropdown-panel-floating', 'open');
     _ctxPLID = null;
   }
 

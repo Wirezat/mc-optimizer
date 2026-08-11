@@ -14,64 +14,16 @@
     })();
   </script>
   <style>
-    /* ── Stat row (meta) ─────────────────────────────────────────────────── */
-    .stat-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--gap-card);
-      margin-bottom: var(--gap-field);
-    }
-    .stat { display: flex; flex-direction: column; gap: 2px; min-width: 100px; }
-    .stat-label {
-      font-size: var(--text-xs);
-      color: var(--text-faint);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .stat-value {
-      font-size: var(--text-base);
-      font-weight: var(--weight-semibold);
-      color: var(--text);
-      font-family: var(--font-mono);
-    }
-
-    /* ── Paired stat (target / current) — two labelled rows in a tiny grid so
-       the numbers share one left-aligned column after equal-width row labels.
-       The current row only renders while the line is incomplete. ──────────── */
-    .stat-pair {
-      display: grid; grid-template-columns: max-content max-content;
-      column-gap: var(--gap-inline); row-gap: 1px; align-items: baseline;
-    }
-    .stat-pair .row-label {
-      font-size: 10px; color: var(--text-faint); font-family: var(--font-mono);
-      text-transform: uppercase; letter-spacing: 0.04em;
-    }
-    .stat-pair .stat-value-current {
-      font-size: var(--text-base); font-weight: var(--weight-normal);
-      font-family: var(--font-mono); color: var(--text-muted);
-    }
-
-    /* ── Progress bar ────────────────────────────────────────────────────── */
+    /* ── Progress bar — .wui-progress-track/.wui-progress-fill supply the
+       track/fill visuals (components/feedback.css); .progress-wrap/.progress-label
+       are page-local layout glue with no wui equivalent. ───────────────────── */
     .progress-wrap {
       display: flex;
       align-items: center;
       gap: var(--gap-control);
       margin-bottom: var(--gap-field);
     }
-    .progress-track {
-      flex: 1;
-      height: 6px;
-      background: var(--border);
-      border-radius: 99px;
-      overflow: hidden;
-    }
-    .progress-fill {
-      height: 100%;
-      background: var(--accent);
-      border-radius: 99px;
-      transition: width .3s;
-    }
-    .progress-fill.full { background: var(--success); }
+    .progress-wrap .wui-progress-track { flex: 1; }
     .progress-label {
       font-size: var(--text-xs);
       color: var(--text-muted);
@@ -79,36 +31,10 @@
       font-family: var(--font-mono);
     }
 
-    /* ── Machine group row — explicit columns: amount | machine | recipe |
-       upgrades (blank when none) | build state | status toggle. Ported
-       layout/classes from solve.html's result view where they overlap
-       (mg-header/mg-row/mg-count/mg-machine/mg-mod). The build-state column
-       holds at most two compact number fields (machines built, upgrades
-       installed toward the group's own target tier); it disappears once the
-       group is fully built, leaving just the status icon like before. ─────── */
-    .mg-header {
-      display: flex; align-items: center; gap: var(--gap-control);
-      padding: 2px 0 var(--gap-inline);
-      border-bottom: 1px solid var(--border);
-      font-size: 10px; font-weight: var(--weight-bold); text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--text-faint);
-    }
-    .mg-header .mg-count { font-size: 10px; }
-    .mg-row {
-      display: flex; align-items: center; gap: var(--gap-control);
-      flex-wrap: wrap; /* build-state fields drop to a second line when tight */
-      padding: var(--gap-inline) 0; border-bottom: 1px solid var(--border);
-    }
-    .mg-row:last-child { border-bottom: none; }
-    .mg-count       { font-weight: var(--weight-bold); width: 32px; flex-shrink: 0; }
-    .mg-machine-col { flex: 1 1 120px; min-width: 120px; }
-    .mg-machine     { color: var(--text); font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mg-mod         { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono); }
-    .mg-recipe-col  { width: 120px; flex-shrink: 0; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mg-upgrade-col { width: 105px; flex-shrink: 0; font-size: var(--text-xs); color: var(--text-muted); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mg-state-col   { display: flex; gap: var(--gap-item); white-space: nowrap; margin-left: auto; }
-    .mg-build-col   { width: 36px; flex-shrink: 0; display: flex; justify-content: flex-end; margin-left: auto; }
-    .mg-state-col + .mg-build-col { margin-left: 0; }
+    /* ── Machine group table — column widths/headers now come from the
+       shared .table component (tables.css); machine name+mod render via
+       .icontext. Build-state fields and the status toggle below have no wui
+       equivalent and stay as page-specific cell content. ────────────────── */
 
     /* Build-state fields: compact "n / N" number inputs, no spinner arrows. */
     .mg-build-field {
@@ -150,21 +76,14 @@
     .mg-tog.partial { --_icon-color: var(--warn); }
     .mg-tog.built   { --_icon-color: var(--success); }
 
-    /* ── IO list (ported from solve.html's result view) ──────────────────── */
+    /* ── IO section label — groups the Detail-Grid rows into Inputs/Outputs;
+       no wui equivalent (Detail-Grid itself has no sub-heading concept). ──── */
     .io-section-label {
       font-size: var(--text-xs); font-weight: var(--weight-semibold);
       text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
       margin: var(--gap-control) 0 var(--gap-inline);
     }
     .io-section-label:first-child { margin-top: 0; }
-    .io-row {
-      display: flex; align-items: baseline; justify-content: space-between;
-      gap: var(--gap-control); padding: 3px 0; font-size: var(--text-sm);
-    }
-    .io-item { color: var(--text); }
-    .io-item-primary { color: var(--accent); font-weight: var(--weight-semibold); }
-    .io-sublabel { font-size: 10px; color: var(--text-faint); font-style: italic; font-family: var(--mono); }
-    .io-rate { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); flex-shrink: 0; }
   </style>
 </head>
 <body class="app-shell">
@@ -215,7 +134,7 @@
             </div>
             <div class="page-title" id="page-title">…</div>
           </div>
-          <span class="pill" id="pl-status-pill"></span>
+          <span class="badge" id="pl-status-pill"></span>
         </div>
 
         <!-- ── Split layout ── -->
@@ -227,10 +146,10 @@
             <!-- Meta + actions -->
             <div class="container">
               <div class="container-body">
-                <div class="stat-row" id="pl-meta"></div>
+                <div class="detail-grid" id="pl-meta" style="margin-bottom:var(--gap-field);"></div>
                 <div class="progress-wrap" id="progress-wrap" style="display:none;">
-                  <div class="progress-track">
-                    <div class="progress-fill" id="progress-fill"></div>
+                  <div class="wui-progress-track">
+                    <div class="wui-progress-fill" id="progress-fill"></div>
                   </div>
                   <span class="progress-label" id="progress-label"></span>
                 </div>
@@ -243,8 +162,20 @@
               <div class="container-header">
                 <span class="container-title" data-i18n="production_line.machine_groups"></span>
               </div>
-              <div class="container-body" id="mg-list">
-                <span class="td-faint" data-i18n="common.loading"></span>
+              <div class="container-body-flush">
+                <table class="table" id="mg-table">
+                  <thead><tr>
+                    <th style="width:32px" data-i18n="solve.col.count"></th>
+                    <th data-i18n="solve.col.machine"></th>
+                    <th style="width:120px" data-i18n="solve.col.recipe"></th>
+                    <th style="width:105px" data-i18n="solve.upgrade.label"></th>
+                    <th style="width:80px"></th>
+                    <th style="width:36px"></th>
+                  </tr></thead>
+                  <tbody id="mg-list">
+                    <tr><td colspan="6"><span class="td-faint" data-i18n="common.loading"></span></td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -349,11 +280,13 @@
     renderIO();
   }
 
+  // Tone mapping covers every status the DB CHECK constraint allows
+  // (production_lines.status IN ('draft','active','archived')).
   function renderStatusPill() {
-    const pill = document.getElementById('pl-status-pill');
-    const cls  = { active: 'pill-active', draft: 'pill-draft', archived: 'pill-archived' };
-    pill.className   = 'pill ' + (cls[_pl.status] || '');
-    pill.textContent = t('status.' + _pl.status) || _pl.status;
+    const status = _pl.status;
+    const tone = status === 'active' ? 'badge-success' : status === 'draft' ? 'badge-warn' : 'badge-accent';
+    document.getElementById('pl-status-pill').outerHTML =
+      `<span id="pl-status-pill" class="badge ${tone}">${esc(t('status.' + status))}</span>`;
   }
 
   // A group is complete when all its machines stand AND (if it has a target upgrade
@@ -367,18 +300,13 @@
     return mgs.length > 0 && mgs.every(isGroupComplete);
   }
 
-  // Paired stat: bold target value, with the "current" value (from the real build
-  // state) stacked directly below in the same column. The current row only shows
-  // while the line is incomplete — once fully built it matches the target anyway.
+  // Key/value row for the Detail-Grid meta block. The "current" value (from the
+  // real build state) renders muted in parens next to the target — only while
+  // the line is incomplete; once fully built it matches the target anyway.
   function statPair(label, targetVal, currentVal, showCurrent) {
-    return `<div class="stat">
-      <span class="stat-label">${esc(label)}</span>
-      <div class="stat-pair">
-        <span class="row-label">${esc(t('production_line.row.target'))}</span>
-        <span class="stat-value">${targetVal}</span>
-        ${showCurrent ? `<span class="row-label">${esc(t('production_line.row.current'))}</span>
-        <span class="stat-value-current">${currentVal}</span>` : ''}
-      </div>
+    return `<div class="detail-row">
+      <span class="detail-key">${esc(label)}</span>
+      <span class="detail-val">${esc(targetVal)}${showCurrent ? ` <span style="color:var(--text-faint)">(${esc(currentVal)})</span>` : ''}</span>
     </div>`;
   }
 
@@ -388,17 +316,17 @@
     const incomplete = _pl.status === 'active' && !isLineComplete();
     const curRate    = fmtNum(_pl.current_rate || 0) + ' /' + _pl.time_unit;
     document.getElementById('pl-meta').innerHTML = `
-      <div class="stat">
-        <span class="stat-label">${esc(t('production_line.meta.target'))}</span>
+      <div class="detail-row">
+        <span class="detail-key">${esc(t('production_line.meta.target'))}</span>
         ${iconTextHTML(_pl.target_mod_id, _pl.target_item_id, { isFluid: _pl.target_is_fluid, name: targetName, subtitle: _pl.target_mod_id, size: 'lg' })}
       </div>
-      <div class="stat">
-        <span class="stat-label">${esc(t('production_line.meta.mode'))}</span>
-        <span class="stat-value">${esc(_pl.optimize_mode.toUpperCase())}</span>
+      <div class="detail-row">
+        <span class="detail-key">${esc(t('production_line.meta.mode'))}</span>
+        <span class="detail-val">${esc(_pl.optimize_mode.toUpperCase())}</span>
       </div>
-      ${statPair(t('common.rate'), esc(rate), esc(curRate), incomplete)}
+      ${statPair(t('common.rate'), rate, curRate, incomplete)}
       ${(_pl.target_eu_per_tick || 0) > 0
-        ? statPair('EU/t', _pl.target_eu_per_tick, _pl.current_eu_per_tick || 0, incomplete)
+        ? statPair('EU/t', String(_pl.target_eu_per_tick), String(_pl.current_eu_per_tick || 0), incomplete)
         : ''}
     `;
   }
@@ -415,7 +343,7 @@
       pw.style.display = '';
       const fill = document.getElementById('progress-fill');
       fill.style.width = Math.round(built / total * 100) + '%';
-      fill.classList.toggle('full', isLineComplete());
+      fill.style.background = isLineComplete() ? 'var(--success)' : '';
       document.getElementById('progress-label').textContent =
         `${built} / ${total} ${t('production_line.machines_built')}`;
     } else {
@@ -443,29 +371,21 @@
     });
   }
 
-  // Machine-group row layout ported from solve.html's result view (same
-  // .mg-header/.mg-row classes). Rate/upgrade editing for the TARGET loadout
-  // is being redone separately, not part of this pass — but the CURRENT build
-  // state (machines built / upgrades installed) is editable inline per row.
+  // Machine-group rows render into the <tbody> of the .table set up in the
+  // page markup (thead columns are static HTML). Rate/upgrade editing for the
+  // TARGET loadout is being redone separately, not part of this pass — but the
+  // CURRENT build state (machines built / upgrades installed) is editable
+  // inline per row.
   function renderMachineGroups() {
     const mgs       = _pl.machine_groups || [];
-    const canToggle = _pl.status === 'active';
     const container = document.getElementById('mg-list');
 
     if (!mgs.length) {
-      container.innerHTML = `<span class="td-faint">—</span>`;
+      container.innerHTML = `<tr><td colspan="6"><span class="td-faint">—</span></td></tr>`;
       return;
     }
 
-    const hdr = `<div class="mg-header">
-      <div class="mg-count">${esc(t('solve.col.count'))}</div>
-      <div class="mg-machine-col">${esc(t('solve.col.machine'))}</div>
-      <div class="mg-recipe-col">${esc(t('solve.col.recipe'))}</div>
-      <div class="mg-upgrade-col">${esc(t('solve.upgrade.label'))}</div>
-      <div class="mg-state-col"></div>
-      <div class="mg-build-col"></div>
-    </div>`;
-    container.innerHTML = hdr + mgs.map(g => mgRowHTML(g, canToggle)).join('');
+    container.innerHTML = mgs.map(g => mgRowHTML(g)).join('');
 
     container.querySelectorAll('[data-mgtoggle]').forEach(btn => {
       btn.addEventListener('click', () => toggleMGStatus(btn.dataset.mgtoggle));
@@ -489,16 +409,16 @@
   }
   const STATE_GLYPH = { planned: '⚒', partial: '◐', built: '✓' };
 
-  function mgRowHTML(g, canToggle) {
-    const name     = machineName(g.machine_mod_id, g.machine_id);
-    const outName  = _recipeOutputs.get(g.recipe_id) || '—';
-    const tier     = g.upgrade_tier_id ? _tiers.find(tr => tr.id === g.upgrade_tier_id) : null;
-    const upgText  = tier ? `${tier.name} ×${g.upgrade_count}` : '';
-    const state    = groupState(g);
-    const complete = state === 'built';
-    const glyph    = STATE_GLYPH[state];
-    const nxtGlyph = complete ? '✓→⚒' : `${glyph}→✓`;
-    const togBtn   = canToggle
+  // Status-toggle cell: a clickable icon button while the line is active,
+  // else a plain static icon. canToggle is derived from _pl (module state)
+  // rather than passed down, since every cell-builder needs it independently.
+  function mgTogHTML(g) {
+    const canToggle = _pl.status === 'active';
+    const state     = groupState(g);
+    const complete  = state === 'built';
+    const glyph     = STATE_GLYPH[state];
+    const nxtGlyph  = complete ? '✓→⚒' : `${glyph}→✓`;
+    return canToggle
       ? `<button class="mg-tog btn-icon-color ${state}"
            data-mgtoggle="${esc(g.id)}"
            title="${esc(t('status.' + state))}">
@@ -506,10 +426,14 @@
            <span class="tog-nxt">${nxtGlyph}</span>
          </button>`
       : `<span class="mg-tog ${state}" style="color:var(--_icon-color);cursor:default;">${glyph}</span>`;
+  }
 
-    // Build-state fields: hidden once the group is complete — nothing left to
-    // adjust, the row falls back to the plain single-icon display.
-    const fields = (canToggle && !complete) ? `
+  // Build-state fields: hidden once the line isn't active, or once the group
+  // is complete — nothing left to adjust, the row falls back to the plain
+  // single-icon display in the toggle cell.
+  function mgBuildFieldHTML(g) {
+    if (_pl.status !== 'active' || groupState(g) === 'built') return '';
+    return `
       <label class="mg-build-field">
         <span class="mg-build-field-label">${esc(t('production_line.build.built'))}</span>
         <input class="input" type="number" min="0" max="${g.count}" step="1" value="${g.built_count || 0}"
@@ -521,23 +445,34 @@
         <input class="input" type="number" min="0" max="${g.upgrade_count}" step="1" value="${g.current_upgrade_count || 0}"
                data-upg-input="${esc(g.id)}" data-max="${g.upgrade_count}" />
         <span class="mg-build-max">/${g.upgrade_count}</span>
-      </label>` : ''}` : '';
-
-    return `<div class="mg-row">
-      <div class="mg-count">${g.count}×</div>
-      <div class="mg-machine-col">
-        <div class="mg-machine">${esc(name)}</div>
-        <div class="mg-mod">${esc(g.machine_mod_id)}</div>
-      </div>
-      <div class="mg-recipe-col" title="${esc(outName)}">${esc(outName)}</div>
-      <div class="mg-upgrade-col" title="${esc(upgText)}">${esc(upgText)}</div>
-      <div class="mg-state-col">${fields}</div>
-      <div class="mg-build-col">${togBtn}</div>
-    </div>`;
+      </label>` : ''}`;
   }
 
-  // IO row layout ported from solve.html's result view (.io-row), label rendered
-  // via catalog-registry's iconTextHTML (see the ★ primary marker below).
+  function mgRowHTML(g) {
+    const name    = machineName(g.machine_mod_id, g.machine_id);
+    const outName = _recipeOutputs.get(g.recipe_id) || '—';
+    const tier    = g.upgrade_tier_id ? _tiers.find(tr => tr.id === g.upgrade_tier_id) : null;
+    const upgText = tier ? `${tier.name} ×${g.upgrade_count}` : '';
+
+    return `<tr>
+        <td>${esc(g.count)}×</td>
+        <td>
+            <span class="icontext">
+                <span class="icontext-body">
+                    <span class="icontext-text">${esc(name)}</span>
+                    <span class="icontext-subtitle">${esc(g.machine_mod_id)}</span>
+                </span>
+            </span>
+        </td>
+        <td class="td-mono" style="font-size:var(--text-xs)" title="${esc(outName)}">${esc(outName)}</td>
+        <td class="td-mono" style="font-size:var(--text-xs)" title="${esc(upgText)}">${esc(upgText)}</td>
+        <td>${mgBuildFieldHTML(g)}</td>
+        <td>${mgTogHTML(g)}</td>
+    </tr>`;
+  }
+
+  // IO rows use the same Detail-Grid pattern as the meta block, grouped under
+  // a page-local .io-section-label (Detail-Grid has no sub-heading concept).
   function renderIO() {
     const ioEl    = document.getElementById('io-list');
     const all     = _pl.io || [];
@@ -547,11 +482,11 @@
     let html = '';
     if (inputs.length) {
       html += `<div class="io-section-label">${esc(t('solve.inputs'))}</div>`;
-      html += inputs.map(e => ioRow(e, false)).join('');
+      html += `<div class="detail-grid">${inputs.map(e => ioRow(e, false)).join('')}</div>`;
     }
     if (outputs.length) {
       html += `<div class="io-section-label">${esc(t('solve.outputs'))}</div>`;
-      html += outputs.map((e, i) => ioRow(e, i === 0)).join('');
+      html += `<div class="detail-grid">${outputs.map((e, i) => ioRow(e, i === 0)).join('')}</div>`;
     }
     ioEl.innerHTML = html || `<span class="td-faint">—</span>`;
   }
@@ -567,11 +502,10 @@
       subtitle: e.mod_id,
       size:     'sm',
     });
-    return `<div class="io-row">
-      <div style="flex:1;min-width:0;display:flex;align-items:center;gap:var(--gap-icon);">
-        ${isPrimary ? '<span class="io-item-primary">★</span>' : ''}${label}
-      </div>
-      <div class="io-rate">${esc(rate)}</div>
+    const star = isPrimary ? `<span style="color:var(--accent);font-weight:var(--weight-semibold)">★</span> ` : '';
+    return `<div class="detail-row">
+      <span class="detail-key" style="color:var(--text)">${star}${label}</span>
+      <span class="detail-val">${esc(rate)}</span>
     </div>`;
   }
 

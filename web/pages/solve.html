@@ -39,27 +39,6 @@
     }
     .rate-field.rate-disabled { opacity: 0.4; pointer-events: none; }
 
-    /* ── Mode toggle ───────────────────────────────────────────────────────── */
-    .mode-toggle {
-      display: inline-flex;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .mode-btn {
-      padding: 0 var(--gap-control);
-      height: var(--h-btn);
-      border: none;
-      background: none;
-      font: inherit;
-      font-size: var(--text-sm);
-      color: var(--text-muted);
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .mode-btn.active { background: var(--accent); color: #fff; font-weight: var(--weight-semibold); }
-    .mode-btn:hover:not(.active) { background: var(--bg-hover); }
-
     /* ── Step label ────────────────────────────────────────────────────────── */
     .step-label {
       font-size: var(--text-xs);
@@ -75,25 +54,6 @@
       letter-spacing: 0;
       color: var(--text-faint);
     }
-
-    /* ── Banners ───────────────────────────────────────────────────────────── */
-    .banner {
-      padding: var(--gap-control) var(--pad-container);
-      border-radius: var(--radius);
-      font-size: var(--text-sm);
-      margin-bottom: var(--gap-section);
-    }
-    .banner-error {
-      background: var(--danger-muted);
-      border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
-    }
-    .banner-warn {
-      background: var(--warn-muted);
-      border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
-    }
-    .banner strong { display: block; margin-bottom: var(--gap-inline); }
-    .banner ul { margin: 0 0 0 var(--pad-container); padding: 0; }
-    .banner-action { margin-top: var(--gap-inline); color: var(--text-muted); }
 
     /* ── Chain table helpers ───────────────────────────────────────────────── */
     .chain-cell-recipe {
@@ -144,14 +104,6 @@
        (graph), tagged instead of the plain "+ Pick Recipe" prompt; still opens
        the picker to override. info = no demand rate known yet, success/warn/
        danger = have vs. need comparison once the chain has actually solved. */
-    .chain-override-btn.chain-tag-info    { border-color: var(--accent);  color: var(--accent);  background: var(--accent-muted); }
-    .chain-override-btn.chain-tag-success { border-color: var(--success); color: var(--success); background: var(--success-muted); }
-    .chain-override-btn.chain-tag-warn    { border-color: var(--warn);    color: var(--warn);    background: var(--warn-muted); }
-    .chain-override-btn.chain-tag-danger  { border-color: var(--danger);  color: var(--danger);  background: var(--danger-muted); }
-    .chain-override-btn.chain-tag-info:hover    { background: var(--accent);  color: var(--bg-card); }
-    .chain-override-btn.chain-tag-success:hover { background: var(--success); color: var(--bg-card); }
-    .chain-override-btn.chain-tag-warn:hover    { background: var(--warn);    color: var(--bg-card); }
-    .chain-override-btn.chain-tag-danger:hover  { background: var(--danger);  color: var(--bg-card); }
     .graph-node-label.clickable.chain-tag-info    { color: var(--accent); }
     .graph-node-label.clickable.chain-tag-success { color: var(--success); }
     .graph-node-label.clickable.chain-tag-warn    { color: var(--warn); }
@@ -208,17 +160,17 @@
     .mg-count { font-weight: var(--weight-bold); width: 32px; flex-shrink: 0; }
     .mg-info  { flex: 1; min-width: 0; }
     .mg-machine { color: var(--text); font-size: var(--text-sm); }
-    .mg-recipe  { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mg-mod     { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono); }
+    .mg-recipe  { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mg-mod     { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
     .mg-util    { font-size: var(--text-xs); color: var(--text-muted); flex-shrink: 0; }
     /* Upgrade badge — populated when OptimizeUpgrades is implemented */
     .mg-upgrade {
       font-size: var(--text-xs); color: var(--accent);
-      font-family: var(--mono); flex-shrink: 0; display: none;
+      font-family: var(--font-mono); flex-shrink: 0; display: none;
     }
     .mg-upgrade:not(:empty) { display: inline; }
     .mg-energy {
-      font-size: var(--text-xs); font-family: var(--mono); color: var(--text-muted);
+      font-size: var(--text-xs); font-family: var(--font-mono); color: var(--text-muted);
       flex-shrink: 0; min-width: 68px; text-align: right;
     }
     .mg-energy .unit { color: var(--text-faint); margin-left: 2px; }
@@ -233,9 +185,7 @@
     }
     .energy-bar-row { display: flex; align-items: center; gap: var(--gap-inline); padding: 3px 0; }
     .energy-bar-label { font-size: var(--text-xs); color: var(--text-muted); width: 78px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .energy-bar-track { flex: 1; height: 6px; border-radius: 3px; background: var(--bg-hover); overflow: hidden; }
-    .energy-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
-    .energy-bar-value { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint); width: 64px; text-align: right; flex-shrink: 0; }
+    .energy-bar-value { font-size: var(--text-xs); font-family: var(--font-mono); color: var(--text-faint); width: 64px; text-align: right; flex-shrink: 0; }
 
     /* ── IO profile ────────────────────────────────────────────────────────── */
     .io-section-label {
@@ -247,8 +197,8 @@
       display: flex; align-items: baseline; justify-content: space-between;
       gap: var(--gap-control); padding: 3px 0; font-size: var(--text-sm);
     }
-    .io-sublabel { font-size: 10px; color: var(--text-faint); font-style: italic; font-family: var(--mono); }
-    .io-rate { color: var(--text-muted); font-family: var(--mono); font-size: var(--text-xs); flex-shrink: 0; }
+    .io-sublabel { font-size: 10px; color: var(--text-faint); font-style: italic; font-family: var(--font-mono); }
+    .io-rate { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); flex-shrink: 0; }
 
     /* ── Info banner ──────────────────────────────────────────────────────── */
     .info-banner {
@@ -320,12 +270,15 @@
         </div>
 
         <!-- ── No active mods banner (blocking) ───────────────────────────── -->
-        <div id="no-mods-banner" class="banner banner-warn" style="display:none;">
-          <strong data-i18n="solve.discover.no_mods_title">No mods configured for this world</strong>
-          <span data-i18n="solve.discover.no_mods_hint">Without active mods there are no recipes to discover.</span>
-          <div class="banner-action">
-            <a id="no-mods-link" href="#" data-i18n="solve.discover.no_mods_action">→ Set up mods</a>
-          </div>
+        <div id="no-mods-banner" class="alert warn" style="display:none;">
+          <span class="alert-icon">⚠</span>
+          <span>
+            <strong data-i18n="solve.discover.no_mods_title">No mods configured for this world</strong>
+            <span data-i18n="solve.discover.no_mods_hint">Without active mods there are no recipes to discover.</span>
+            <div style="margin-top:6px">
+              <a id="no-mods-link" href="#" data-i18n="solve.discover.no_mods_action">→ Set up mods</a>
+            </div>
+          </span>
         </div>
 
         <!-- ── Step 1: Target + Mode ───────────────────────────────────────── -->
@@ -370,9 +323,9 @@
               <div class="field">
                 <label class="field-label" data-i18n="solve.field.mode">Mode</label>
                 <div style="display:flex;gap:var(--gap-inline);align-items:center;">
-                  <div class="mode-toggle">
-                    <button class="mode-btn active" id="btn-auto"></button>
-                    <button class="mode-btn"        id="btn-target"></button>
+                  <div class="radio-group">
+                    <button class="radio-opt active" id="btn-auto"></button>
+                    <button class="radio-opt"        id="btn-target"></button>
                   </div>
                   <button class="btn btn-primary" id="solve-btn"></button>
                   <span class="status-msg" id="solve-status"></span>
@@ -385,20 +338,20 @@
 
               <div class="field" id="tier-field" style="width:auto;">
                 <label class="field-label" data-i18n="solve.tier.label">Tier</label>
-                <div class="mode-toggle" style="flex-shrink:0;">
-                  <button class="mode-btn"        id="btn-tier-bronze"   data-i18n="solve.tier.bronze">Bronze</button>
-                  <button class="mode-btn"        id="btn-tier-steel"    data-i18n="solve.tier.steel">Steel</button>
-                  <button class="mode-btn active" id="btn-tier-electric" data-i18n="solve.tier.electric">Electric</button>
+                <div class="radio-group" style="flex-shrink:0;">
+                  <button class="radio-opt"        id="btn-tier-bronze"   data-i18n="solve.tier.bronze">Bronze</button>
+                  <button class="radio-opt"        id="btn-tier-steel"    data-i18n="solve.tier.steel">Steel</button>
+                  <button class="radio-opt active" id="btn-tier-electric" data-i18n="solve.tier.electric">Electric</button>
                 </div>
               </div>
 
               <div class="field" id="upgrade-field" style="width:auto;">
                 <label class="field-label" data-i18n="solve.upgrade.label">Upgrades</label>
                 <div style="display:flex;gap:var(--gap-inline);align-items:center;flex-wrap:wrap;">
-                  <div class="mode-toggle" style="flex-shrink:0;">
-                    <button class="mode-btn active" id="btn-upg-off"></button>
-                    <button class="mode-btn"        id="btn-upg-auto"></button>
-                    <button class="mode-btn"        id="btn-upg-fixed"></button>
+                  <div class="radio-group" style="flex-shrink:0;">
+                    <button class="radio-opt active" id="btn-upg-off"></button>
+                    <button class="radio-opt"        id="btn-upg-auto"></button>
+                    <button class="radio-opt"        id="btn-upg-fixed"></button>
                   </div>
                   <div id="upg-fixed-controls" style="display:none;gap:var(--gap-inline);align-items:center;flex-shrink:0;">
                     <select class="input" id="upg-tier"></select>
@@ -417,10 +370,13 @@
         </div>
 
         <!-- ── Cycle error banner (blocking) ──────────────────────────────── -->
-        <div id="cycle-error-banner" class="banner banner-error" style="display:none;">
-          <strong>⛔ <span data-i18n="solve.cycle_error.title">The following items create an unresolvable cycle</span></strong>
-          <ul id="cycle-error-list"></ul>
-          <div class="banner-action" data-i18n="solve.cycle_error.action">Change your recipe selection to continue.</div>
+        <div id="cycle-error-banner" class="alert danger" style="display:none;">
+          <span class="alert-icon">⛔</span>
+          <span>
+            <strong><span data-i18n="solve.cycle_error.title">The following items create an unresolvable cycle</span></strong>
+            <ul id="cycle-error-list"></ul>
+            <div style="margin-top:6px" data-i18n="solve.cycle_error.action">Change your recipe selection to continue.</div>
+          </span>
         </div>
 
         <!-- ── Step 2: Chain Configuration ────────────────────────────────── -->
@@ -917,10 +873,10 @@
   function alreadyInFactoryLabel(key) {
     const info = factoryRateInfo(key);
     if (!info) return null;
-    if (info.partial) return { text: t('solve.chain.already_in_factory'), cls: 'chain-tag-info' };
-    if (info.cmp > 0) return { text: `${t('solve.chain.already_in_factory')} ${info.existingText}/${info.neededText}`, cls: 'chain-tag-success' };
-    if (info.cmp === 0) return { text: `${t('solve.chain.already_in_factory')} ${info.existingText}/${info.neededText}`, cls: 'chain-tag-warn' };
-    return { text: `${t('solve.chain.not_enough_in_factory')} ${info.existingText}/${info.neededText}`, cls: 'chain-tag-danger' };
+    if (info.partial) return { text: t('solve.chain.already_in_factory'), cls: 'badge-accent' };
+    if (info.cmp > 0) return { text: `${t('solve.chain.already_in_factory')} ${info.existingText}/${info.neededText}`, cls: 'badge-success' };
+    if (info.cmp === 0) return { text: `${t('solve.chain.already_in_factory')} ${info.existingText}/${info.neededText}`, cls: 'badge-warn' };
+    return { text: `${t('solve.chain.not_enough_in_factory')} ${info.existingText}/${info.neededText}`, cls: 'badge-danger' };
   }
 
   function _chainRecipeCell(item, key, withStop) {
@@ -959,7 +915,7 @@
     const tag = alreadyInFactoryLabel(key);
     const label = tag ? tag.text : t('solve.chain.pick_recipe');
     return warnIcon +
-      `<button class="chain-override-btn${tag ? ' ' + tag.cls : ''}" data-action="openChainPicker"
+      `<button class="chain-override-btn${tag ? ' badge ' + tag.cls : ''}" data-action="openChainPicker"
         data-key="${esc(key)}" data-with-stop="${withStop}"${tag ? ` title="${esc(t('solve.chain.already_in_factory_hint'))}"` : ''}>${esc(label)}</button>`;
   }
 
@@ -1414,7 +1370,7 @@
         ${[...byMod.entries()].sort((a, b) => b[1] - a[1]).map(([mod, eu]) => `
           <div class="energy-bar-row">
             <div class="energy-bar-label" title="${esc(modName(mod))}">${esc(modName(mod))}</div>
-            <div class="energy-bar-track"><div class="energy-bar-fill" style="width:${Math.round(eu/maxModEU*100)}%"></div></div>
+            <div class="wui-progress-track"><div class="wui-progress-fill" style="width:${Math.round(eu/maxModEU*100)}%"></div></div>
             <div class="energy-bar-value">${eu} EU/t</div>
           </div>`).join('')}
       </div>`;

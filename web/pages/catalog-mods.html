@@ -31,10 +31,6 @@
     .link-icon { display: inline-block; font-size: .7em; opacity: .65; margin-right: 3px; letter-spacing: 0; font-style: normal; }
     .link-icon-add { opacity: .35; }
 
-    /* placeholder text for empty inline-editable fields — inline-edit.css has no
-       placeholder mechanism, so this stays page-specific */
-    .field-editable[data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--text-faint); pointer-events: none; }
-
     /* link editing */
     .mod-link-empty .mod-link-add { opacity: .5; border-style: dashed; }
     .mod-link-empty .mod-link-add:hover { opacity: 1; }

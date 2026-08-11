@@ -14,3 +14,7 @@
 .group-toggle { cursor: pointer; user-select: none; font-size: .7em; opacity: .5; padding-right: 4px; }
 .group-toggle::before { content: '▾'; }
 .table-group-hd.collapsed .group-toggle::before { content: '▸'; }
+
+/* placeholder text for empty inline-editable fields — inline-edit.css has no
+   placeholder mechanism, so this lives here instead. */
+.field-editable[data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--text-faint); pointer-events: none; }

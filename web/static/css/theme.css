@@ -74,9 +74,9 @@ html.dark {
 
 /* ── Status messages ─────────────────────────────────────────────────────── */
 .status-msg { font-size: var(--text-sm); font-weight: var(--weight-medium); padding: var(--gap-inline) var(--gap-field); border-radius: var(--radius); display: none; }
-.status-msg.ok   { background: var(--success-muted); color: var(--success); display: inline-flex; }
-.status-msg.err  { background: var(--danger-muted);  color: var(--danger);  display: inline-flex; }
-.status-msg.warn { background: var(--warn-muted);    color: var(--warn);    display: inline-flex; }
+.status-msg.ok   { color: var(--success); display: inline-flex; }
+.status-msg.err  { color: var(--danger);  display: inline-flex; }
+.status-msg.warn { color: var(--warn);    display: inline-flex; }
 
 /* ── Mod picker (mod-picker.js) ──────────────────────────────────────────── */
 .check-all-row {

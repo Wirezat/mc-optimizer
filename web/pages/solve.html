@@ -100,14 +100,14 @@
     .chain-override-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
     .chain-override-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
 
-    /* ── "Already/Not enough in Factory" tag — same button (table) or label
-       (graph), tagged instead of the plain "+ Pick Recipe" prompt; still opens
-       the picker to override. info = no demand rate known yet, success/warn/
-       danger = have vs. need comparison once the chain has actually solved. */
-    .graph-node-label.clickable.chain-tag-info    { color: var(--accent); }
-    .graph-node-label.clickable.chain-tag-success { color: var(--success); }
-    .graph-node-label.clickable.chain-tag-warn    { color: var(--warn); }
-    .graph-node-label.clickable.chain-tag-danger  { color: var(--danger); }
+    /* .badge-success/.badge-warn/.badge-danger/.badge-accent alone (0-1-0)
+       can't beat graph.css's .graph-node-label.clickable color rule (0-2-0);
+       this compound selector (0-3-0) wins outright so the already/not-enough
+       in-factory tone actually shows on graph nodes, not just the table. */
+    .graph-node-label.clickable.badge-accent  { color: var(--accent); }
+    .graph-node-label.clickable.badge-success { color: var(--success); }
+    .graph-node-label.clickable.badge-warn    { color: var(--warn); }
+    .graph-node-label.clickable.badge-danger  { color: var(--danger); }
 
     .partial-btn {
       font-size: var(--text-xs);
@@ -193,6 +193,7 @@
       text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
       margin: var(--gap-control) 0 var(--gap-inline);
     }
+    .io-section-label:first-child { margin-top: 0; }
     .io-row {
       display: flex; align-items: baseline; justify-content: space-between;
       gap: var(--gap-control); padding: 3px 0; font-size: var(--text-sm);
@@ -1070,7 +1071,7 @@
         badge,
         kind,
         warn: _cycleNodes.has(key) || ci.ModRestricted,
-        labels: pickable ? [{ text: labelText, cls: tag?.cls, menu: buildRecipeMenu(ci, key, { withStop: ci.Level !== 0 }) }] : null,
+        labels: pickable ? [{ text: labelText, cls: tag ? 'badge ' + tag.cls : undefined, menu: buildRecipeMenu(ci, key, { withStop: ci.Level !== 0 }) }] : null,
         dependsOn,
       });
     }

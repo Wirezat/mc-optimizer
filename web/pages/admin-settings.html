@@ -52,10 +52,11 @@
     }
     .admin-cb:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* ── Status msg ───────────────────────────────────────────────────────── */
-    .status-msg     { font-size: var(--text-sm); min-height: 1.2em; display: block; }
-    .status-msg.ok  { color: var(--success); }
-    .status-msg.err { color: var(--danger); }
+    /* ── Status msg — always reserves layout space (unlike theme.css's
+       display:none default) so the settings panels don't jump when a
+       message appears; color now matches theme.css's flat .ok/.err exactly,
+       so those tone rules were dropped as redundant. */
+    .status-msg { font-size: var(--text-sm); min-height: 1.2em; display: block; }
   </style>
 </head>
 <body class="app-shell">

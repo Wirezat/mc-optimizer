@@ -14,11 +14,6 @@
         document.documentElement.classList.add('dark');
     })();
   </script>
-  <style>
-    /* placeholder text for empty inline-editable fields — inline-edit.css has no
-       placeholder mechanism, so this stays page-specific */
-    .field-editable[data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--text-faint); pointer-events: none; }
-  </style>
 </head>
 <body class="app-shell">
   <header class="header">

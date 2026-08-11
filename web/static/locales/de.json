@@ -1,7 +1,6 @@
 {
-  "admin.import.browse": "auswählen",
   "admin.import.btn": "Importieren",
-  "admin.import.drop_hint": "Mod-ZIP hier ablegen oder",
+  "admin.import.drop_main": "Mod-ZIP hier ablegen oder klicken zum Durchsuchen",
   "admin.import.drop_sub": "Maschinen, Rezepte, Items, Fluide, Texturen, Übersetzungen, Tags und mehr werden importiert",
   "admin.import.stat.block_drops": "Block-Drops",
   "admin.import.stat.fluids": "Fluide",
@@ -241,6 +240,7 @@
   "header.logout": "Abmelden",
   "header.personal": "Persönlich",
   "header.role_admin": "Administrator",
+  "header.role_owner": "Eigentümer",
   "header.role_user": "Benutzer",
   "login.confirm": "Bestätigen",
   "login.confirm_password": "Passwort bestätigen",

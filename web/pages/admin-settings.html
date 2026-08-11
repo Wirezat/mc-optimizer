@@ -14,28 +14,6 @@
     })();
   </script>
   <style>
-    /* ── Section card ──────────────────────────────────────────────────────── */
-    .admin-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      max-width: 760px;
-      margin-bottom: var(--gap-section);
-    }
-    .admin-card-header {
-      padding: var(--gap-control) var(--pad-card);
-      border-bottom: 1px solid var(--border);
-      font-size: var(--text-xs);
-      font-weight: var(--weight-bold);
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--text-faint);
-    }
-    .admin-card-body {
-      padding: var(--gap-control) var(--pad-card);
-    }
-
     /* ── Setting row (checkbox + label) ───────────────────────────────────── */
     .setting-row {
       display: flex;
@@ -64,19 +42,6 @@
       cursor: pointer;
       accent-color: var(--accent);
     }
-
-    /* ── Role badge ───────────────────────────────────────────────────────── */
-    .role-badge {
-      display: inline-block;
-      padding: 2px var(--gap-inline);
-      border-radius: var(--radius-pill);
-      font-size: var(--text-xs);
-      font-weight: var(--weight-bold);
-      text-transform: uppercase;
-    }
-    .role-owner { background: var(--accent-muted); color: var(--accent); }
-    .role-admin { background: rgba(59,130,246,0.12); color: #2563eb; }
-    .role-user  { background: var(--bg); color: var(--text-faint); border: 1px solid var(--border); }
 
     /* ── Admin checkbox ───────────────────────────────────────────────────── */
     .admin-cb {
@@ -135,9 +100,9 @@
         </div>
 
         <!-- Access & Registration -->
-        <div class="admin-card">
-          <div class="admin-card-header" data-i18n="admin.settings.section.access"></div>
-          <div class="admin-card-body">
+        <div class="container" style="max-width:760px">
+          <div class="container-header"><span class="container-title" data-i18n="admin.settings.section.access"></span></div>
+          <div class="container-body">
             <div class="setting-row">
               <label for="reg-toggle">
                 <div class="setting-label" data-i18n="admin.settings.reg_allow"></div>
@@ -150,8 +115,8 @@
         </div>
 
         <!-- User Management -->
-        <div class="admin-card">
-          <div class="admin-card-header" data-i18n="admin.settings.section.users"></div>
+        <div class="container" style="max-width:760px">
+          <div class="container-header"><span class="container-title" data-i18n="admin.settings.section.users"></span></div>
           <table class="table" id="users-table">
             <thead>
               <tr>
@@ -245,6 +210,12 @@
     }
   }
 
+  function roleBadgeHTML(role) {
+    const tone = role === 'owner' ? 'badge-accent' : role === 'admin' ? 'badge-warn' : 'badge';
+    const key = role === 'owner' ? 'header.role_owner' : role === 'admin' ? 'header.role_admin' : 'header.role_user';
+    return `<span class="badge ${tone}">${esc(t(key))}</span>`;
+  }
+
   function renderUsers() {
     const tbody = document.getElementById('users-tbody');
     if (!_users.length) {
@@ -254,9 +225,9 @@
     const viewerIsOwner = _me?.is_owner ?? false;
     tbody.innerHTML = _users.map(u => {
       let roleBadge = '';
-      if (u.is_owner) roleBadge += '<span class="role-badge role-owner">Owner</span> ';
-      if (u.is_admin) roleBadge += `<span class="role-badge role-admin">${t('header.role_admin')}</span>`;
-      if (!u.is_owner && !u.is_admin) roleBadge = `<span class="role-badge role-user">${t('header.role_user')}</span>`;
+      if (u.is_owner) roleBadge += roleBadgeHTML('owner') + ' ';
+      if (u.is_admin) roleBadge += roleBadgeHTML('admin');
+      if (!u.is_owner && !u.is_admin) roleBadge = roleBadgeHTML('user');
       const date = u.created_at ? u.created_at.slice(0,10) : '—';
       const transferCell = viewerIsOwner
         ? (u.is_owner || u.id === _me.id ? '<td></td>'

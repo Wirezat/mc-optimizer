@@ -14,53 +14,6 @@
     })();
   </script>
   <style>
-    /* ── Progress bar (flush, above drop zone) ─────────────────────────────── */
-    .import-progress {
-      height: 3px;
-      background: var(--border);
-      overflow: hidden;
-      display: none;
-    }
-    .import-progress.visible { display: block; }
-    .import-progress-fill {
-      height: 100%;
-      background: var(--accent);
-      width: 0%;
-      transition: width 0.3s;
-    }
-
-    /* ── Drop zone ─────────────────────────────────────────────────────────── */
-    .import-drop {
-      margin: var(--pad-container);
-      border: 2px dashed var(--border);
-      border-radius: var(--radius);
-      padding: var(--gap-section) var(--pad-card);
-      text-align: center;
-      color: var(--text-faint);
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s, color 0.15s;
-      background: var(--bg);
-    }
-    .import-drop:hover, .import-drop.drag-over {
-      border-color: var(--accent);
-      background: var(--accent-muted);
-      color: var(--text);
-    }
-    .import-drop.disabled { opacity: 0.5; pointer-events: none; }
-    .import-drop-icon  { font-size: 24px; display: block; margin-bottom: var(--gap-inline); opacity: 0.5; }
-    .import-drop-main  { font-size: var(--text-sm); color: var(--text); }
-    .import-drop-browse {
-      color: var(--accent); text-decoration: underline; cursor: pointer;
-      background: none; border: none; font-size: inherit; font-family: inherit; padding: 0;
-    }
-    .import-drop-file {
-      font-size: var(--text-sm);
-      font-weight: var(--weight-semibold);
-      color: var(--accent);
-      margin-top: var(--gap-inline);
-    }
-    .import-drop-sub { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--gap-inline); }
-
     /* ── Action row (bottom of container) ─────────────────────────────────── */
     .import-actions {
       display: flex;
@@ -69,20 +22,14 @@
       padding: var(--gap-inline) var(--pad-container);
       border-top: 1px solid var(--border);
     }
-    .import-status     { font-size: var(--text-sm); }
-    .import-status.ok  { color: var(--success); }
-    .import-status.err { color: var(--danger); }
 
-    /* ── Result stats ──────────────────────────────────────────────────────── */
-    .import-stat-row { display: flex; gap: var(--pad-card); flex-wrap: wrap; }
-    .import-stat { display: flex; align-items: center; gap: var(--gap-inline); }
-    .import-stat-num   { font-size: var(--text-md); font-weight: var(--weight-bold); color: var(--accent); }
-    .import-stat-label { font-size: var(--text-sm); color: var(--text-muted); }
+    /* ── Drop zone (page-specific: wui has no disabled modifier) ───────────── */
+    #drop-zone.disabled { opacity: 0.4; pointer-events: none; }
 
     /* ── Warnings ──────────────────────────────────────────────────────────── */
     .import-warn-list { margin-top: var(--gap-control); max-height: 160px; overflow-y: auto; }
     .import-warn-line {
-      font-family: var(--mono);
+      font-family: var(--font-mono);
       font-size: var(--text-xs);
       color: var(--text-muted);
       padding: 2px 0;
@@ -147,26 +94,25 @@
           </div>
 
           <!-- Progress bar (flush) -->
-          <div class="import-progress" id="progress-bar">
-            <div class="import-progress-fill" id="progress-fill"></div>
+          <div class="wui-progress-track" id="progress-bar" style="display:none;margin:0 var(--pad-container)">
+            <div class="wui-progress-fill" id="progress-fill" style="width:0%;transition:width 0.3s"></div>
           </div>
 
           <!-- Drop zone -->
-          <div class="import-drop" id="drop-zone">
-            <span class="import-drop-icon">📦</span>
-            <div class="import-drop-main">
-              <span data-i18n="admin.import.drop_hint"></span>
-              <button class="import-drop-browse" id="drop-browse" data-i18n="admin.import.browse"></button>
+          <div class="wui-dropzone" id="drop-zone" style="margin:var(--pad-container)">
+            <div>
+              <div style="font-size:20px;opacity:.5">📦</div>
+              <div data-i18n="admin.import.drop_main"></div>
+              <div id="drop-file" style="font-size:var(--text-sm);font-weight:var(--weight-semibold);color:var(--accent);margin-top:var(--gap-inline)"></div>
+              <div style="font-size:var(--text-xs);color:var(--text-faint)" data-i18n="admin.import.drop_sub"></div>
             </div>
-            <div class="import-drop-file" id="drop-file"></div>
-            <div class="import-drop-sub" data-i18n="admin.import.drop_sub"></div>
           </div>
           <input type="file" id="zip-input" accept=".zip" style="display:none" />
 
           <!-- Actions -->
           <div class="import-actions">
             <button class="btn btn-primary btn-sm" id="import-btn" disabled data-i18n="admin.import.btn"></button>
-            <span class="import-status" id="import-status"></span>
+            <span class="status-msg" id="import-status"></span>
           </div>
 
         </div>
@@ -177,7 +123,7 @@
             <span class="container-title" id="import-result-mod"></span>
           </div>
           <div class="container-body">
-            <div class="import-stat-row" id="import-stats"></div>
+            <div class="detail-grid cols-2" id="import-stats"></div>
             <div class="import-warn-list" id="import-warnings"></div>
           </div>
         </div>
@@ -235,14 +181,10 @@
   const dropZone = document.getElementById('drop-zone');
 
   dropZone.addEventListener('click', () => zipInput.click());
-  document.getElementById('drop-browse').addEventListener('click', e => {
-    e.stopPropagation();
-    zipInput.click();
-  });
-  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
   dropZone.addEventListener('drop', e => {
-    e.preventDefault(); dropZone.classList.remove('drag-over');
+    e.preventDefault(); dropZone.classList.remove('dragover');
     const f = e.dataTransfer.files[0];
     if (f) setFile(f);
   });
@@ -267,7 +209,7 @@
 
     const pb = document.getElementById('progress-bar');
     const pf = document.getElementById('progress-fill');
-    pb.classList.add('visible');
+    pb.style.display = 'block';
     pf.style.width = '15%';
 
     try {
@@ -277,7 +219,7 @@
       pf.style.width = '85%';
       const data = await res.json();
       pf.style.width = '100%';
-      setTimeout(() => { pb.classList.remove('visible'); pf.style.width = '0%'; }, 350);
+      setTimeout(() => { pb.style.display = 'none'; pf.style.width = '0%'; }, 350);
       dropZone.classList.remove('disabled');
 
       const result = Array.isArray(data) ? data[0] : data;
@@ -285,7 +227,7 @@
       if (!res.ok) {
         document.getElementById('import-result-mod').textContent = '';
         document.getElementById('import-stats').innerHTML =
-          `<div class="import-stat"><span class="import-stat-num" style="color:var(--danger)">${t('common.error')}</span><span class="import-stat-label">${esc(result?.message || String(res.status))}</span></div>`;
+          `<div class="detail-row"><span class="detail-key" style="color:var(--danger)">${t('common.error')}</span><span class="detail-val">${esc(result?.message || String(res.status))}</span></div>`;
         document.getElementById('import-warnings').innerHTML = '';
         document.getElementById('import-result').style.display = '';
         setStatus(t('msg.save_error'), 'err');
@@ -324,7 +266,7 @@
         onConfirm:    () => { window.location.href = '/catalog/machines'; },
       });
     } catch(e) {
-      pb.classList.remove('visible');
+      pb.style.display = 'none';
       dropZone.classList.remove('disabled');
       setStatus(t('msg.network_error') + ': ' + e.message, 'err');
     }
@@ -333,12 +275,12 @@
   function setStatus(msg, type) {
     const el = document.getElementById('import-status');
     el.textContent = msg;
-    el.className = 'import-status' + (type ? ' ' + type : '');
+    el.className = 'status-msg' + (type ? ' ' + type : '');
   }
 
   function stat(n, label) {
     if (!n) return '';
-    return `<div class="import-stat"><span class="import-stat-num">${n}</span><span class="import-stat-label">${label}</span></div>`;
+    return `<div class="detail-row"><span class="detail-key">${label}</span><span class="detail-val">${n}</span></div>`;
   }
 
   init();

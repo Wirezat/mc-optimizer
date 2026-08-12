@@ -199,7 +199,7 @@
       const hdBody = document.createElement('tbody');
       const hdRow = document.createElement('tr');
       hdRow.className = 'table-group-hd collapsed';
-      hdRow.innerHTML = `<td colspan="5"><span class="group-toggle"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${machines.length}</span></td>`;
+      hdRow.innerHTML = `<td colspan="5"><span class="group-hd-arrow"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${machines.length}</span></td>`;
       hdBody.appendChild(hdRow);
 
       const rowsBody = document.createElement('tbody');

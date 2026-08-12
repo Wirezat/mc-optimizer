@@ -271,7 +271,7 @@
       const hdBody = document.createElement('tbody');
       const hdRow = document.createElement('tr');
       hdRow.className = 'table-group-hd collapsed';
-      hdRow.innerHTML = `<td colspan="8"><span class="group-toggle"></span>${esc(villager)}` +
+      hdRow.innerHTML = `<td colspan="8"><span class="group-hd-arrow"></span>${esc(villager)}` +
         `<span class="trade-source">${esc(first.source_name || first.source_mod_id)}</span>` +
         `<span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${groupTrades.length}</span></td>`;
       hdBody.appendChild(hdRow);

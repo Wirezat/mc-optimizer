@@ -2,18 +2,14 @@
    catalog-fluids, catalog-machines, catalog-recipes, catalog-trades, catalog-mods.
    Hoisted from identical per-page copies; keep in sync app-wide by editing here only. */
 
-.row-name-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
+.row-name-link { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); }
 .row-name-link:hover { color: var(--accent); border-color: var(--accent); }
 
-.catalog-link { color: var(--text-base); text-decoration: none; border-bottom: 1px solid var(--border); }
+.catalog-link { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); }
 .catalog-link:hover { color: var(--accent); border-color: var(--accent); }
 
 .recipe-count-link { color: var(--text-muted); text-decoration: none; font-size: var(--text-sm); }
 .recipe-count-link:hover { color: var(--accent); }
-
-.group-toggle { cursor: pointer; user-select: none; font-size: .7em; opacity: .5; padding-right: 4px; }
-.group-toggle::before { content: '▾'; }
-.table-group-hd.collapsed .group-toggle::before { content: '▸'; }
 
 /* placeholder text for empty inline-editable fields — inline-edit.css has no
    placeholder mechanism, so this lives here instead. */

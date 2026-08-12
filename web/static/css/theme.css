@@ -72,12 +72,6 @@ html.dark {
     --config-header-bg: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-/* ── Status messages ─────────────────────────────────────────────────────── */
-.status-msg { font-size: var(--text-sm); font-weight: var(--weight-medium); padding: var(--gap-inline) var(--gap-field); border-radius: var(--radius); display: none; }
-.status-msg.ok   { color: var(--success); display: inline-flex; }
-.status-msg.err  { color: var(--danger);  display: inline-flex; }
-.status-msg.warn { color: var(--warn);    display: inline-flex; }
-
 /* ── Mod picker (mod-picker.js) ──────────────────────────────────────────── */
 .check-all-row {
     display: flex; align-items: center; justify-content: space-between;

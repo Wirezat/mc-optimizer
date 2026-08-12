@@ -464,7 +464,7 @@
       const hdRow = document.createElement('tr');
       hdRow.className = 'table-group-hd collapsed';
       hdRow.dataset.modGroup = m.mod_id;
-      hdRow.innerHTML = `<td colspan="6"><span class="group-toggle"></span>
+      hdRow.innerHTML = `<td colspan="6"><span class="group-hd-arrow"></span>
         <a href="/catalog/mods" class="catalog-link">${esc(m.name || m.mod_id)}</a>
         <span class="td-muted mod-recipe-count" style="font-size:var(--text-xs);margin-left:6px;">${m.recipe_count || 0}</span>
       </td>`;
@@ -588,7 +588,7 @@
       modRecipeCache.set(modId, modRecipes);
       const modInfo = allMods.find(m => m.mod_id === modId);
       html += `<tr class="table-group-hd" data-mod-group="${esc(modId)}" data-loaded="1">
-        <td colspan="6"><span class="group-toggle"></span>
+        <td colspan="6"><span class="group-hd-arrow"></span>
           <a href="/catalog/mods" class="catalog-link">${esc(modInfo?.name || modId)}</a>
           <span class="td-muted mod-recipe-count" style="font-size:var(--text-xs);margin-left:6px;">${modRecipes.length}</span>
         </td>

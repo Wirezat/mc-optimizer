@@ -212,11 +212,13 @@
   // ── Helpers ───────────────────────────────────────────────────────────────
   function fmtFactories(n) {
     if (!n) return esc(t('saves.factories_none'));
+    if (n === 1) return esc(t('saves.factory_count_one'));
     return esc(t('saves.factory_count').replace('{n}', n));
   }
 
   function fmtMods(n) {
     if (!n) return esc(t('saves.mods_none'));
+    if (n === 1) return esc(t('saves.mod_count_one'));
     return esc(t('saves.mod_count').replace('{n}', n));
   }
 

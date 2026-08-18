@@ -161,7 +161,7 @@
 
   function itemCell(modID, itemID, name) {
     const label = esc(name || itemID);
-    const recipesUrl = `/catalog/recipes?item=${encodeURIComponent(modID + ':' + itemID)}`;
+    const recipesUrl = `/catalog/items?item=${encodeURIComponent(modID + ':' + itemID)}`;
     return `<span class="infocard-trigger" data-infocard-inline>${iconTextHTML(modID, itemID, { name, size: 'sm' })}</span>
       <div class="infocard-def" hidden>
         <div class="infocard-header">

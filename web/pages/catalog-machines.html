@@ -154,7 +154,7 @@
 
   function machineRowEl(m) {
     const energyVal = m.base_eu_per_tick || '';
-    const recipesUrl = `/catalog/recipes?mod=${encodeURIComponent(m.mod_id)}&machine=${encodeURIComponent(m.machine_id)}`;
+    const recipesUrl = `/catalog/items?producedByMachine=${encodeURIComponent(m.mod_id + ':' + m.machine_id)}`;
     const tierBadge = m.variants && m.variants.length > 1
       ? `<span class="badge badge-neutral" style="margin-left:var(--gap-inline);">${esc(t('catalog.machines.tier_count').replace('{n}', m.variants.length))}</span>`
       : '';

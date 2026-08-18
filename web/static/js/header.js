@@ -9,7 +9,6 @@ const NAV_LINKS = () => [
   { href: '/catalog/items',    icon: '📦', label: t('nav.items') },
   { href: '/catalog/fluids',   icon: '💧', label: t('nav.fluids') },
   { href: '/catalog/machines', icon: '🔩', label: t('nav.machines') },
-  { href: '/catalog/recipes',  icon: '📋', label: t('nav.recipes') },
   { href: '/catalog/trades',   icon: '🏪', label: t('nav.trades') },
 ];
 

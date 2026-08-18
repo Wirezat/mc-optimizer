@@ -251,6 +251,7 @@ func (d *DB) loadRecipeIO(ctx context.Context, r *solver.RecipeRow) error {
 		FROM recipe_item_inputs rii
 		LEFT JOIN tags t ON t.id = rii.tag_id
 		WHERE rii.recipe_id = $1
+		ORDER BY rii.sort_index
 	`, r.ID)
 	if err != nil {
 		return fmt.Errorf("db: load recipe io: %w", err)
@@ -278,6 +279,7 @@ func (d *DB) loadRecipeIO(ctx context.Context, r *solver.RecipeRow) error {
 	rows2, err := d.Pool.Query(ctx, `
 		SELECT item_mod_id, item_id, amount_num, amount_den, probability_num, probability_den
 		FROM recipe_item_outputs WHERE recipe_id = $1
+		ORDER BY sort_index
 	`, r.ID)
 	if err != nil {
 		return fmt.Errorf("db: load recipe io: %w", err)
@@ -300,6 +302,7 @@ func (d *DB) loadRecipeIO(ctx context.Context, r *solver.RecipeRow) error {
 		SELECT COALESCE(fluid_mod_id, ''), COALESCE(fluid_id, ''),
 		       amount_mb, probability_num, probability_den
 		FROM recipe_fluid_inputs WHERE recipe_id = $1
+		ORDER BY sort_index
 	`, r.ID)
 	if err != nil {
 		return fmt.Errorf("db: load recipe io: %w", err)
@@ -322,6 +325,7 @@ func (d *DB) loadRecipeIO(ctx context.Context, r *solver.RecipeRow) error {
 		SELECT COALESCE(fluid_mod_id, ''), COALESCE(fluid_id, ''),
 		       amount_mb, probability_num, probability_den
 		FROM recipe_fluid_outputs WHERE recipe_id = $1
+		ORDER BY sort_index
 	`, r.ID)
 	if err != nil {
 		return fmt.Errorf("db: load recipe io: %w", err)

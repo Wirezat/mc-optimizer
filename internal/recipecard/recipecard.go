@@ -100,9 +100,6 @@ func Build(r *solver.RecipeRow) Card {
 // slots, setting X/Y only when every item on a side (inputs, or outputs)
 // resolves to one.
 //
-// TODO: recipe I/O has no stored ordering column; pairing relies on
-// DB-return order (see loadRecipeIO in internal/db/recipes.go).
-//
 // TODO: multiblocks (MI's MultiblockMachines.java, IO's
 // multi_processing_array) have no fixed slot grid to source coordinates
 // from and always fall back to the frontend's grid layout.

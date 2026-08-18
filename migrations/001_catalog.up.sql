@@ -139,6 +139,7 @@ CREATE INDEX ON recipes (source_mod_id);
 CREATE TABLE recipe_item_inputs (
     id              UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id       UUID    NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    sort_index      SMALLINT NOT NULL DEFAULT 0,
     item_mod_id     TEXT,
     item_id         TEXT,
     tag_id          UUID    REFERENCES tags(id),
@@ -156,6 +157,7 @@ CREATE TABLE recipe_item_inputs (
 CREATE TABLE recipe_item_outputs (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id       UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    sort_index      SMALLINT NOT NULL DEFAULT 0,
     item_mod_id     TEXT NOT NULL,
     item_id         TEXT NOT NULL,
     amount_num      INT  NOT NULL,
@@ -168,6 +170,7 @@ CREATE TABLE recipe_item_outputs (
 CREATE TABLE recipe_fluid_inputs (
     id              UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id       UUID   NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    sort_index      SMALLINT NOT NULL DEFAULT 0,
     fluid_mod_id    TEXT,
     fluid_id        TEXT,
     tag_id          UUID   REFERENCES tags(id),
@@ -184,6 +187,7 @@ CREATE TABLE recipe_fluid_inputs (
 CREATE TABLE recipe_fluid_outputs (
     id              UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id       UUID   NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+    sort_index      SMALLINT NOT NULL DEFAULT 0,
     fluid_mod_id    TEXT,
     fluid_id        TEXT,
     tag_id          UUID   REFERENCES tags(id),

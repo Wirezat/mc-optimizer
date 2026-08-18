@@ -137,7 +137,7 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 	}
 
 	// 7. Insert item inputs.
-	for _, io := range rec.ItemInputs {
+	for i, io := range rec.ItemInputs {
 		var tagID *uuid.UUID
 		if io.TagName != nil {
 			id := tagIDs[*io.TagName]
@@ -145,10 +145,10 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO recipe_item_inputs
-				(id, recipe_id, item_mod_id, item_id, tag_id,
+				(id, recipe_id, sort_index, item_mod_id, item_id, tag_id,
 				 amount_num, amount_den, probability_num, probability_den, non_consuming)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
-		`, recipeID, io.ModID, io.ID, tagID,
+			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`, recipeID, i, io.ModID, io.ID, tagID,
 			io.AmountNum, io.AmountDen, io.ProbNum, io.ProbDen, io.NonConsuming,
 		); err != nil {
 			return false, fmt.Errorf("db: import recipe: insert item input: %w", err)
@@ -156,13 +156,13 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 	}
 
 	// 8. Insert item outputs.
-	for _, io := range rec.ItemOutputs {
+	for i, io := range rec.ItemOutputs {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO recipe_item_outputs
-				(id, recipe_id, item_mod_id, item_id,
+				(id, recipe_id, sort_index, item_mod_id, item_id,
 				 amount_num, amount_den, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
-		`, recipeID, *io.ModID, *io.ID,
+			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+		`, recipeID, i, *io.ModID, *io.ID,
 			io.AmountNum, io.AmountDen, io.ProbNum, io.ProbDen,
 		); err != nil {
 			return false, fmt.Errorf("db: import recipe: insert item output: %w", err)
@@ -170,7 +170,7 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 	}
 
 	// 9. Insert fluid inputs.
-	for _, io := range rec.FluidInputs {
+	for i, io := range rec.FluidInputs {
 		var tagID *uuid.UUID
 		if io.TagName != nil {
 			id := tagIDs[*io.TagName]
@@ -178,16 +178,16 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO recipe_fluid_inputs
-				(id, recipe_id, fluid_mod_id, fluid_id, tag_id, amount_mb, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
-		`, recipeID, io.ModID, io.ID, tagID, io.AmountMB, io.ProbNum, io.ProbDen,
+				(id, recipe_id, sort_index, fluid_mod_id, fluid_id, tag_id, amount_mb, probability_num, probability_den)
+			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+		`, recipeID, i, io.ModID, io.ID, tagID, io.AmountMB, io.ProbNum, io.ProbDen,
 		); err != nil {
 			return false, fmt.Errorf("db: import recipe: insert fluid input: %w", err)
 		}
 	}
 
 	// 10. Insert fluid outputs.
-	for _, io := range rec.FluidOutputs {
+	for i, io := range rec.FluidOutputs {
 		var tagID *uuid.UUID
 		if io.TagName != nil {
 			id := tagIDs[*io.TagName]
@@ -195,9 +195,9 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO recipe_fluid_outputs
-				(id, recipe_id, fluid_mod_id, fluid_id, tag_id, amount_mb, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
-		`, recipeID, io.ModID, io.ID, tagID, io.AmountMB, io.ProbNum, io.ProbDen,
+				(id, recipe_id, sort_index, fluid_mod_id, fluid_id, tag_id, amount_mb, probability_num, probability_den)
+			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+		`, recipeID, i, io.ModID, io.ID, tagID, io.AmountMB, io.ProbNum, io.ProbDen,
 		); err != nil {
 			return false, fmt.Errorf("db: import recipe: insert fluid output: %w", err)
 		}

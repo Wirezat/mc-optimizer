@@ -1050,12 +1050,12 @@ func (d *DB) CreateRecipe(ctx context.Context, modID string, req *model.CreateRe
 	recipeID := rec.ID
 
 	// 2. Insert item inputs.
-	for _, in := range req.ItemInputs {
+	for i, in := range req.ItemInputs {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO recipe_item_inputs
-				(id, recipe_id, item_mod_id, item_id, tag_id, amount_num, amount_den, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
-		`, recipeID, in.ItemModID, in.ItemID, in.TagID,
+				(id, recipe_id, sort_index, item_mod_id, item_id, tag_id, amount_num, amount_den, probability_num, probability_den)
+			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`, recipeID, i, in.ItemModID, in.ItemID, in.TagID,
 			in.AmountNum, in.AmountDen, in.ProbabilityNum, in.ProbabilityDen,
 		); err != nil {
 			return nil, fmt.Errorf("db: create recipe: %w", err)
@@ -1063,12 +1063,12 @@ func (d *DB) CreateRecipe(ctx context.Context, modID string, req *model.CreateRe
 	}
 
 	// 3. Insert item outputs.
-	for _, out := range req.ItemOutputs {
+	for i, out := range req.ItemOutputs {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO recipe_item_outputs
-				(id, recipe_id, item_mod_id, item_id, amount_num, amount_den, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
-		`, recipeID, out.ItemModID, out.ItemID,
+				(id, recipe_id, sort_index, item_mod_id, item_id, amount_num, amount_den, probability_num, probability_den)
+			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+		`, recipeID, i, out.ItemModID, out.ItemID,
 			out.AmountNum, out.AmountDen, out.ProbabilityNum, out.ProbabilityDen,
 		); err != nil {
 			return nil, fmt.Errorf("db: create recipe: %w", err)
@@ -1076,12 +1076,12 @@ func (d *DB) CreateRecipe(ctx context.Context, modID string, req *model.CreateRe
 	}
 
 	// 4. Insert fluid inputs.
-	for _, in := range req.FluidInputs {
+	for i, in := range req.FluidInputs {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO recipe_fluid_inputs
-				(id, recipe_id, fluid_mod_id, fluid_id, amount_mb, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
-		`, recipeID, in.FluidModID, in.FluidID,
+				(id, recipe_id, sort_index, fluid_mod_id, fluid_id, amount_mb, probability_num, probability_den)
+			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+		`, recipeID, i, in.FluidModID, in.FluidID,
 			in.AmountMB, in.ProbabilityNum, in.ProbabilityDen,
 		); err != nil {
 			return nil, fmt.Errorf("db: create recipe: %w", err)
@@ -1089,12 +1089,12 @@ func (d *DB) CreateRecipe(ctx context.Context, modID string, req *model.CreateRe
 	}
 
 	// 5. Insert fluid outputs.
-	for _, out := range req.FluidOutputs {
+	for i, out := range req.FluidOutputs {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO recipe_fluid_outputs
-				(id, recipe_id, fluid_mod_id, fluid_id, amount_mb, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
-		`, recipeID, out.FluidModID, out.FluidID,
+				(id, recipe_id, sort_index, fluid_mod_id, fluid_id, amount_mb, probability_num, probability_den)
+			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+		`, recipeID, i, out.FluidModID, out.FluidID,
 			out.AmountMB, out.ProbabilityNum, out.ProbabilityDen,
 		); err != nil {
 			return nil, fmt.Errorf("db: create recipe: %w", err)

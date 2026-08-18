@@ -35,13 +35,18 @@ const maxAchievableEUExpr = `
 
 // GetRecipesForItem returns all recipes that output this item.
 // Includes interface-compatible recipes: if machine A implements machine B,
-// recipes of B are also returned as if they belong to A — but only if A can
-// actually supply enough EU/t for the recipe, even at max upgrades (a bronze
-// machine capped at 2 EU/t cannot run a recipe that needs 8 EU/t, even though
-// it "implements" the base machine for lower-EU recipes).
+// recipes of B are also considered as if they belong to A — but only if A
+// can actually supply enough EU/t for the recipe, even at max upgrades (a
+// bronze machine capped at 2 EU/t cannot run a recipe that needs 8 EU/t,
+// even though it "implements" the base machine for lower-EU recipes).
+// A recipe qualifying for both its base machine and one or more
+// implementers is folded to a single row (DISTINCT ON id, preferring
+// is_direct=0) so e.g. Packer/Steel Packer show once as "Packer" instead
+// of as duplicate cards — only a recipe that ONLY an implementer can run
+// keeps that implementer's identity.
 func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([]*solver.RecipeRow, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT id, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu
+		SELECT DISTINCT ON (id) id, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu
 		FROM (
 			SELECT DISTINCT r.id, r.machine_mod_id, r.machine_id,
 			                r.duration_ticks, r.eu_per_tick, r.total_eu, 0 AS is_direct
@@ -69,8 +74,7 @@ func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([
 			  AND (mt.energy_type <> 'eu' OR r.eu_per_tick <= `+maxAchievableEUExpr+`)
 			  AND (mt.fixed_recipe_eu_cap IS NULL OR mt.fixed_recipe_eu_cap = 0 OR r.eu_per_tick <= mt.fixed_recipe_eu_cap)
 		) sub
-		ORDER BY CASE machine_id WHEN 'packer' THEN 0 ELSE 1 END DESC,
-		         is_direct, machine_id
+		ORDER BY id, is_direct, machine_id
 	`, itemModID, itemID)
 	if err != nil {
 		return nil, fmt.Errorf("db: get recipes for item: %w", err)
@@ -79,10 +83,12 @@ func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([
 }
 
 // GetRecipesForFluid returns all recipes that output this fluid.
-// Includes interface-compatible recipes.
+// Includes interface-compatible recipes; a recipe qualifying for both its
+// base machine and one or more implementers is folded to a single row —
+// see GetRecipesForItem's doc comment for the full rationale.
 func (d *DB) GetRecipesForFluid(ctx context.Context, fluidModID, fluidID string) ([]*solver.RecipeRow, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT id, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu
+		SELECT DISTINCT ON (id) id, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu
 		FROM (
 			SELECT DISTINCT r.id, r.machine_mod_id, r.machine_id,
 			                r.duration_ticks, r.eu_per_tick, r.total_eu, 0 AS is_direct
@@ -108,7 +114,7 @@ func (d *DB) GetRecipesForFluid(ctx context.Context, fluidModID, fluidID string)
 			  AND (mt.energy_type <> 'eu' OR r.eu_per_tick <= `+maxAchievableEUExpr+`)
 			  AND (mt.fixed_recipe_eu_cap IS NULL OR mt.fixed_recipe_eu_cap = 0 OR r.eu_per_tick <= mt.fixed_recipe_eu_cap)
 		) sub
-		ORDER BY is_direct, machine_id
+		ORDER BY id, is_direct, machine_id
 	`, fluidModID, fluidID)
 	if err != nil {
 		return nil, fmt.Errorf("db: get recipes for fluid: %w", err)

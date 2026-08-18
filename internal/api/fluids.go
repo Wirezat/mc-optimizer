@@ -4,12 +4,13 @@ import (
 	"net/http"
 
 	"github.com/Wirezat/production-optimizer/internal/db"
+	"github.com/Wirezat/production-optimizer/internal/recipecard"
 )
 
 // GetFluidRecipesHandler handles GET /api/fluids/{mod_id}/{fluid_id}/recipes.
 // Returns all recipes that produce the given fluid, as recipe cards — the
-// fluid mirror of GetItemRecipesHandler (internal/api/items.go), sharing its
-// buildRecipeCard.
+// fluid mirror of GetItemRecipesHandler (internal/api/items.go), sharing
+// internal/recipecard.
 func GetFluidRecipesHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := r.PathValue("mod_id")
@@ -23,9 +24,9 @@ func GetFluidRecipesHandler(database *db.DB) http.HandlerFunc {
 			errInternal(w, err)
 			return
 		}
-		cards := make([]recipeCard, len(rows))
+		cards := make([]recipecard.Card, len(rows))
 		for i, row := range rows {
-			cards[i] = buildRecipeCard(row)
+			cards[i] = recipecard.Build(row)
 		}
 		writeJSON(w, http.StatusOK, cards)
 	}

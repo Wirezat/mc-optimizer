@@ -1,4 +1,4 @@
-package api
+package recipecard
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 
 func strp(s string) *string { return &s }
 
-func TestBuildRecipeCard_ItemAndTagInputs(t *testing.T) {
+func TestBuild_ItemAndTagInputs(t *testing.T) {
 	row := &solver.RecipeRow{
 		ID: "r1", MachineMod: "mi", MachineID: "compressor",
 		DurationTicks: 100, EUPerTick: 32, TotalEU: 3200,
@@ -25,7 +25,7 @@ func TestBuildRecipeCard_ItemAndTagInputs(t *testing.T) {
 		},
 	}
 
-	card := buildRecipeCard(row)
+	card := Build(row)
 
 	if card.ID != "r1" || card.MachineModID != "mi" || card.MachineID != "compressor" {
 		t.Fatalf("machine/id fields wrong: %+v", card)
@@ -74,14 +74,14 @@ func TestBuildRecipeCard_ItemAndTagInputs(t *testing.T) {
 	}
 }
 
-func TestBuildRecipeCard_FractionalAmount(t *testing.T) {
+func TestBuild_FractionalAmount(t *testing.T) {
 	row := &solver.RecipeRow{
 		ID: "r2", MachineMod: "mi", MachineID: "distillery",
 		ItemOutputs: []solver.RecipeRowItemIO{
 			{ItemModID: strp("mi"), ItemID: strp("thing"), AmountNum: 1, AmountDen: 2},
 		},
 	}
-	card := buildRecipeCard(row)
+	card := Build(row)
 	if card.Outputs[0].Amount != 0.5 {
 		t.Errorf("expected fractional amount 0.5, got %v", card.Outputs[0].Amount)
 	}

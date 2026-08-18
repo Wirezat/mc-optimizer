@@ -406,24 +406,39 @@ func (d *DB) ListItemsProducedBy(ctx context.Context, modID, machineID string) (
 // (modID, machineID) filter shape, joining recipe_fluid_outputs instead.
 func (d *DB) ListFluidsProducedBy(ctx context.Context, modID, machineID string) ([]*model.Fluid, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT DISTINCT f.mod_id, f.fluid_id,
-		       COALESCE((SELECT name FROM translations WHERE lang='en_us' AND lang_key='fluid.'||f.mod_id||'.'||f.fluid_id), '') AS fname
-		FROM fluids f
-		JOIN recipe_fluid_outputs rfo ON rfo.fluid_mod_id = f.mod_id AND rfo.fluid_id = f.fluid_id
-		JOIN recipes r ON r.id = rfo.recipe_id
-		WHERE ( ($2 <> '' AND r.machine_mod_id = $1 AND r.machine_id = $2)
-		     OR ($2 = ''  AND $1 <> '' AND r.source_mod_id = $1) )
+		SELECT mod_id, fluid_id, fname FROM (
+			SELECT DISTINCT f.mod_id, f.fluid_id,
+			       COALESCE((SELECT t.name FROM translations t WHERE t.lang = 'en_us' AND t.lang_key IN (
+			           'fluid.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END,
+			           'block.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END,
+			           'item.'  || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END
+			       ) LIMIT 1), '') AS fname
+			FROM fluids f
+			JOIN recipe_fluid_outputs rfo ON rfo.fluid_mod_id = f.mod_id AND rfo.fluid_id = f.fluid_id
+			JOIN recipes r ON r.id = rfo.recipe_id
+			WHERE ( ($2 <> '' AND r.machine_mod_id = $1 AND r.machine_id = $2)
+			     OR ($2 = ''  AND $1 <> '' AND r.source_mod_id = $1) )
 
-		UNION
+			UNION
 
-		SELECT DISTINCT f.mod_id, f.fluid_id,
-		       COALESCE((SELECT name FROM translations WHERE lang='en_us' AND lang_key='fluid.'||f.mod_id||'.'||f.fluid_id), '') AS fname
-		FROM fluids f
-		JOIN recipe_fluid_outputs rfo ON rfo.fluid_mod_id = f.mod_id AND rfo.fluid_id = f.fluid_id
-		JOIN recipes r ON r.id = rfo.recipe_id
-		JOIN machine_interfaces mi ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
-		WHERE $2 <> '' AND mi.machine_mod_id = $1 AND mi.machine_id = $2
-
+			SELECT DISTINCT f.mod_id, f.fluid_id,
+			       COALESCE((SELECT t.name FROM translations t WHERE t.lang = 'en_us' AND t.lang_key IN (
+			           'fluid.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END,
+			           'block.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END,
+			           'item.'  || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 1) ELSE f.mod_id END
+			                    || '.' || CASE WHEN f.fluid_id LIKE '%:%' THEN split_part(f.fluid_id, ':', 2) ELSE f.fluid_id END
+			       ) LIMIT 1), '') AS fname
+			FROM fluids f
+			JOIN recipe_fluid_outputs rfo ON rfo.fluid_mod_id = f.mod_id AND rfo.fluid_id = f.fluid_id
+			JOIN recipes r ON r.id = rfo.recipe_id
+			JOIN machine_interfaces mi ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
+			WHERE $2 <> '' AND mi.machine_mod_id = $1 AND mi.machine_id = $2
+		) sub
 		ORDER BY fname
 	`, modID, machineID)
 	if err != nil {

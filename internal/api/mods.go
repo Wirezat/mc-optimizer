@@ -652,6 +652,33 @@ func optionalSaveID(r *http.Request) *uuid.UUID {
 // ?q=&offset → paginated search (autocomplete use, LIMIT 50)
 func SearchItemsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if producedByMod := r.URL.Query().Get("producedByMod"); producedByMod != "" {
+			items, err := database.ListItemsProducedBy(r.Context(), producedByMod, "")
+			if err != nil {
+				errInternal(w, err)
+				return
+			}
+			if items == nil {
+				items = []*model.Item{}
+			}
+			attachItemTextures(items, assetsDir)
+			writeJSON(w, http.StatusOK, items)
+			return
+		}
+		if producedByMachine := r.URL.Query().Get("producedByMachine"); producedByMachine != "" {
+			machineMod, machineID := splitCatalogRef(producedByMachine)
+			items, err := database.ListItemsProducedBy(r.Context(), machineMod, machineID)
+			if err != nil {
+				errInternal(w, err)
+				return
+			}
+			if items == nil {
+				items = []*model.Item{}
+			}
+			attachItemTextures(items, assetsDir)
+			writeJSON(w, http.StatusOK, items)
+			return
+		}
 		if r.URL.Query().Get("all") == "true" {
 			items, err := database.ListAllItems(r.Context(), optionalSaveID(r))
 			if err != nil {
@@ -687,6 +714,33 @@ func SearchItemsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 // Optional query params: ?q=<search term>&offset=<int>&all=true&save_id=<id>
 func SearchFluidsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if producedByMod := r.URL.Query().Get("producedByMod"); producedByMod != "" {
+			fluids, err := database.ListFluidsProducedBy(r.Context(), producedByMod, "")
+			if err != nil {
+				errInternal(w, err)
+				return
+			}
+			if fluids == nil {
+				fluids = []*model.Fluid{}
+			}
+			attachFluidTextures(fluids, assetsDir)
+			writeJSON(w, http.StatusOK, fluids)
+			return
+		}
+		if producedByMachine := r.URL.Query().Get("producedByMachine"); producedByMachine != "" {
+			machineMod, machineID := splitCatalogRef(producedByMachine)
+			fluids, err := database.ListFluidsProducedBy(r.Context(), machineMod, machineID)
+			if err != nil {
+				errInternal(w, err)
+				return
+			}
+			if fluids == nil {
+				fluids = []*model.Fluid{}
+			}
+			attachFluidTextures(fluids, assetsDir)
+			writeJSON(w, http.StatusOK, fluids)
+			return
+		}
 		if r.URL.Query().Get("all") == "true" {
 			fluids, err := database.ListAllFluids(r.Context(), optionalSaveID(r))
 			if err != nil {

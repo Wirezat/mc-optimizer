@@ -7,6 +7,10 @@
   <link rel="stylesheet" href="/static/ui/index.css" />
   <link rel="stylesheet" href="/static/css/theme.css" />
   <link rel="stylesheet" href="/static/css/catalog-common.css" />
+  <link rel="stylesheet" href="/static/css/crafting-card.css" />
+  <style>
+    tr[data-item-key].row-selected td { background: var(--bg-hover); }
+  </style>
   <script>
     (function(){
       const s = localStorage.getItem('theme');
@@ -34,30 +38,44 @@
         </div>
       </div>
 
-      <div class="container">
-        <div class="container-header">
-          <span class="container-title" id="item-count"></span>
-        </div>
-        <div class="container-filter">
-          <div class="wui-ac-wrap" style="width:220px;">
-            <input class="input" id="item-search" data-i18n-placeholder="catalog.search_placeholder"
-              style="width:100%;height:var(--h-btn-sm);" autocomplete="off" />
-            <div class="wui-ac-drop" id="item-search-ac"></div>
+      <div class="split-layout">
+        <div class="main-panel">
+          <div class="container">
+            <div class="container-header">
+              <span class="container-title" id="item-count"></span>
+            </div>
+            <div class="container-filter">
+              <div class="wui-ac-wrap" style="width:220px;">
+                <input class="input" id="item-search" data-i18n-placeholder="catalog.search_placeholder"
+                  style="width:100%;height:var(--h-btn-sm);" autocomplete="off" />
+                <div class="wui-ac-drop" id="item-search-ac"></div>
+              </div>
+            </div>
+            <div class="container-body-flush">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
+                    <th data-i18n="catalog.items.col.item_id"></th>
+                    <th data-i18n="catalog.items.col.stack"></th>
+                  </tr>
+                </thead>
+                <tbody id="item-tbody">
+                  <tr><td colspan="3" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-        <div class="container-body-flush">
-          <table class="table">
-            <thead>
-              <tr>
-                <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
-                <th data-i18n="catalog.items.col.item_id"></th>
-                <th data-i18n="catalog.items.col.stack"></th>
-              </tr>
-            </thead>
-            <tbody id="item-tbody">
-              <tr><td colspan="3" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
-            </tbody>
-          </table>
+        <div class="side-panel">
+          <div class="container">
+            <div class="container-header">
+              <span class="container-title" data-i18n="catalog.recipes.section.recipes"></span>
+            </div>
+            <div class="container-body" id="item-detail">
+              <span class="td-muted" data-i18n="catalog.items.detail.empty"></span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -75,6 +93,8 @@
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
+  import { initIconCycle } from '/static/ui/js/icon-cycle.js';
+  import { recipeListHTML } from '/static/js/recipe-card.js';
 
   await load(getLang());
   applyI18n();
@@ -86,26 +106,47 @@
   let groupBodies = []; // sibling <tbody> pairs appended per mod
   const countEl  = document.getElementById('item-count');
   const searchEl = document.getElementById('item-search');
-  const urlMod   = new URLSearchParams(location.search).get('mod') || '';
+  const detailEl = document.getElementById('item-detail');
+  const params   = new URLSearchParams(location.search);
+  const urlMod               = params.get('mod') || '';
+  const urlProducedByMod     = params.get('producedByMod') || '';
+  const urlProducedByMachine = params.get('producedByMachine') || '';
+  const urlItem              = params.get('item') || ''; // "modid:itemid" — pre-selects that row
 
   let allItems = [];
   let modNames = {};
+  let machineNames = {}; // "modid:machineid" -> display name, for recipe-card meta rows
   let filtered = [];
+  let selectedKey = ''; // "modid:itemid" of the row currently shown in the side panel
   const openGroups = new Map(); // modId -> VirtualWindow
   const groupRows  = new Map(); // modId -> item[]
+
+  async function selectItem(item) {
+    selectedKey = item.mod_id + ':' + item.item_id;
+    detailEl.innerHTML = `<span class="td-muted" data-i18n="catalog.empty.loading"></span>`;
+    applyI18n(detailEl);
+    const res = await apiFetch(`/api/items/${encodeURIComponent(item.mod_id)}/${encodeURIComponent(item.item_id)}/recipes`);
+    const recipes = res?.ok ? await res.json() : [];
+    detailEl.innerHTML = recipeListHTML(recipes, r => machineNames[r.machine_mod_id + ':' + r.machine_id]);
+    applyI18n(detailEl);
+    initInfocards(detailEl);
+    initIconCycle(detailEl);
+  }
 
   function itemRowEl(item) {
     const entry = entryOf(item, false);
     const tr = document.createElement('tr');
+    tr.dataset.itemKey = item.mod_id + ':' + item.item_id;
+    tr.className = tr.dataset.itemKey === selectedKey ? 'row-selected' : '';
+    tr.style.cursor = 'pointer';
     tr.innerHTML = `
       <td>
-        <a href="/catalog/recipes?item=${encodeURIComponent(item.mod_id + ':' + item.item_id)}"
-           class="row-name-link" data-infocard-inline>
+        <span class="row-name-link" data-infocard-inline>
           <span class="icontext icontext-sm">
             ${iconImageHTML(entry, { cls: 'icontext-icon', hidpiPx: 16 })}
             <span class="icontext-body"><span class="icontext-text">${esc(item.name || item.item_id)}</span></span>
           </span>
-        </a>
+        </span>
         <div class="infocard-def" hidden>
           <div class="infocard-header">
             ${iconImageHTML(entry, { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
@@ -118,6 +159,11 @@
       </td>
       <td class="td-mono td-muted">${esc(item.item_id)}</td>
       <td class="td-muted td-num">${esc(item.max_stack)}×</td>`;
+    tr.addEventListener('click', () => {
+      table.querySelectorAll('tr.row-selected').forEach(el => el.classList.remove('row-selected'));
+      tr.classList.add('row-selected');
+      selectItem(item);
+    });
     initHiDPIRender(tr);
     initInfocards(tr);
     return [tr];
@@ -186,6 +232,7 @@
       const hdBody = document.createElement('tbody');
       const hdRow = document.createElement('tr');
       hdRow.className = 'table-group-hd collapsed';
+      hdRow.dataset.modId = modId;
       hdRow.innerHTML = `<td colspan="3"><span class="group-hd-arrow"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${items.length}</span></td>`;
       hdBody.appendChild(hdRow);
 
@@ -204,18 +251,38 @@
 
   searchEl.addEventListener('input', resetAndRender);
 
-  const [itemsRes, modsRes] = await Promise.all([
-    apiFetch('/api/items?all=true'),
+  const itemsURL = urlProducedByMod
+    ? `/api/items?producedByMod=${encodeURIComponent(urlProducedByMod)}`
+    : urlProducedByMachine
+    ? `/api/items?producedByMachine=${encodeURIComponent(urlProducedByMachine)}`
+    : '/api/items?all=true';
+
+  const [itemsRes, modsRes, machinesRes] = await Promise.all([
+    apiFetch(itemsURL),
     apiFetch('/api/mods'),
+    apiFetch('/api/machines'),
   ]);
   if (modsRes?.ok) {
     const mods = await modsRes.json();
     mods.forEach(m => { modNames[m.mod_id] = m.name; });
   }
+  if (machinesRes?.ok) {
+    const machines = await machinesRes.json();
+    machines.forEach(m => { machineNames[m.mod_id + ':' + m.machine_id] = m.name; });
+  }
   if (itemsRes?.ok) {
     allItems = await itemsRes.json();
     allItems.forEach(i => { i.mod_name = modNames[i.mod_id] || i.mod_id; });
     resetAndRender();
+    if (urlItem) {
+      const [im, ii] = urlItem.split(':');
+      const match = allItems.find(i => i.mod_id === im && i.item_id === ii);
+      if (match) {
+        const hd = table.querySelector(`.table-group-hd[data-mod-id="${CSS.escape(match.mod_id)}"]`);
+        if (hd) toggleGroup(match.mod_id, hd, hd.nextElementSibling);
+        selectItem(match);
+      }
+    }
     new WuiAutocomplete({
       inputEl:   searchEl,
       dropEl:    document.getElementById('item-search-ac'),

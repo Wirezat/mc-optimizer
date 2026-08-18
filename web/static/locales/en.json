@@ -61,6 +61,7 @@
   "catalog.items.col.stack": "Stack",
   "catalog.items.count": "{n} items",
   "catalog.items.count_one": "1 item",
+  "catalog.items.detail.empty": "Select an item to see its recipes.",
   "catalog.items.detail.recipes_link": "Recipes with this item →",
   "catalog.items.subtitle": "Browse all registered items",
   "catalog.items.title": "Items",

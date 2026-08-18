@@ -61,6 +61,7 @@
   "catalog.items.col.stack": "Stapelgröße",
   "catalog.items.count": "{n} Items",
   "catalog.items.count_one": "1 Item",
+  "catalog.items.detail.empty": "Item auswählen, um Rezepte zu sehen.",
   "catalog.items.detail.recipes_link": "Recipes mit diesem Item →",
   "catalog.items.subtitle": "Alle registrierten Items durchsuchen",
   "catalog.items.title": "Items",

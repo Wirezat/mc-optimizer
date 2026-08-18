@@ -166,7 +166,7 @@ func run() error {
 	mux.Handle("PUT /api/mods/{mod_id}", adminOnly(api.UpdateModHandler(database)))
 	mux.Handle("GET /api/mods/{mod_id}/modrinth-preview", adminOnly(api.ModrinthPreviewHandler(database)))
 	mux.Handle("DELETE /api/mods/{mod_id}", adminOnly(api.DeleteModHandler(database)))
-	mux.Handle("GET /api/machines", protected(api.ListAllMachinesHandler(database)))
+	mux.Handle("GET /api/machines", protected(api.ListAllMachinesHandler(database, "assets")))
 	mux.Handle("GET /api/upgrade-tiers", api.ListUpgradeTiersHandler(database)) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/mods/{mod_id}/machines", protected(api.ListMachinesHandler(database)))
 	mux.Handle("PATCH /api/mods/{mod_id}/machines/{machine_id}", adminOnly(api.UpdateMachineHandler(database)))

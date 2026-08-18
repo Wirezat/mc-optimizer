@@ -13,11 +13,12 @@ import (
 	"github.com/google/uuid"
 )
 
-// ListModsHandler returns all mods.
-// ListAllMachinesHandler returns all machine types across all mods.
-func ListAllMachinesHandler(database *db.DB) http.HandlerFunc {
+// ListAllMachinesHandler returns all machine types across all mods, grouped
+// by tier-variant relationships (see ListAllMachinesGrouped), each with its
+// icon texture resolved.
+func ListAllMachinesHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		machines, err := database.ListAllMachines(r.Context())
+		machines, err := database.ListAllMachinesGrouped(r.Context())
 		if err != nil {
 			errInternal(w, err)
 			return
@@ -25,7 +26,24 @@ func ListAllMachinesHandler(database *db.DB) http.HandlerFunc {
 		if machines == nil {
 			machines = []*model.MachineType{}
 		}
+		attachMachineTextures(machines, assetsDir)
 		writeJSON(w, http.StatusOK, machines)
+	}
+}
+
+// attachMachineTextures populates TextureURL on each machine and each of its
+// Variants by resolving the icon file on disk, leaving it nil when none exists.
+func attachMachineTextures(machines []*model.MachineType, assetsDir string) {
+	for _, m := range machines {
+		if url, ok := assets.ResolveMachineTexture(assetsDir, m.ModID, m.MachineID); ok {
+			m.TextureURL = &url
+		}
+		for i := range m.Variants {
+			v := &m.Variants[i]
+			if url, ok := assets.ResolveMachineTexture(assetsDir, v.ModID, v.MachineID); ok {
+				v.TextureURL = &url
+			}
+		}
 	}
 }
 
@@ -44,6 +62,7 @@ func ListUpgradeTiersHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
+// ListModsHandler returns all mods.
 func ListModsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		mods, err := database.ListMods(r.Context())

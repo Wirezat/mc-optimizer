@@ -8,9 +8,12 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/render"
 )
 
-// Sizes a render may be asked for. Restricted so a request cannot make the
-// server rasterise something enormous, and so the cache stays small.
-var allowedRenderSizes = map[int]bool{16: true, 32: true, 64: true}
+// Bounds on the size a render may be asked for, so a request cannot make the
+// server rasterise something absurd or blow up the per-model render cache.
+const (
+	minRenderSize = 8
+	maxRenderSize = 256
+)
 
 const defaultRenderSize = 32
 
@@ -54,7 +57,7 @@ func RenderModelHandler(cache *render.Cache) http.HandlerFunc {
 		size := defaultRenderSize
 		if raw := r.URL.Query().Get("size"); raw != "" {
 			v, err := strconv.Atoi(raw)
-			if err != nil || !allowedRenderSizes[v] {
+			if err != nil || v < minRenderSize || v > maxRenderSize {
 				http.Error(w, "unsupported size", http.StatusBadRequest)
 				return
 			}

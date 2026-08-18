@@ -56,6 +56,35 @@ func ResolveFluidTexture(assetsDir, modID, fluidID string) (urlPath string, ok b
 	})
 }
 
+// ResolveMachineTexture returns the public URL path for machineID's icon
+// under modID (block model, blockstate, item model, or generated fallback
+// texture, in that order), or ok=false if none exist on disk under
+// assetsDir. Item models cover machines with no block model (MI's
+// block-entity-rendered casings) via vanilla's generic block/cube parent,
+// no MI-specific rendering needed; only the filename needs a second,
+// "electric_"-prefixed attempt for MI's one naming inconsistency.
+func ResolveMachineTexture(assetsDir, modID, machineID string) (urlPath string, ok bool) {
+	if !safeSegment(modID) || !safeSegment(machineID) {
+		return "", false
+	}
+	if _, err := os.Stat(filepath.Join(assetsDir, modID, "models", "block", machineID+".json")); err == nil {
+		return fmt.Sprintf("/assets/render/%s/block/%s.png", modID, machineID), true
+	}
+	if _, err := os.Stat(filepath.Join(assetsDir, modID, "blockstates", machineID+".json")); err == nil {
+		return fmt.Sprintf("/assets/render/%s/block/%s.png", modID, machineID), true
+	}
+	if _, err := os.Stat(filepath.Join(assetsDir, modID, "models", "item", machineID+".json")); err == nil {
+		return fmt.Sprintf("/assets/render/%s/item/%s.png", modID, machineID), true
+	}
+	if _, err := os.Stat(filepath.Join(assetsDir, modID, "models", "item", "electric_"+machineID+".json")); err == nil {
+		return fmt.Sprintf("/assets/render/%s/item/electric_%s.png", modID, machineID), true
+	}
+	return resolveFirst(assetsDir, []candidate{
+		{filepath.Join(modID, "textures", "generated", "machine_icons", machineID+"_south.png"), fmt.Sprintf("%s/textures/generated/machine_icons/%s_south.png", modID, machineID)},
+		{filepath.Join(modID, "textures", "generated", "machine_icons", "electric_"+machineID+"_south.png"), fmt.Sprintf("%s/textures/generated/machine_icons/electric_%s_south.png", modID, machineID)},
+	})
+}
+
 func resolveFirst(assetsDir string, candidates []candidate) (string, bool) {
 	for _, c := range candidates {
 		if _, err := os.Stat(filepath.Join(assetsDir, c.diskRel)); err == nil {

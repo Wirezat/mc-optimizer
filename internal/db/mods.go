@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/Wirezat/production-optimizer/internal/solver"
@@ -616,6 +617,98 @@ func (d *DB) ListAllMachines(ctx context.Context) ([]*model.MachineType, error) 
 		machines = append(machines, mt)
 	}
 	return machines, rows.Err()
+}
+
+// ListAllMachinesGrouped returns all machine types across all mods, with
+// tier-variant machines folded into their base machine's Variants (see
+// groupMachines). TextureURL is left nil; callers attach it via
+// assets.ResolveMachineTexture, same as attachItemTextures/attachFluidTextures
+// do for items/fluids.
+func (d *DB) ListAllMachinesGrouped(ctx context.Context) ([]*model.MachineType, error) {
+	all, err := d.ListAllMachines(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := d.Pool.Query(ctx, `SELECT machine_mod_id, machine_id, base_mod_id, base_machine_id FROM machine_interfaces`)
+	if err != nil {
+		return nil, fmt.Errorf("db: list machine interfaces for grouping: %w", err)
+	}
+	defer rows.Close()
+
+	var interfaces []MachineInterface
+	for rows.Next() {
+		var mi MachineInterface
+		if err := rows.Scan(&mi.MachineModID, &mi.MachineID, &mi.BaseModID, &mi.BaseMachineID); err != nil {
+			return nil, fmt.Errorf("db: scan machine interface for grouping: %w", err)
+		}
+		interfaces = append(interfaces, mi)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return groupMachines(all, interfaces), nil
+}
+
+// groupMachines folds each single-base implementer into its base's Variants
+// (alphabetical by Name, RecipeCount summed). A machine with zero or more
+// than one base edge stays its own top-level row — more than one means a
+// genuinely multi-purpose machine, not a tier variant of anything. Output is
+// sorted by ModID then MachineID.
+func groupMachines(all []*model.MachineType, interfaces []MachineInterface) []*model.MachineType {
+	type key struct{ mod, machine string }
+	basesOf := map[key][]key{} // implementer -> every base it implements
+	for _, mi := range interfaces {
+		k := key{mi.MachineModID, mi.MachineID}
+		basesOf[k] = append(basesOf[k], key{mi.BaseModID, mi.BaseMachineID})
+	}
+	baseOf := map[key]key{} // implementer -> its sole base, only for implementers with exactly one
+	for k, bases := range basesOf {
+		if len(bases) == 1 {
+			baseOf[k] = bases[0]
+		}
+	}
+
+	groups := map[key][]*model.MachineType{} // base key -> its implementers (base excluded here, added below)
+	for _, m := range all {
+		k := key{m.ModID, m.MachineID}
+		if base, isImplementer := baseOf[k]; isImplementer {
+			groups[base] = append(groups[base], m)
+		}
+	}
+
+	var out []*model.MachineType
+	for _, m := range all {
+		k := key{m.ModID, m.MachineID}
+		if _, isImplementer := baseOf[k]; isImplementer {
+			continue // folded into its base below, not a top-level row
+		}
+		implementers := groups[k]
+		if len(implementers) == 0 {
+			out = append(out, m)
+			continue
+		}
+		grouped := *m // copy: don't mutate the shared slice element
+		members := append([]*model.MachineType{m}, implementers...)
+		sort.Slice(members, func(i, j int) bool { return members[i].Name < members[j].Name })
+		grouped.RecipeCount = 0
+		grouped.Variants = make([]model.MachineVariant, 0, len(members))
+		for _, v := range members {
+			grouped.RecipeCount += v.RecipeCount
+			grouped.Variants = append(grouped.Variants, model.MachineVariant{
+				ModID: v.ModID, MachineID: v.MachineID, Name: v.Name, BaseEUPerTick: v.BaseEUPerTick,
+			})
+		}
+		out = append(out, &grouped)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].ModID != out[j].ModID {
+			return out[i].ModID < out[j].ModID
+		}
+		return out[i].MachineID < out[j].MachineID
+	})
+	return out
 }
 
 // ListMachinesByMod returns all machine types for modID ordered by machine_id.

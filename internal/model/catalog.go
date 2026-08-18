@@ -80,15 +80,29 @@ type Fluid struct {
 }
 
 type MachineType struct {
-	ModID         string `json:"mod_id"`
-	MachineID     string `json:"machine_id"`
-	Name          string `json:"name"`
-	BaseEUPerTick int64  `json:"base_eu_per_tick"`
-	MaxEUPerTick  int64  `json:"max_eu_per_tick"`
-	MaxSlots      int16  `json:"max_slots"`
-	EnergyType    string `json:"energy_type"`
-	Upgradable    bool   `json:"upgradable"`
-	RecipeCount   int    `json:"recipe_count"`
+	ModID         string  `json:"mod_id"`
+	MachineID     string  `json:"machine_id"`
+	Name          string  `json:"name"`
+	BaseEUPerTick int64   `json:"base_eu_per_tick"`
+	MaxEUPerTick  int64   `json:"max_eu_per_tick"`
+	MaxSlots      int16   `json:"max_slots"`
+	EnergyType    string  `json:"energy_type"`
+	Upgradable    bool    `json:"upgradable"`
+	RecipeCount   int     `json:"recipe_count"`
+	TextureURL    *string `json:"texture_url,omitempty"`
+	// Variants holds every machine folded into this row (base + implementers),
+	// alphabetical by name; nil means a plain single icon, no cycle/hover.
+	Variants []MachineVariant `json:"variants,omitempty"`
+}
+
+// MachineVariant is one machine folded into a grouped MachineType row, with
+// its own energy value since tiers differ (e.g. bronze vs. steel).
+type MachineVariant struct {
+	ModID         string  `json:"mod_id"`
+	MachineID     string  `json:"machine_id"`
+	Name          string  `json:"name"`
+	BaseEUPerTick int64   `json:"base_eu_per_tick"`
+	TextureURL    *string `json:"texture_url,omitempty"`
 }
 
 type UpgradeTier struct {

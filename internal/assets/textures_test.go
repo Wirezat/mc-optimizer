@@ -185,3 +185,136 @@ func TestResolveFluidTexture_FluidDirWinsOverBlock(t *testing.T) {
 		t.Errorf("url = %q, want %q", url, want)
 	}
 }
+
+func TestResolveMachineTexture_ModelFallback(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "minecraft/models/block/furnace.json")
+
+	url, ok := ResolveMachineTexture(dir, "minecraft", "furnace")
+	if !ok {
+		t.Fatal("expected ok=true for a machine with a real block model")
+	}
+	want := "/assets/render/minecraft/block/furnace.png"
+	if url != want {
+		t.Errorf("url = %q, want %q", url, want)
+	}
+}
+
+func TestResolveMachineTexture_BlockStateFallback(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "mod/blockstates/some_machine.json")
+
+	url, ok := ResolveMachineTexture(dir, "mod", "some_machine")
+	if !ok {
+		t.Fatal("expected ok=true for a machine backed only by a blockstate")
+	}
+	want := "/assets/render/mod/block/some_machine.png"
+	if url != want {
+		t.Errorf("url = %q, want %q", url, want)
+	}
+}
+
+func TestResolveMachineTexture_ModelWinsOverGeneratedIcon(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "mod/models/block/thing.json")
+	writeFixture(t, dir, "mod/textures/generated/machine_icons/thing_south.png")
+
+	url, _ := ResolveMachineTexture(dir, "mod", "thing")
+	if want := "/assets/render/mod/block/thing.png"; url != want {
+		t.Errorf("url = %q, want the model render %q", url, want)
+	}
+}
+
+func TestResolveMachineTexture_ItemModelFallback(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "modern_industrialization/models/item/assembler.json")
+
+	url, ok := ResolveMachineTexture(dir, "modern_industrialization", "assembler")
+	if !ok {
+		t.Fatal("expected ok=true for a machine with only an item model")
+	}
+	want := "/assets/render/modern_industrialization/item/assembler.png"
+	if url != want {
+		t.Errorf("url = %q, want %q", url, want)
+	}
+}
+
+func TestResolveMachineTexture_ItemModelElectricPrefixFallback(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "modern_industrialization/models/item/electric_compressor.json")
+
+	url, ok := ResolveMachineTexture(dir, "modern_industrialization", "compressor")
+	if !ok {
+		t.Fatal("expected ok=true via the electric_ prefix fallback")
+	}
+	want := "/assets/render/modern_industrialization/item/electric_compressor.png"
+	if url != want {
+		t.Errorf("url = %q, want %q", url, want)
+	}
+}
+
+func TestResolveMachineTexture_ItemModelWinsOverGeneratedIcon(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "mod/models/item/thing.json")
+	writeFixture(t, dir, "mod/textures/generated/machine_icons/thing_south.png")
+
+	url, _ := ResolveMachineTexture(dir, "mod", "thing")
+	if want := "/assets/render/mod/item/thing.png"; url != want {
+		t.Errorf("url = %q, want the item model render %q", url, want)
+	}
+}
+
+func TestResolveMachineTexture_GeneratedIconDirect(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "modern_industrialization/textures/generated/machine_icons/electric_blast_furnace_south.png")
+
+	url, ok := ResolveMachineTexture(dir, "modern_industrialization", "electric_blast_furnace")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	want := "/assets/modern_industrialization/textures/generated/machine_icons/electric_blast_furnace_south.png"
+	if url != want {
+		t.Errorf("url = %q, want %q", url, want)
+	}
+}
+
+func TestResolveMachineTexture_GeneratedIconElectricPrefixFallback(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "modern_industrialization/textures/generated/machine_icons/electric_compressor_south.png")
+
+	url, ok := ResolveMachineTexture(dir, "modern_industrialization", "compressor")
+	if !ok {
+		t.Fatal("expected ok=true via the electric_ prefix fallback")
+	}
+	want := "/assets/modern_industrialization/textures/generated/machine_icons/electric_compressor_south.png"
+	if url != want {
+		t.Errorf("url = %q, want %q", url, want)
+	}
+}
+
+func TestResolveMachineTexture_Missing(t *testing.T) {
+	dir := t.TempDir()
+
+	_, ok := ResolveMachineTexture(dir, "modern_industrialization", "nonexistent")
+	if ok {
+		t.Fatal("expected ok=false for a machine with no model and no generated icon")
+	}
+}
+
+func TestResolveMachineTexture_RejectsEscapingSegments(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "secret.png")
+
+	for _, tc := range []struct{ modID, machineID string }{
+		{"..", "secret"},
+		{"modern_industrialization", ".."},
+		{"../modern_industrialization", "compressor"},
+		{"modern_industrialization", "../secret"},
+		{"", "compressor"},
+		{"modern_industrialization", ""},
+	} {
+		if _, ok := ResolveMachineTexture(dir, tc.modID, tc.machineID); ok {
+			t.Errorf("ResolveMachineTexture(%q, %q) = ok, want rejected", tc.modID, tc.machineID)
+		}
+	}
+}

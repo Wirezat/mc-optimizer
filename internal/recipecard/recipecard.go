@@ -112,11 +112,17 @@ func Build(r *solver.RecipeRow) Card {
 // matches import order but isn't guaranteed. Revisit if that ever causes a
 // visibly wrong pairing.
 //
-// Also note: as of this writing only vanilla machines (furnace, campfire,
-// etc.) have any machine_slots rows at all — modded machines (Modern
-// Industrialization and friends) have none yet, so this is a no-op for them
-// until their YAML machine defs get curated slot_x/slot_y. Everything falls
-// back to the grid layout until then.
+// Also note: coverage is partial. Vanilla machines all have slot_x/slot_y
+// (docs/vanilla.yml). For Modern Industrialization, only the 14 machines
+// registered via SingleBlockCraftingMachines.registerMachineTiers() (+ their
+// bronze_/steel_ tier variants — 27 of 45 MI machines) have coordinates,
+// extracted from that source file's addSlot/addSlots calls by
+// scripts/import/inject_mi_slots.py. Still missing, and falling back to the
+// grid layout until someone extracts them the same way: MI's
+// SingleBlockSpecialMachines.java (boilers/generators/storage) and
+// MultiblockMachines.java (hatches, not a fixed GUI grid — needs a different
+// representation entirely), plus Extended Industrialization and
+// Industrialization Overdrive (different codebases, not yet surveyed).
 func ApplySlotLayout(card *Card, slots []*model.MachineSlot) {
 	if itemIn, ok := resolveSlots(slots, "item_input", len(card.Inputs)); ok {
 		if fluidIn, ok := resolveSlots(slots, "fluid_input", len(card.FluidInputs)); ok {

@@ -7,6 +7,10 @@
   <link rel="stylesheet" href="/static/ui/index.css" />
   <link rel="stylesheet" href="/static/css/theme.css" />
   <link rel="stylesheet" href="/static/css/catalog-common.css" />
+  <link rel="stylesheet" href="/static/css/crafting-card.css" />
+  <style>
+    tr[data-fluid-key].row-selected td { background: var(--bg-hover); }
+  </style>
   <script>
     (function(){
       const s = localStorage.getItem('theme');
@@ -34,29 +38,43 @@
         </div>
       </div>
 
-      <div class="container">
-        <div class="container-header">
-          <span class="container-title" id="fluid-count"></span>
-        </div>
-        <div class="container-filter">
-          <div class="wui-ac-wrap" style="width:220px;">
-            <input class="input" id="fluid-search" data-i18n-placeholder="catalog.search_placeholder"
-              style="width:100%;height:var(--h-btn-sm);" autocomplete="off" />
-            <div class="wui-ac-drop" id="fluid-search-ac"></div>
+      <div class="split-layout">
+        <div class="main-panel">
+          <div class="container">
+            <div class="container-header">
+              <span class="container-title" id="fluid-count"></span>
+            </div>
+            <div class="container-filter">
+              <div class="wui-ac-wrap" style="width:220px;">
+                <input class="input" id="fluid-search" data-i18n-placeholder="catalog.search_placeholder"
+                  style="width:100%;height:var(--h-btn-sm);" autocomplete="off" />
+                <div class="wui-ac-drop" id="fluid-search-ac"></div>
+              </div>
+            </div>
+            <div class="container-body-flush">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
+                    <th data-i18n="catalog.fluids.col.fluid_id"></th>
+                  </tr>
+                </thead>
+                <tbody id="fluid-tbody">
+                  <tr><td colspan="2" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-        <div class="container-body-flush">
-          <table class="table">
-            <thead>
-              <tr>
-                <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
-                <th data-i18n="catalog.fluids.col.fluid_id"></th>
-              </tr>
-            </thead>
-            <tbody id="fluid-tbody">
-              <tr><td colspan="2" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
-            </tbody>
-          </table>
+        <div class="side-panel">
+          <div class="container">
+            <div class="container-header">
+              <span class="container-title" data-i18n="catalog.recipes.section.recipes"></span>
+            </div>
+            <div class="container-body" id="fluid-detail">
+              <span class="td-muted" data-i18n="catalog.fluids.detail.empty"></span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -74,6 +92,8 @@
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
+  import { initIconCycle } from '/static/ui/js/icon-cycle.js';
+  import { recipeListHTML } from '/static/js/recipe-card.js';
 
   await load(getLang());
   applyI18n();
@@ -85,26 +105,47 @@
   let groupBodies = []; // sibling <tbody> pairs appended per mod
   const countEl  = document.getElementById('fluid-count');
   const searchEl = document.getElementById('fluid-search');
-  const urlMod   = new URLSearchParams(location.search).get('mod') || '';
+  const detailEl = document.getElementById('fluid-detail');
+  const params   = new URLSearchParams(location.search);
+  const urlMod               = params.get('mod') || '';
+  const urlProducedByMod     = params.get('producedByMod') || '';
+  const urlProducedByMachine = params.get('producedByMachine') || '';
+  const urlFluid             = params.get('fluid') || ''; // "modid:fluidid" — pre-selects that row
 
   let allFluids = [];
   let modNames = {};
+  let machineNames = {}; // "modid:machineid" -> display name, for recipe-card meta rows
   let filtered = [];
+  let selectedKey = ''; // "modid:fluidid" of the row currently shown in the side panel
   const openGroups = new Map();
   const groupRows = new Map();
+
+  async function selectFluid(fluid) {
+    selectedKey = fluid.mod_id + ':' + fluid.fluid_id;
+    detailEl.innerHTML = `<span class="td-muted" data-i18n="catalog.empty.loading"></span>`;
+    applyI18n(detailEl);
+    const res = await apiFetch(`/api/fluids/${encodeURIComponent(fluid.mod_id)}/${encodeURIComponent(fluid.fluid_id)}/recipes`);
+    const recipes = res?.ok ? await res.json() : [];
+    detailEl.innerHTML = recipeListHTML(recipes, r => machineNames[r.machine_mod_id + ':' + r.machine_id]);
+    applyI18n(detailEl);
+    initInfocards(detailEl);
+    initIconCycle(detailEl);
+  }
 
   function fluidRowEl(fluid) {
     const entry = entryOf(fluid, true);
     const tr = document.createElement('tr');
+    tr.dataset.fluidKey = fluid.mod_id + ':' + fluid.fluid_id;
+    tr.className = tr.dataset.fluidKey === selectedKey ? 'row-selected' : '';
+    tr.style.cursor = 'pointer';
     tr.innerHTML = `
       <td>
-        <a href="/catalog/recipes?fluid=${encodeURIComponent(fluid.mod_id + ':' + fluid.fluid_id)}"
-           class="row-name-link" data-infocard-inline>
+        <span class="row-name-link" data-infocard-inline>
           <span class="icontext icontext-sm">
             ${iconImageHTML(entry, { cls: 'icontext-icon', hidpiPx: 16 })}
             <span class="icontext-body"><span class="icontext-text">${esc(fluid.name || fluid.fluid_id)}</span></span>
           </span>
-        </a>
+        </span>
         <div class="infocard-def" hidden>
           <div class="infocard-header">
             ${iconImageHTML(entry, { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
@@ -116,6 +157,11 @@
         </div>
       </td>
       <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>`;
+    tr.addEventListener('click', () => {
+      table.querySelectorAll('tr.row-selected').forEach(el => el.classList.remove('row-selected'));
+      tr.classList.add('row-selected');
+      selectFluid(fluid);
+    });
     initHiDPIRender(tr);
     initInfocards(tr);
     return [tr];
@@ -183,6 +229,7 @@
       const hdBody = document.createElement('tbody');
       const hdRow = document.createElement('tr');
       hdRow.className = 'table-group-hd collapsed';
+      hdRow.dataset.modId = modId;
       hdRow.innerHTML = `<td colspan="2"><span class="group-hd-arrow"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${fluids.length}</span></td>`;
       hdBody.appendChild(hdRow);
 
@@ -200,18 +247,38 @@
 
   searchEl.addEventListener('input', resetAndRender);
 
-  const [fluidsRes, modsRes] = await Promise.all([
-    apiFetch('/api/fluids?all=true'),
+  const fluidsURL = urlProducedByMod
+    ? `/api/fluids?producedByMod=${encodeURIComponent(urlProducedByMod)}`
+    : urlProducedByMachine
+    ? `/api/fluids?producedByMachine=${encodeURIComponent(urlProducedByMachine)}`
+    : '/api/fluids?all=true';
+
+  const [fluidsRes, modsRes, machinesRes] = await Promise.all([
+    apiFetch(fluidsURL),
     apiFetch('/api/mods'),
+    apiFetch('/api/machines'),
   ]);
   if (modsRes?.ok) {
     const mods = await modsRes.json();
     mods.forEach(m => { modNames[m.mod_id] = m.name; });
   }
+  if (machinesRes?.ok) {
+    const machines = await machinesRes.json();
+    machines.forEach(m => { machineNames[m.mod_id + ':' + m.machine_id] = m.name; });
+  }
   if (fluidsRes?.ok) {
     allFluids = await fluidsRes.json();
     allFluids.forEach(f => { f.mod_name = modNames[f.mod_id] || f.mod_id; });
     resetAndRender();
+    if (urlFluid) {
+      const [fm, fi] = urlFluid.split(':');
+      const match = allFluids.find(f => f.mod_id === fm && f.fluid_id === fi);
+      if (match) {
+        const hd = table.querySelector(`.table-group-hd[data-mod-id="${CSS.escape(match.mod_id)}"]`);
+        if (hd) toggleGroup(match.mod_id, hd, hd.nextElementSibling);
+        selectFluid(match);
+      }
+    }
     new WuiAutocomplete({
       inputEl:   searchEl,
       dropEl:    document.getElementById('fluid-search-ac'),

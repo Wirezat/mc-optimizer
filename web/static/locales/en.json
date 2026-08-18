@@ -54,6 +54,7 @@
   "catalog.fluids.col.fluid_id": "Fluid ID",
   "catalog.fluids.count": "{n} fluids",
   "catalog.fluids.count_one": "1 fluid",
+  "catalog.fluids.detail.empty": "Select a fluid to see its recipes.",
   "catalog.fluids.detail.recipes_link": "Recipes with this fluid →",
   "catalog.fluids.subtitle": "Browse all registered fluids",
   "catalog.fluids.title": "Fluids",

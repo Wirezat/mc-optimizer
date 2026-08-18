@@ -180,7 +180,7 @@ export function entryOf(row, isFluid = false) {
  * aligned in a list where only some rows have an icon; pass false where an
  * absent icon should take no space, as in an infocard header.
  */
-export function iconImageHTML(entry, { cls = '', placeholder = true, dataset = null } = {}) {
+export function iconImageHTML(entry, { cls = '', placeholder = true, dataset = null, hidpiPx = null } = {}) {
     const { cls: sheetCls, style } = sheetAttrs(entry);
     const classes = [cls, sheetCls].filter(Boolean).join(' ');
     const classAttr = classes ? ` class="${esc(classes)}"` : '';
@@ -192,8 +192,9 @@ export function iconImageHTML(entry, { cls = '', placeholder = true, dataset = n
     // cycling through its members, say. Values are escaped here so a caller
     // never has to think about it. Names are checked rather than escaped:
     // esc() leaves spaces alone, so a name carrying one would end the attribute
-    // and start another.
-    const data = Object.entries(dataset ?? {})
+    // and start another. hidpiPx rides along the same way, read by
+    // initHiDPIRender (hidpi-render.js); a no-op on a flat texture.
+    const data = Object.entries({ ...(hidpiPx ? { 'hidpi-px': hidpiPx } : {}), ...(dataset ?? {}) })
         .map(([k, v]) => {
             if (!/^[a-z][a-z0-9-]*$/.test(k)) {
                 throw new Error(`iconImageHTML: unsafe data attribute name ${JSON.stringify(k)}`);
@@ -237,7 +238,9 @@ export function iconTextHTML(modID, id, {
     const rootCls = esc(['icontext', size ? `icontext-${size}` : '', extraClass]
         .filter(Boolean).join(' '));
 
-    const icon = iconImageHTML(entry, { cls: 'icontext-icon' });
+    // Matches --icontext-icon-size per size variant (components/icontext.css).
+    const hidpiPx = size === 'sm' ? 16 : size === 'lg' ? 28 : 20;
+    const icon = iconImageHTML(entry, { cls: 'icontext-icon', hidpiPx });
 
     const textCls  = marquee ? 'icontext-text cell-clamp cell-clamp--scroll' : 'icontext-text';
     const textBody = marquee

@@ -73,6 +73,7 @@
   import { wuiFilter } from '/static/ui/js/filter.js';
   import { entryOf, iconImageHTML } from '/static/js/catalog-registry.js';
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
+  import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
 
   await load(getLang());
   applyI18n();
@@ -99,13 +100,14 @@
         <a href="/catalog/recipes?item=${encodeURIComponent(item.mod_id + ':' + item.item_id)}"
            class="row-name-link">
           <span class="icontext icontext-sm">
-            ${iconImageHTML(entryOf(item, false), { cls: 'icontext-icon' })}
+            ${iconImageHTML(entryOf(item, false), { cls: 'icontext-icon', hidpiPx: 16 })}
             <span class="icontext-body"><span class="icontext-text">${esc(item.name || item.item_id)}</span></span>
           </span>
         </a>
       </td>
       <td class="td-mono td-muted">${esc(item.item_id)}</td>
       <td class="td-muted td-num">${esc(item.max_stack)}×</td>`;
+    initHiDPIRender(tr);
     return [tr];
   }
 

@@ -288,6 +288,7 @@
   import { init as initHeader } from '/static/js/header.js';
   import { initClickToEdit, initBulkRow, initCellClampScroll, initCollapsibleGroups, initDraggableRows } from '/static/ui/js/table-features.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
+  import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initKonfigBar, initModal, openModal } from '/static/ui/js/index.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
@@ -503,6 +504,7 @@
     plTbody.querySelector('[data-bulk-count]').dataset.bulkCountTpl = '{n} ' + t('factory.pl.selected');
     initClickToEdit(plTbody);
     initCellClampScroll(plTbody);
+    initHiDPIRender(plTbody);
     initInfocards(plTbody);
     bulkRowCtl.refresh();
   }
@@ -566,7 +568,7 @@
     const def     = itemId ? `<div class="infocard-def" hidden>
       <div class="infocard-header">
         ${iconImageHTML(lookupCatalog(modId, itemId, isFluid),
-                        { cls: 'infocard-icon', placeholder: false })}
+                        { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
         <div class="infocard-heading">
           <span class="infocard-title">${esc(itemName || itemId)}</span>
           <span class="infocard-subtitle">${modDisp}</span>
@@ -995,6 +997,7 @@
       secHd(t('factory.balance.surplus')) +
       (surplus.length ? surplus.map(e => dataRow(e, true)).join('')  : emptyRow());
     initCellClampScroll(tbody);
+    initHiDPIRender(tbody);
     initInfocards(tbody);
   }
 
@@ -1007,7 +1010,7 @@
     return `<div id="${defId}" class="infocard-def" hidden>
       <div class="infocard-header">
         ${iconImageHTML(lookupCatalog(e.mod_id, e.item_fluid_id, e.io_type === 'fluid'),
-                        { cls: 'infocard-icon', placeholder: false })}
+                        { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
         <div class="infocard-heading">
           <span class="infocard-title">${esc(e.name || e.item_fluid_id)}</span>
           <span class="infocard-subtitle">${esc(e.item_fluid_id)}</span>

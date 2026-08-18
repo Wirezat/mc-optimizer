@@ -123,6 +123,7 @@
   import { wuiFilter } from '/static/ui/js/filter.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
   import { initIconCycle } from '/static/ui/js/icon-cycle.js';
+  import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { loadCatalog, lookupCatalog, lookupTag, iconImageHTML } from '/static/js/catalog-registry.js';
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
 
@@ -174,7 +175,7 @@
       entry,
       name:  name || id || '?',
       label: entry?.textureUrl
-        ? iconImageHTML(entry, { cls: 'crafting-cell-icon' })
+        ? iconImageHTML(entry, { cls: 'crafting-cell-icon', hidpiPx: 36 })
         : `<span class="crafting-cell-text">${esc(name || id || '?')}</span>`,
     };
   }
@@ -215,6 +216,7 @@
       label: first
         ? iconImageHTML(first, {
             cls: 'crafting-cell-icon',
+            hidpiPx: 36,
             // More than one member means no single texture is the right answer,
             // so the cell rotates through them.
             dataset: icons.length > 1
@@ -232,7 +234,7 @@
     const shown = icons.slice(0, TAG_CARD_ICONS);
     const cells = shown.map(e =>
       `<div class="infocard-grid-cell" data-label="${esc(e.name)}">` +
-      iconImageHTML(e, { placeholder: false }) + '</div>').join('');
+      iconImageHTML(e, { placeholder: false, hidpiPx: 36 }) + '</div>').join('');
     const more = total > shown.length
       ? `<div class="infocard-section td-muted">+${total - shown.length}</div>`
       : '';
@@ -245,7 +247,7 @@
                        count = '', amount = '', nonConsuming = false, extra = '' }) {
     const countMark = count ? `<span class="crafting-cell-count">${esc(count)}</span>` : '';
     const ncMark  = nonConsuming ? `<span class="nc-badge">↺</span>` : '';
-    const icon    = iconImageHTML(entry, { cls: 'infocard-icon', placeholder: false });
+    const icon    = iconImageHTML(entry, { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 });
     const amtRow  = amount
       ? `<div class="infocard-section"><div class="infocard-row">` +
         `<span class="infocard-key">${esc(t('catalog.recipes.card.amount'))}</span>` +
@@ -504,6 +506,7 @@
 
     if (ioCache.has(recipeID)) {
       bodyEl.innerHTML = ioCache.get(recipeID);
+      initHiDPIRender(bodyEl);
       initInfocards(bodyEl);
       initIconCycle(bodyEl);
       return;
@@ -530,6 +533,7 @@
       ${ioGrid(allOutputs)}
     </div>`;
     bodyEl.innerHTML = html;
+    initHiDPIRender(bodyEl);
     initInfocards(bodyEl);
     initIconCycle(bodyEl);
     ioCache.set(recipeID, html);

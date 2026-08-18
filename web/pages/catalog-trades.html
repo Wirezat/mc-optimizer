@@ -109,6 +109,7 @@
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
+  import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
   import { loadCatalog, lookupCatalog, iconTextHTML, iconImageHTML } from '/static/js/catalog-registry.js';
@@ -164,7 +165,7 @@
     return `<span class="infocard-trigger" data-infocard-inline>${iconTextHTML(modID, itemID, { name, size: 'sm' })}</span>
       <div class="infocard-def" hidden>
         <div class="infocard-header">
-          ${iconImageHTML(lookupCatalog(modID, itemID), { cls: 'infocard-icon', placeholder: false })}
+          ${iconImageHTML(lookupCatalog(modID, itemID), { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
           <div class="infocard-heading">
             <span class="infocard-title">${label}</span>
             <span class="infocard-subtitle">${esc(modID)}:${esc(itemID)}</span>
@@ -195,6 +196,7 @@
       <td class="td-muted" style="text-align:right;">${tr.max_uses ?? '—'}</td>
       <td class="td-muted" style="text-align:right;">${tr.xp ?? '—'}</td>`;
     applyI18n(row);
+    initHiDPIRender(row);
     initInfocards(row);
     return [row];
   }

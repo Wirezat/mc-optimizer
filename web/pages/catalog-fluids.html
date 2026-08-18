@@ -72,6 +72,7 @@
   import { wuiFilter } from '/static/ui/js/filter.js';
   import { entryOf, iconImageHTML } from '/static/js/catalog-registry.js';
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
+  import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
 
   await load(getLang());
   applyI18n();
@@ -98,12 +99,13 @@
         <a href="/catalog/recipes?fluid=${encodeURIComponent(fluid.mod_id + ':' + fluid.fluid_id)}"
            class="row-name-link">
           <span class="icontext icontext-sm">
-            ${iconImageHTML(entryOf(fluid, true), { cls: 'icontext-icon' })}
+            ${iconImageHTML(entryOf(fluid, true), { cls: 'icontext-icon', hidpiPx: 16 })}
             <span class="icontext-body"><span class="icontext-text">${esc(fluid.name || fluid.fluid_id)}</span></span>
           </span>
         </a>
       </td>
       <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>`;
+    initHiDPIRender(tr);
     return [tr];
   }
 

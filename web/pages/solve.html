@@ -424,6 +424,7 @@
   import { openPopover, closePopover } from '/static/ui/js/components/popover.js';
   import { renderGraph } from '/static/ui/js/components/graph.js';
   import { loadCatalog, lookupCatalog, iconTextHTML, catalogEntries } from '/static/js/catalog-registry.js';
+  import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
 
   await load(getLang());
   applyI18n();
@@ -968,6 +969,7 @@
       </tr></thead>
       <tbody>${rows.join('')}</tbody>
     </table>`);
+    initHiDPIRender(chainContainer.body);
   }
 
   // ── Graph view of the chain ───────────────────────────────────────────────
@@ -1377,6 +1379,7 @@
       </div>`;
     }
     ioEl.innerHTML = io || `<span style="color:var(--text-faint);font-size:var(--text-sm);">—</span>`;
+    initHiDPIRender(ioEl);
   }
 
   let _openChainPickerKey = null;

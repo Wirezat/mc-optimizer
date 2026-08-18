@@ -205,6 +205,7 @@
   import { machine as machineName, loadMI } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { loadCatalog, iconTextHTML } from '/static/js/catalog-registry.js';
+  import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
 
   const _lang = getLang();
   await load(_lang);
@@ -329,6 +330,7 @@
         ? statPair('EU/t', String(_pl.target_eu_per_tick), String(_pl.current_eu_per_tick || 0), incomplete)
         : ''}
     `;
+    initHiDPIRender(document.getElementById('pl-meta'));
   }
 
   // Build progress is machine-weighted now that groups can be partially built:
@@ -489,6 +491,7 @@
       html += `<div class="detail-grid">${outputs.map((e, i) => ioRow(e, i === 0)).join('')}</div>`;
     }
     ioEl.innerHTML = html || `<span class="td-faint">—</span>`;
+    initHiDPIRender(ioEl);
   }
 
   function ioRow(e, isPrimary) {

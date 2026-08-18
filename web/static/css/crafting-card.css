@@ -1,0 +1,46 @@
+/* crafting-card.css — shared with catalog-items.html and catalog-fluids.html's
+   recipe-detail side panel. Originally lived in catalog-recipes.html. */
+.crafting-layout { display: flex; align-items: flex-start; gap: var(--gap-container); }
+.crafting-grid { display: grid; gap: 2px; flex-shrink: 0; }
+.crafting-cell { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-hover); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); color: var(--text-muted); text-align: center; line-height: 1.2; overflow: hidden; position: relative; cursor: help; }
+.crafting-cell.empty { opacity: .3; cursor: default; }
+.crafting-cell--nc { border-style: dashed; opacity: .75; }
+/* The texture fills the slot, the way an item fills its inventory square. */
+.crafting-cell-icon {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+/* Plain-text stand-in when an item has no texture; it has to live inside
+   the same 36px square, so it gets the padding the icon does not want. */
+.crafting-cell-text {
+  --crafting-text-pad: 2px;
+  padding: var(--crafting-text-pad);
+  overflow: hidden;
+}
+/* Stack count, bottom-right over the texture, as the game draws it. The
+   outline keeps it legible on top of any texture underneath. */
+.crafting-cell-count {
+  --crafting-count-size: 10px;
+  --crafting-count-inset: 1px;
+  --crafting-count-outline: #000;
+  position: absolute;
+  right: var(--crafting-count-inset);
+  bottom: var(--crafting-count-inset);
+  font-size: var(--crafting-count-size);
+  font-weight: var(--weight-semibold);
+  font-family: var(--font-mono);
+  color: #fff;
+  text-shadow: 1px 1px 0 var(--crafting-count-outline), -1px 1px 0 var(--crafting-count-outline),
+               1px -1px 0 var(--crafting-count-outline), -1px -1px 0 var(--crafting-count-outline);
+  pointer-events: none;
+}
+/* Moved off the bottom-right corner so it cannot collide with the count. */
+.nc-badge { position: absolute; top: 0; left: 2px; font-size: 8px; color: var(--text-faint); pointer-events: none; }
+.crafting-arrow { font-size: 1.2em; color: var(--text-faint); align-self: center; }
+.crafting-result { display: flex; flex-direction: column; gap: var(--gap-inline); justify-content: center; }
+
+/* One recipe card: meta row (machine + duration/EU) above its crafting-layout. */
+.recipe-card { padding: var(--gap-inline) 0; border-bottom: 1px solid var(--border); }
+.recipe-card:last-child { border-bottom: none; }
+.recipe-card-meta { display: flex; justify-content: space-between; gap: var(--gap-control); margin-bottom: var(--gap-inline); font-size: var(--text-sm); }

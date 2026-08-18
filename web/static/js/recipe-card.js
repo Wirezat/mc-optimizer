@@ -4,9 +4,8 @@
    /api/items/{mod}/{item}/recipes and GET /api/fluids/{mod}/{fluid}/recipes
    return (see internal/api/items.go's buildRecipeCard for the exact shape).
 
-   Extracted from catalog-recipes.html, which built this inline — reused
-   here by catalog-items.html and catalog-fluids.html's side panel instead
-   of being duplicated. Needs crafting-card.css.
+   Used by catalog-items.html and catalog-fluids.html's side panel. Needs
+   crafting-card.css.
 */
 import { t, esc } from '/static/js/i18n.js';
 import { lookupCatalog, lookupTag, iconImageHTML } from '/static/js/catalog-registry.js';

@@ -667,6 +667,10 @@ func SearchItemsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 		}
 		if producedByMachine := r.URL.Query().Get("producedByMachine"); producedByMachine != "" {
 			machineMod, machineID := splitCatalogRef(producedByMachine)
+			if machineMod == "" || machineID == "" {
+				errBadRequest(w, "producedByMachine must be a \"mod_id:machine_id\" pair")
+				return
+			}
 			items, err := database.ListItemsProducedBy(r.Context(), machineMod, machineID)
 			if err != nil {
 				errInternal(w, err)
@@ -729,6 +733,10 @@ func SearchFluidsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 		}
 		if producedByMachine := r.URL.Query().Get("producedByMachine"); producedByMachine != "" {
 			machineMod, machineID := splitCatalogRef(producedByMachine)
+			if machineMod == "" || machineID == "" {
+				errBadRequest(w, "producedByMachine must be a \"mod_id:machine_id\" pair")
+				return
+			}
 			fluids, err := database.ListFluidsProducedBy(r.Context(), machineMod, machineID)
 			if err != nil {
 				errInternal(w, err)

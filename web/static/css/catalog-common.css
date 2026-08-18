@@ -1,5 +1,5 @@
 /* Shared catalog table link/toggle styles — used across catalog-items,
-   catalog-fluids, catalog-machines, catalog-recipes, catalog-trades, catalog-mods.
+   catalog-fluids, catalog-machines, catalog-trades, catalog-mods.
    Hoisted from identical per-page copies; keep in sync app-wide by editing here only. */
 
 .row-name-link { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); }

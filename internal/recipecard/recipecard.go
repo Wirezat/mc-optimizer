@@ -4,7 +4,10 @@
 // frontend already has those cached).
 package recipecard
 
-import "github.com/Wirezat/production-optimizer/internal/solver"
+import (
+	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/solver"
+)
 
 type Card struct {
 	ID            string   `json:"id"`
@@ -20,25 +23,33 @@ type Card struct {
 }
 
 // Input is a concrete item (item_mod_id+item_id set, tag_name empty) or a
-// tag slot (tag_name set, item_mod_id/item_id empty) — never both.
+// tag slot (tag_name set, item_mod_id/item_id empty) — never both. X/Y are
+// only set by ApplySlotLayout; the frontend falls back to its own grid
+// layout when they're absent.
 type Input struct {
 	ItemModID    string  `json:"item_mod_id,omitempty"`
 	ItemID       string  `json:"item_id,omitempty"`
 	TagName      string  `json:"tag_name,omitempty"`
 	Amount       float64 `json:"amount"`
 	NonConsuming bool    `json:"non_consuming,omitempty"`
+	X            *int16  `json:"x,omitempty"`
+	Y            *int16  `json:"y,omitempty"`
 }
 
 type Output struct {
 	ItemModID string  `json:"item_mod_id"`
 	ItemID    string  `json:"item_id"`
 	Amount    float64 `json:"amount"`
+	X         *int16  `json:"x,omitempty"`
+	Y         *int16  `json:"y,omitempty"`
 }
 
 type Fluid struct {
 	FluidModID string `json:"fluid_mod_id"`
 	FluidID    string `json:"fluid_id"`
 	AmountMB   int64  `json:"amount_mb"`
+	X          *int16 `json:"x,omitempty"`
+	Y          *int16 `json:"y,omitempty"`
 }
 
 // Build converts one solver.RecipeRow into a Card. Pure function — no I/O —
@@ -86,4 +97,68 @@ func Build(r *solver.RecipeRow) Card {
 		card.FluidOutputs = append(card.FluidOutputs, Fluid{FluidModID: fo.FluidModID, FluidID: fo.FluidID, AmountMB: fo.AmountMB})
 	}
 	return card
+}
+
+// ApplySlotLayout pairs card's inputs/outputs with slots (the owning
+// machine's slot layout, in whatever order the DB returned them) and, if
+// every one of them resolves, sets their X/Y. Item and fluid I/O on the same
+// side (inputs or outputs) are treated as one group — a partial layout (some
+// positioned, some not) is worse than the frontend's uniform grid fallback,
+// so either the whole side gets coordinates or none of it does.
+//
+// TODO: recipe I/O has no stored ordering of its own (see loadRecipeIO in
+// internal/db/recipes.go) — this pairs recipe input N with the machine's
+// Nth non-fuel slot of the matching type in DB-return order, which usually
+// matches import order but isn't guaranteed. Revisit if that ever causes a
+// visibly wrong pairing.
+//
+// Also note: as of this writing only vanilla machines (furnace, campfire,
+// etc.) have any machine_slots rows at all — modded machines (Modern
+// Industrialization and friends) have none yet, so this is a no-op for them
+// until their YAML machine defs get curated slot_x/slot_y. Everything falls
+// back to the grid layout until then.
+func ApplySlotLayout(card *Card, slots []*model.MachineSlot) {
+	if itemIn, ok := resolveSlots(slots, "item_input", len(card.Inputs)); ok {
+		if fluidIn, ok := resolveSlots(slots, "fluid_input", len(card.FluidInputs)); ok {
+			for i := range card.Inputs {
+				card.Inputs[i].X, card.Inputs[i].Y = itemIn[i].SlotX, itemIn[i].SlotY
+			}
+			for i := range card.FluidInputs {
+				card.FluidInputs[i].X, card.FluidInputs[i].Y = fluidIn[i].SlotX, fluidIn[i].SlotY
+			}
+		}
+	}
+	if itemOut, ok := resolveSlots(slots, "item_output", len(card.Outputs)); ok {
+		if fluidOut, ok := resolveSlots(slots, "fluid_output", len(card.FluidOutputs)); ok {
+			for i := range card.Outputs {
+				card.Outputs[i].X, card.Outputs[i].Y = itemOut[i].SlotX, itemOut[i].SlotY
+			}
+			for i := range card.FluidOutputs {
+				card.FluidOutputs[i].X, card.FluidOutputs[i].Y = fluidOut[i].SlotX, fluidOut[i].SlotY
+			}
+		}
+	}
+}
+
+// resolveSlots picks the first n usable slots of slotType, in the order
+// given (fuel slots are burn-fuel, never a recipe I/O, so they're skipped).
+// ok is false — and the pick unusable — if there aren't n of them, or any of
+// the first n is missing x/y.
+func resolveSlots(slots []*model.MachineSlot, slotType string, n int) (picked []*model.MachineSlot, ok bool) {
+	if n == 0 {
+		return nil, true
+	}
+	for _, s := range slots {
+		if s.SlotType != slotType || (s.Label != nil && *s.Label == "fuel") {
+			continue
+		}
+		if s.SlotX == nil || s.SlotY == nil {
+			return nil, false
+		}
+		picked = append(picked, s)
+		if len(picked) == n {
+			return picked, true
+		}
+	}
+	return nil, false
 }

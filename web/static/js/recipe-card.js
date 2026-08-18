@@ -68,7 +68,7 @@ function tagCell(tagName) {
 // count is the bare number drawn in the corner; amount carries the unit and
 // stays in the hover card, where there is room for it.
 function craftCell({ label, name, ref = '', entry = null,
-                     count = '', amount = '', nonConsuming = false, extra = '' }) {
+                     count = '', amount = '', nonConsuming = false, extra = '', style = '' }) {
   const countMark = count ? `<span class="crafting-cell-count">${esc(count)}</span>` : '';
   const ncMark = nonConsuming ? `<span class="nc-badge">↺</span>` : '';
   const icon = iconImageHTML(entry, { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 });
@@ -81,7 +81,8 @@ function craftCell({ label, name, ref = '', entry = null,
     ? `<div class="infocard-section">${esc(t('recipe.non_consuming_title'))}</div>`
     : '';
   const sub = ref ? `<span class="infocard-subtitle">${esc(ref)}</span>` : '';
-  return `<div class="crafting-cell${nonConsuming ? ' crafting-cell--nc' : ''}" data-infocard-inline>${label}${countMark}${ncMark}</div>
+  const styleAttr = style ? ` style="${esc(style)}"` : '';
+  return `<div class="crafting-cell${nonConsuming ? ' crafting-cell--nc' : ''}"${styleAttr} data-infocard-inline>${label}${countMark}${ncMark}</div>
     <div class="infocard-def" hidden>
       <div class="infocard-header">${icon}
         <div class="infocard-heading">
@@ -92,34 +93,55 @@ function craftCell({ label, name, ref = '', entry = null,
     </div>`;
 }
 
+// One recipe-card I/O entry ({item_mod_id,item_id}, {fluid_mod_id,fluid_id}
+// or {tag_name}, plus amount/x/y) → its cell's inline style + craftCell HTML.
+function ioCellHTML(io, style) {
+  const isFluid = io.fluid_id != null;
+  const count = isFluid ? (io.amount_mb ? String(io.amount_mb) : '')
+    : (io.amount > 1 ? String(io.amount) : '');
+  const amount = isFluid ? (io.amount_mb ? io.amount_mb + 'mB' : '')
+    : (io.amount > 1 ? io.amount + '×' : '');
+  if (io.tag_name) {
+    return craftCell({ ...tagCell(io.tag_name), count, amount, nonConsuming: io.non_consuming, style });
+  }
+  const ref = isFluid
+    ? (io.fluid_mod_id + ':' + io.fluid_id)
+    : ((io.item_mod_id || '') + ':' + (io.item_id || ''));
+  const parts = isFluid
+    ? cellParts(io.fluid_mod_id, io.fluid_id, true)
+    : cellParts(io.item_mod_id, io.item_id, false);
+  return craftCell({ ...parts, ref, count, amount, nonConsuming: io.non_consuming, style });
+}
+
 // items: recipe-card "inputs"/"outputs"/"fluid_inputs"/"fluid_outputs" arrays
 // (or a concatenation of an item + fluid array, for one combined grid).
+//
+// When every entry carries x/y (internal/recipecard.ApplySlotLayout found a
+// full slot layout for this machine — see its doc comment for when that is),
+// cells are placed at their real machine-slot positions instead of the
+// generic auto-filled square below, which is otherwise the only option
+// (most machines have no slot coordinates yet).
 function ioGrid(items) {
   if (!items.length) return `<div class="crafting-cell empty" style="width:36px;height:36px;"></div>`;
+
+  if (items.every(io => io.x != null && io.y != null)) {
+    const xs = items.map(io => io.x), ys = items.map(io => io.y);
+    const minX = Math.min(...xs), minY = Math.min(...ys);
+    const cols = Math.max(...xs) - minX + 1;
+    const rows = Math.max(...ys) - minY + 1;
+    const style = `grid-template-columns:repeat(${cols},36px);grid-template-rows:repeat(${rows},36px);`;
+    const cells = items.map(io =>
+      ioCellHTML(io, `grid-column:${io.x - minX + 1};grid-row:${io.y - minY + 1};`)).join('');
+    return `<div class="crafting-grid" style="${style}">${cells}</div>`;
+  }
+
   const cols = Math.max(1, Math.ceil(Math.sqrt(items.length)));
   const rows = Math.ceil(items.length / cols);
   const total = cols * rows;
   const style = `grid-template-columns:repeat(${cols},36px);grid-template-rows:repeat(${rows},36px);`;
   let cells = '';
   for (let i = 0; i < total; i++) {
-    if (i >= items.length) { cells += `<div class="crafting-cell empty"></div>`; continue; }
-    const io = items[i];
-    const isFluid = io.fluid_id != null;
-    const count = isFluid ? (io.amount_mb ? String(io.amount_mb) : '')
-      : (io.amount > 1 ? String(io.amount) : '');
-    const amount = isFluid ? (io.amount_mb ? io.amount_mb + 'mB' : '')
-      : (io.amount > 1 ? io.amount + '×' : '');
-    if (io.tag_name) {
-      cells += craftCell({ ...tagCell(io.tag_name), count, amount, nonConsuming: io.non_consuming });
-      continue;
-    }
-    const ref = isFluid
-      ? (io.fluid_mod_id + ':' + io.fluid_id)
-      : ((io.item_mod_id || '') + ':' + (io.item_id || ''));
-    const parts = isFluid
-      ? cellParts(io.fluid_mod_id, io.fluid_id, true)
-      : cellParts(io.item_mod_id, io.item_id, false);
-    cells += craftCell({ ...parts, ref, count, amount, nonConsuming: io.non_consuming });
+    cells += i >= items.length ? `<div class="crafting-cell empty"></div>` : ioCellHTML(items[i]);
   }
   return `<div class="crafting-grid" style="${style}">${cells}</div>`;
 }

@@ -4,10 +4,100 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
 func strp(s string) *string { return &s }
+func i16p(v int16) *int16   { return &v }
+
+func slot(typ string, x, y int16, label string) *model.MachineSlot {
+	s := &model.MachineSlot{SlotType: typ, SlotX: i16p(x), SlotY: i16p(y)}
+	if label != "" {
+		s.Label = &label
+	}
+	return s
+}
+
+func TestApplySlotLayout_PositionsWhenSlotsCoverAllIO(t *testing.T) {
+	card := &Card{
+		Inputs:  []Input{{ItemID: "a"}, {ItemID: "b"}},
+		Outputs: []Output{{ItemID: "c"}},
+	}
+	slots := []*model.MachineSlot{
+		slot("item_input", 0, 0, ""),
+		slot("item_input", 1, 0, ""),
+		slot("item_output", 4, 0, ""),
+	}
+	ApplySlotLayout(card, slots)
+
+	if card.Inputs[0].X == nil || *card.Inputs[0].X != 0 || *card.Inputs[0].Y != 0 {
+		t.Errorf("input 0 not positioned: %+v", card.Inputs[0])
+	}
+	if card.Inputs[1].X == nil || *card.Inputs[1].X != 1 {
+		t.Errorf("input 1 not positioned: %+v", card.Inputs[1])
+	}
+	if card.Outputs[0].X == nil || *card.Outputs[0].X != 4 {
+		t.Errorf("output not positioned: %+v", card.Outputs[0])
+	}
+}
+
+func TestApplySlotLayout_FuelSlotNeverUsedForRecipeInput(t *testing.T) {
+	card := &Card{Inputs: []Input{{ItemID: "ore"}}}
+	slots := []*model.MachineSlot{
+		slot("item_input", 0, 0, "fuel"),
+		slot("item_input", 0, 1, ""),
+	}
+	ApplySlotLayout(card, slots)
+
+	if card.Inputs[0].X == nil || *card.Inputs[0].Y != 1 {
+		t.Errorf("expected the non-fuel slot to be picked, got %+v", card.Inputs[0])
+	}
+}
+
+func TestApplySlotLayout_FallsBackWhenNotEnoughSlots(t *testing.T) {
+	card := &Card{Inputs: []Input{{ItemID: "a"}, {ItemID: "b"}}}
+	slots := []*model.MachineSlot{slot("item_input", 0, 0, "")}
+	ApplySlotLayout(card, slots)
+
+	if card.Inputs[0].X != nil || card.Inputs[1].X != nil {
+		t.Errorf("expected no positioning (insufficient slots), got %+v", card.Inputs)
+	}
+}
+
+func TestApplySlotLayout_FallsBackWhenSlotMissingCoords(t *testing.T) {
+	card := &Card{Inputs: []Input{{ItemID: "a"}}}
+	slots := []*model.MachineSlot{{SlotType: "item_input"}} // no SlotX/SlotY
+	ApplySlotLayout(card, slots)
+
+	if card.Inputs[0].X != nil {
+		t.Errorf("expected no positioning (slot missing coords), got %+v", card.Inputs[0])
+	}
+}
+
+func TestApplySlotLayout_PartialSideFallsBackEntirely(t *testing.T) {
+	// item_input resolves fine, but there's no fluid_input slot at all for
+	// the recipe's one fluid input — the whole "inputs" side must stay
+	// ungridded, not just the fluid half of it.
+	card := &Card{
+		Inputs:      []Input{{ItemID: "a"}},
+		FluidInputs: []Fluid{{FluidID: "steam"}},
+	}
+	slots := []*model.MachineSlot{slot("item_input", 0, 0, "")}
+	ApplySlotLayout(card, slots)
+
+	if card.Inputs[0].X != nil {
+		t.Errorf("expected item input to stay unpositioned when its side is incomplete, got %+v", card.Inputs[0])
+	}
+}
+
+func TestApplySlotLayout_NoSlots_NoOp(t *testing.T) {
+	card := &Card{Inputs: []Input{{ItemID: "a"}}}
+	ApplySlotLayout(card, nil)
+	if card.Inputs[0].X != nil {
+		t.Errorf("expected no positioning with nil slots, got %+v", card.Inputs[0])
+	}
+}
 
 func TestBuild_ItemAndTagInputs(t *testing.T) {
 	row := &solver.RecipeRow{

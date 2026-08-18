@@ -88,7 +88,7 @@
   import { init as initHeader } from '/static/js/header.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
-  import { entryOf, iconImageHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, entryOf, iconImageHTML } from '/static/js/catalog-registry.js';
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
@@ -125,9 +125,15 @@
     detailEl.innerHTML = `<span class="td-muted" data-i18n="catalog.empty.loading"></span>`;
     applyI18n(detailEl);
     const res = await apiFetch(`/api/fluids/${encodeURIComponent(fluid.mod_id)}/${encodeURIComponent(fluid.fluid_id)}/recipes`);
-    const recipes = res?.ok ? await res.json() : [];
+    if (!res?.ok) {
+      detailEl.innerHTML = `<span class="td-muted" data-i18n="catalog.fluids.detail.load_error"></span>`;
+      applyI18n(detailEl);
+      return;
+    }
+    const recipes = await res.json();
     detailEl.innerHTML = recipeListHTML(recipes, r => machineNames[r.machine_mod_id + ':' + r.machine_id]);
     applyI18n(detailEl);
+    initHiDPIRender(detailEl);
     initInfocards(detailEl);
     initIconCycle(detailEl);
   }
@@ -257,6 +263,7 @@
     apiFetch(fluidsURL),
     apiFetch('/api/mods'),
     apiFetch('/api/machines'),
+    loadCatalog(),
   ]);
   if (modsRes?.ok) {
     const mods = await modsRes.json();
@@ -278,7 +285,7 @@
       const match = allFluids.find(f => f.mod_id === fm && f.fluid_id === fi);
       if (match) {
         const hd = table.querySelector(`.table-group-hd[data-mod-id="${CSS.escape(match.mod_id)}"]`);
-        if (hd) toggleGroup(match.mod_id, hd, hd.nextElementSibling);
+        if (hd) toggleGroup(match.mod_id, hd, hd.parentElement.nextElementSibling);
         selectFluid(match);
       }
     }

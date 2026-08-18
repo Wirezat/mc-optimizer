@@ -103,13 +103,14 @@
             <thead>
               <tr>
                 <th style="width:24px;"></th>
-                <th data-i18n="catalog.mods.col.mod_id"></th>
                 <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
+                <th data-i18n="catalog.mods.col.mod_id"></th>
                 <th data-i18n="catalog.mods.col.energy_type"></th>
+                <th data-i18n="catalog.mods.col.recipes"></th>
               </tr>
             </thead>
             <tbody id="mod-tbody">
-              <tr><td colspan="4" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
+              <tr><td colspan="5" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
             </tbody>
           </table>
         </div>
@@ -120,7 +121,7 @@
 
 <script type="module">
   import { guard, apiFetch, isAdmin, getUser } from '/static/ui/js/auth.js';
-  import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
+  import { load, applyI18n, getLang, t, esc, tCount } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { initClickToEdit } from '/static/ui/js/table-features.js';
   import { initInlineEdit } from '/static/ui/js/inline-edit.js';
@@ -171,34 +172,39 @@
       ? allMods.filter(m => wuiFilter(m, q, ['mod_id', 'name', 'energy_type', 'modrinth_slug']))
       : allMods;
 
-    countEl.textContent = mods.length + ' mod' + (mods.length !== 1 ? 's' : '');
+    countEl.textContent = tCount(mods.length, 'catalog.mods.count');
 
     if (!mods.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_mods')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_mods')}</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = mods.map(m => `
+    tbody.innerHTML = mods.map(m => {
+      const recipesUrl = `/catalog/recipes?mod=${encodeURIComponent(m.mod_id)}`;
+      return `
       <tr data-mod-id="${esc(m.mod_id)}">
         <td><span class="table-expand-trigger" data-expand="mod-${esc(m.mod_id)}">▸</span></td>
-        <td class="td-mono td-muted">${esc(m.mod_id)}</td>
         <td>${admin ? `
           <div class="td-editable" data-wui-field="name">
             <span class="td-val">${esc(m.name)}</span>
             <input class="td-input" type="text" value="${esc(m.name)}" />
           </div>` : esc(m.name)}</td>
+        <td class="td-mono td-muted">${esc(m.mod_id)}</td>
         <td>${admin ? `
           <select class="badge-select" data-wui-field="energy_type" data-mod-id="${esc(m.mod_id)}">
             ${['EU','FE','SU','NONE','CUSTOM'].map(e =>
               `<option${m.energy_type===e?' selected':''}>${e}</option>`).join('')}
           </select>` : `<span class="badge badge-neutral">${esc(m.energy_type)}</span>`}</td>
+        <td>${m.recipe_count
+          ? `<a href="${esc(recipesUrl)}" class="recipe-count-link">${m.recipe_count}</a>`
+          : `<span class="td-muted">—</span>`}</td>
       </tr>
       <tr class="table-expand-row" id="mod-${esc(m.mod_id)}">
-        <td colspan="4"><div class="table-expand-body" id="mod-body-${esc(m.mod_id)}">
+        <td colspan="5"><div class="table-expand-body" id="mod-body-${esc(m.mod_id)}">
           <span class="td-muted" style="font-size:var(--text-sm);">${t('catalog.empty.loading')}</span>
         </div></td>
-      </tr>`
-    ).join('');
+      </tr>`;
+    }).join('');
 
     if (admin) initClickToEdit(tbody);
   }

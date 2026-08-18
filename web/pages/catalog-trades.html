@@ -106,7 +106,7 @@
 
 <script type="module">
   import { guard, apiFetch } from '/static/ui/js/auth.js';
-  import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
+  import { load, applyI18n, getLang, t, esc, tCount } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
@@ -243,7 +243,7 @@
     let trades = allTrades;
     if (q) trades = trades.filter(tr => wuiFilter(tr, q, ['profession', 'source_name', 'source_mod_id', 'cost_name', 'cost_item_id', 'cost2_name', 'cost2_item_id', 'result_name', 'result_item_id', 'tier']));
 
-    countEl.textContent = trades.length + ' trade' + (trades.length !== 1 ? 's' : '');
+    countEl.textContent = tCount(trades.length, 'catalog.trades.count');
 
     for (const vw of openGroups.values()) vw.destroy();
     openGroups.clear();

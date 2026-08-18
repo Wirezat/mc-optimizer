@@ -98,7 +98,7 @@
 <script type="module">
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
   import { guard, apiFetch, getUser } from '/static/ui/js/auth.js';
-  import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
+  import { load, applyI18n, getLang, t, esc, tCount } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
@@ -216,7 +216,7 @@
       if (wuiFilter(m, q, ['name', 'machine_id', 'mod_name', 'energy_type', 'base_eu_per_tick'])) return true;
       return (m.variants || []).some(v => wuiFilter(v, q, ['name', 'machine_id']));
     });
-    countEl.textContent = filtered.length + ' machine' + (filtered.length !== 1 ? 's' : '');
+    countEl.textContent = tCount(filtered.length, 'catalog.machines.count');
 
     for (const vw of openGroups.values()) vw.destroy();
     openGroups.clear();

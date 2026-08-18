@@ -66,13 +66,14 @@
 
 <script type="module">
   import { guard, apiFetch } from '/static/ui/js/auth.js';
-  import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
+  import { load, applyI18n, getLang, t, esc, tCount } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
   import { entryOf, iconImageHTML } from '/static/js/catalog-registry.js';
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
+  import { initInfocards } from '/static/ui/js/infocard.js';
 
   await load(getLang());
   applyI18n();
@@ -93,19 +94,30 @@
   const groupRows = new Map();
 
   function fluidRowEl(fluid) {
+    const entry = entryOf(fluid, true);
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
         <a href="/catalog/recipes?fluid=${encodeURIComponent(fluid.mod_id + ':' + fluid.fluid_id)}"
-           class="row-name-link">
+           class="row-name-link" data-infocard-inline>
           <span class="icontext icontext-sm">
-            ${iconImageHTML(entryOf(fluid, true), { cls: 'icontext-icon', hidpiPx: 16 })}
+            ${iconImageHTML(entry, { cls: 'icontext-icon', hidpiPx: 16 })}
             <span class="icontext-body"><span class="icontext-text">${esc(fluid.name || fluid.fluid_id)}</span></span>
           </span>
         </a>
+        <div class="infocard-def" hidden>
+          <div class="infocard-header">
+            ${iconImageHTML(entry, { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
+            <div class="infocard-heading">
+              <span class="infocard-title">${esc(fluid.name || fluid.fluid_id)}</span>
+              <span class="infocard-subtitle">${esc(fluid.mod_name)}</span>
+            </div>
+          </div>
+        </div>
       </td>
       <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>`;
     initHiDPIRender(tr);
+    initInfocards(tr);
     return [tr];
   }
 
@@ -144,7 +156,7 @@
     const q = searchEl.value.trim().toLowerCase();
     filtered = urlMod ? allFluids.filter(f => f.mod_id === urlMod) : allFluids;
     if (q) filtered = filtered.filter(f => wuiFilter(f, q, ['name', 'fluid_id', 'mod_name']));
-    countEl.textContent = filtered.length + ' fluid' + (filtered.length !== 1 ? 's' : '');
+    countEl.textContent = tCount(filtered.length, 'catalog.fluids.count');
 
     for (const vw of openGroups.values()) vw.destroy();
     openGroups.clear();

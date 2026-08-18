@@ -83,7 +83,7 @@
           <span class="container-title" id="recipe-count"></span>
         </div>
         <div class="container-filter">
-          <div class="wui-ac-wrap" style="width:260px;">
+          <div class="wui-ac-wrap" style="width:220px;">
             <input class="input" id="recipe-search" data-i18n-placeholder="catalog.search_placeholder"
               style="width:100%;height:var(--h-btn-sm);" autocomplete="off" />
             <div class="wui-ac-drop" id="recipe-search-ac"></div>
@@ -116,7 +116,7 @@
 
 <script type="module">
   import { guard, apiFetch } from '/static/ui/js/auth.js';
-  import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
+  import { load, applyI18n, getLang, t, esc, tCount } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { initCellClampScroll } from '/static/ui/js/table-features.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
@@ -574,7 +574,7 @@
     if (urlFluid)   qs.set('fluid', urlFluid);
     const res = await apiFetch(`/api/recipes?${qs.toString()}`);
     const recipes = res?.ok ? await res.json() : [];
-    countEl.textContent = recipes.length + ' recipe' + (recipes.length !== 1 ? 's' : '');
+    countEl.textContent = tCount(recipes.length, 'catalog.recipes.count');
 
     if (!recipes.length) {
       tbody.innerHTML = `<tr><td colspan="6" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_recipes')}</td></tr>`;
@@ -623,7 +623,7 @@
       // filter to mods that might have recipes (if urlMod set, only that mod)
       const visibleMods = urlMod ? allMods.filter(m => m.mod_id === urlMod) : allMods;
       renderModGroups(visibleMods);
-      countEl.textContent = visibleMods.length + ' mod' + (visibleMods.length !== 1 ? 's' : '');
+      countEl.textContent = tCount(visibleMods.length, 'catalog.recipes.mod_count');
 
       // if urlMod is set, auto-expand it
       if (urlMod) {

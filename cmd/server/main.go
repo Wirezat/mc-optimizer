@@ -185,6 +185,7 @@ func run() error {
 
 	mux.Handle("GET /api/items", api.SearchItemsHandler(database, "assets")) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/items/{mod_id}/{item_id}/recipes", protected(api.GetItemRecipesHandler(database)))
+	mux.Handle("GET /api/fluids/{mod_id}/{fluid_id}/recipes", protected(api.GetFluidRecipesHandler(database)))
 	mux.Handle("GET /api/fluids", api.SearchFluidsHandler(database, "assets")) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/tags", protected(api.SearchTagsHandler(database)))
 	mux.Handle("GET /api/tag-members", protected(api.ListTagMembersHandler(database)))

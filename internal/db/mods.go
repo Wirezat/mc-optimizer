@@ -348,6 +348,100 @@ func (d *DB) ListItemsByMod(ctx context.Context, modID string) ([]*model.Item, e
 	return items, nil
 }
 
+// ListItemsProducedBy returns every item that appears as an output of a
+// recipe matching (modID, machineID), same filter shape as
+// ListRecipesCatalog: machineID set narrows to that exact machine (plus
+// anything that implements it via machine_interfaces); machineID empty
+// narrows to recipes the mod itself added (source_mod_id); both empty
+// returns nothing (callers only call this with at least one set).
+func (d *DB) ListItemsProducedBy(ctx context.Context, modID, machineID string) ([]*model.Item, error) {
+	rows, err := d.Pool.Query(ctx, `
+		SELECT DISTINCT i.mod_id, i.item_id,
+		       COALESCE(
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='item.'||i.mod_id||'.'||i.item_id),
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||i.mod_id||'.'||i.item_id),
+		           ''
+		       ) AS iname,
+		       i.max_stack
+		FROM items i
+		JOIN recipe_item_outputs rio ON rio.item_mod_id = i.mod_id AND rio.item_id = i.item_id
+		JOIN recipes r ON r.id = rio.recipe_id
+		WHERE ( ($2 <> '' AND r.machine_mod_id = $1 AND r.machine_id = $2)
+		     OR ($2 = ''  AND $1 <> '' AND r.source_mod_id = $1) )
+
+		UNION
+
+		SELECT DISTINCT i.mod_id, i.item_id,
+		       COALESCE(
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='item.'||i.mod_id||'.'||i.item_id),
+		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||i.mod_id||'.'||i.item_id),
+		           ''
+		       ) AS iname,
+		       i.max_stack
+		FROM items i
+		JOIN recipe_item_outputs rio ON rio.item_mod_id = i.mod_id AND rio.item_id = i.item_id
+		JOIN recipes r ON r.id = rio.recipe_id
+		JOIN machine_interfaces mi ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
+		WHERE $2 <> '' AND mi.machine_mod_id = $1 AND mi.machine_id = $2
+
+		ORDER BY iname
+	`, modID, machineID)
+	if err != nil {
+		return nil, fmt.Errorf("db: list items produced by: %w", err)
+	}
+	defer rows.Close()
+
+	var items []*model.Item
+	for rows.Next() {
+		it := &model.Item{}
+		if err := rows.Scan(&it.ModID, &it.ItemID, &it.Name, &it.MaxStack); err != nil {
+			return nil, fmt.Errorf("db: scan item produced by: %w", err)
+		}
+		items = append(items, it)
+	}
+	return items, rows.Err()
+}
+
+// ListFluidsProducedBy is ListItemsProducedBy's fluid mirror — same
+// (modID, machineID) filter shape, joining recipe_fluid_outputs instead.
+func (d *DB) ListFluidsProducedBy(ctx context.Context, modID, machineID string) ([]*model.Fluid, error) {
+	rows, err := d.Pool.Query(ctx, `
+		SELECT DISTINCT f.mod_id, f.fluid_id,
+		       COALESCE((SELECT name FROM translations WHERE lang='en_us' AND lang_key='fluid.'||f.mod_id||'.'||f.fluid_id), '') AS fname
+		FROM fluids f
+		JOIN recipe_fluid_outputs rfo ON rfo.fluid_mod_id = f.mod_id AND rfo.fluid_id = f.fluid_id
+		JOIN recipes r ON r.id = rfo.recipe_id
+		WHERE ( ($2 <> '' AND r.machine_mod_id = $1 AND r.machine_id = $2)
+		     OR ($2 = ''  AND $1 <> '' AND r.source_mod_id = $1) )
+
+		UNION
+
+		SELECT DISTINCT f.mod_id, f.fluid_id,
+		       COALESCE((SELECT name FROM translations WHERE lang='en_us' AND lang_key='fluid.'||f.mod_id||'.'||f.fluid_id), '') AS fname
+		FROM fluids f
+		JOIN recipe_fluid_outputs rfo ON rfo.fluid_mod_id = f.mod_id AND rfo.fluid_id = f.fluid_id
+		JOIN recipes r ON r.id = rfo.recipe_id
+		JOIN machine_interfaces mi ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
+		WHERE $2 <> '' AND mi.machine_mod_id = $1 AND mi.machine_id = $2
+
+		ORDER BY fname
+	`, modID, machineID)
+	if err != nil {
+		return nil, fmt.Errorf("db: list fluids produced by: %w", err)
+	}
+	defer rows.Close()
+
+	var fluids []*model.Fluid
+	for rows.Next() {
+		f := &model.Fluid{}
+		if err := rows.Scan(&f.ModID, &f.FluidID, &f.Name); err != nil {
+			return nil, fmt.Errorf("db: scan fluid produced by: %w", err)
+		}
+		fluids = append(fluids, f)
+	}
+	return fluids, rows.Err()
+}
+
 // SearchItems returns up to 50 items matching query q across all mods, ordered by name.
 // offset is used for pagination (ring-buffer / infinite scroll on the frontend).
 func (d *DB) SearchItems(ctx context.Context, q string, offset int) ([]*model.Item, error) {

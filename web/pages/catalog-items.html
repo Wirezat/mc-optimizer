@@ -268,7 +268,10 @@
   }
   if (machinesRes?.ok) {
     const machines = await machinesRes.json();
-    machines.forEach(m => { machineNames[m.mod_id + ':' + m.machine_id] = m.name; });
+    machines.forEach(m => {
+      machineNames[m.mod_id + ':' + m.machine_id] = m.name;
+      (m.variants || []).forEach(v => { machineNames[v.mod_id + ':' + v.machine_id] = v.name; });
+    });
   }
   if (itemsRes?.ok) {
     allItems = await itemsRes.json();

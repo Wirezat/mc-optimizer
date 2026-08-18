@@ -239,7 +239,6 @@ func run() error {
 	mux.HandleFunc("GET /catalog/items", page("catalog-items.html"))
 	mux.HandleFunc("GET /catalog/fluids", page("catalog-fluids.html"))
 	mux.HandleFunc("GET /catalog/machines", page("catalog-machines.html"))
-	mux.HandleFunc("GET /catalog/recipes", page("catalog-recipes.html"))
 	mux.HandleFunc("GET /catalog/trades", page("catalog-trades.html"))
 	mux.HandleFunc("GET /admin/settings", page("admin-settings.html"))
 	mux.HandleFunc("GET /admin/import", page("admin-import.html"))

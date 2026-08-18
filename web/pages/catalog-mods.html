@@ -180,7 +180,7 @@
     }
 
     tbody.innerHTML = mods.map(m => {
-      const recipesUrl = `/catalog/recipes?mod=${encodeURIComponent(m.mod_id)}`;
+      const recipesUrl = `/catalog/items?producedByMod=${encodeURIComponent(m.mod_id)}`;
       return `
       <tr data-mod-id="${esc(m.mod_id)}">
         <td><span class="table-expand-trigger" data-expand="mod-${esc(m.mod_id)}">▸</span></td>

@@ -1,11 +1,8 @@
 /* recipe-card.js
-   Renders a recipe's crafting-grid card (input icons → output icons, plus
-   machine/duration/EU) from the recipe-card JSON shape GET
-   /api/items/{mod}/{item}/recipes and GET /api/fluids/{mod}/{fluid}/recipes
-   return (see internal/api/items.go's buildRecipeCard for the exact shape).
-
-   Used by catalog-items.html and catalog-fluids.html's side panel. Needs
-   crafting-card.css.
+   Renders a recipe's crafting-grid card from the recipe-card JSON shape
+   GET /api/items/{mod}/{item}/recipes and GET /api/fluids/{mod}/{fluid}/recipes
+   return (see internal/recipecard.Card for the exact shape).
+   Used by catalog-items.html and catalog-fluids.html's side panel.
 */
 import { t, esc } from '/static/js/i18n.js';
 import { lookupCatalog, lookupTag, iconImageHTML } from '/static/js/catalog-registry.js';
@@ -115,12 +112,6 @@ function ioCellHTML(io, style) {
 
 // items: recipe-card "inputs"/"outputs"/"fluid_inputs"/"fluid_outputs" arrays
 // (or a concatenation of an item + fluid array, for one combined grid).
-//
-// When every entry carries x/y (internal/recipecard.ApplySlotLayout found a
-// full slot layout for this machine — see its doc comment for when that is),
-// cells are placed at their real machine-slot positions instead of the
-// generic auto-filled square below, which is otherwise the only option
-// (most machines have no slot coordinates yet).
 function ioGrid(items) {
   if (!items.length) return `<div class="crafting-cell empty" style="width:36px;height:36px;"></div>`;
 

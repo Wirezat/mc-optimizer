@@ -1,7 +1,6 @@
 // Package recipecard renders solver.RecipeRow into the JSON shape the item
-// and fluid recipe-detail endpoints return: enough for the frontend to draw
-// a crafting-grid card, deliberately carrying no display names (the
-// frontend already has those cached).
+// and fluid recipe-detail endpoints return, for the frontend's crafting-grid
+// card.
 package recipecard
 
 import (
@@ -23,9 +22,8 @@ type Card struct {
 }
 
 // Input is a concrete item (item_mod_id+item_id set, tag_name empty) or a
-// tag slot (tag_name set, item_mod_id/item_id empty) — never both. X/Y are
-// only set by ApplySlotLayout; the frontend falls back to its own grid
-// layout when they're absent.
+// tag slot (tag_name set, item_mod_id/item_id empty), never both. X/Y are
+// set only by ApplySlotLayout.
 type Input struct {
 	ItemModID    string  `json:"item_mod_id,omitempty"`
 	ItemID       string  `json:"item_id,omitempty"`
@@ -52,8 +50,7 @@ type Fluid struct {
 	Y          *int16 `json:"y,omitempty"`
 }
 
-// Build converts one solver.RecipeRow into a Card. Pure function — no I/O —
-// so it's tested directly without a DB.
+// Build converts one solver.RecipeRow into a Card.
 func Build(r *solver.RecipeRow) Card {
 	card := Card{
 		ID: r.ID, MachineModID: r.MachineMod, MachineID: r.MachineID,
@@ -99,41 +96,16 @@ func Build(r *solver.RecipeRow) Card {
 	return card
 }
 
-// ApplySlotLayout pairs card's inputs/outputs with slots (the owning
-// machine's slot layout, in whatever order the DB returned them) and, if
-// every one of them resolves, sets their X/Y. Item and fluid I/O on the same
-// side (inputs or outputs) are treated as one group — a partial layout (some
-// positioned, some not) is worse than the frontend's uniform grid fallback,
-// so either the whole side gets coordinates or none of it does.
+// ApplySlotLayout pairs card's inputs/outputs with the owning machine's
+// slots, setting X/Y only when every item on a side (inputs, or outputs)
+// resolves to one.
 //
-// TODO: recipe I/O has no stored ordering of its own (see loadRecipeIO in
-// internal/db/recipes.go) — this pairs recipe input N with the machine's
-// Nth non-fuel slot of the matching type in DB-return order, which usually
-// matches import order but isn't guaranteed. Revisit if that ever causes a
-// visibly wrong pairing.
+// TODO: recipe I/O has no stored ordering column; pairing relies on
+// DB-return order (see loadRecipeIO in internal/db/recipes.go).
 //
-// Also note: coverage is now as complete as it can be from a fixed x/y grid.
-// Vanilla machines all have slot_x/slot_y (docs/vanilla.yml). For Modern
-// Industrialization, the 14 machines registered via
-// SingleBlockCraftingMachines.registerMachineTiers() (+ their bronze_/steel_
-// tier variants — 27 of 45 MI machines) have coordinates extracted from that
-// source file's addSlot/addSlots calls by scripts/import/inject_mi_slots.py.
-// Extended Industrialization's 4 single-block machines (bending_machine,
-// alloy_smelter, canning_machine, composter, + tier variants — all 10 EIO
-// machines this project tracks) and Industrialization Overdrive's
-// pyrolyse_oven are covered the same way by
-// scripts/import/inject_eio_io_slots.py.
-//
-// What's NOT covered, and never will be by this mechanism: MI's
-// SingleBlockSpecialMachines.java machines (boilers/generators/storage —
-// not in this project's machine list anyway) and every multiblock (MI's
-// MultiblockMachines.java: electric_blast_furnace, distillation_tower,
-// fusion_reactor, the steam boilers, etc.; IO's multi_processing_array).
-// Multiblocks source their items/fluids from hatch blocks placed in a 3D
-// structure, not a fixed in-GUI slot grid — MI's own CraftingMultiblockGui
-// confirms its GUI has no slots at all, just progress/EU. There is no
-// coordinate data to extract for these; they fall back to the grid layout
-// permanently, not just until someone gets around to it.
+// TODO: multiblocks (MI's MultiblockMachines.java, IO's
+// multi_processing_array) have no fixed slot grid to source coordinates
+// from and always fall back to the frontend's grid layout.
 func ApplySlotLayout(card *Card, slots []*model.MachineSlot) {
 	if itemIn, ok := resolveSlots(slots, "item_input", len(card.Inputs)); ok {
 		if fluidIn, ok := resolveSlots(slots, "fluid_input", len(card.FluidInputs)); ok {
@@ -157,10 +129,8 @@ func ApplySlotLayout(card *Card, slots []*model.MachineSlot) {
 	}
 }
 
-// resolveSlots picks the first n usable slots of slotType, in the order
-// given (fuel slots are burn-fuel, never a recipe I/O, so they're skipped).
-// ok is false — and the pick unusable — if there aren't n of them, or any of
-// the first n is missing x/y.
+// resolveSlots picks the first n slots of slotType, skipping fuel slots. ok
+// is false if fewer than n exist, or any picked slot has no x/y.
 func resolveSlots(slots []*model.MachineSlot, slotType string, n int) (picked []*model.MachineSlot, ok bool) {
 	if n == 0 {
 		return nil, true

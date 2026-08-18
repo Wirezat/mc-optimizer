@@ -76,9 +76,6 @@ func TestApplySlotLayout_FallsBackWhenSlotMissingCoords(t *testing.T) {
 }
 
 func TestApplySlotLayout_PartialSideFallsBackEntirely(t *testing.T) {
-	// item_input resolves fine, but there's no fluid_input slot at all for
-	// the recipe's one fluid input — the whole "inputs" side must stay
-	// ungridded, not just the fluid half of it.
 	card := &Card{
 		Inputs:      []Input{{ItemID: "a"}},
 		FluidInputs: []Fluid{{FluidID: "steam"}},
@@ -148,7 +145,6 @@ func TestBuild_ItemAndTagInputs(t *testing.T) {
 		t.Errorf("expected empty (not nil) fluid_outputs, got %+v", card.FluidOutputs)
 	}
 
-	// Round-trip through JSON to catch struct-tag typos the field assertions above wouldn't.
 	b, err := json.Marshal(card)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)

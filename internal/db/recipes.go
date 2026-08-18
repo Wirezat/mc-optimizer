@@ -33,17 +33,11 @@ const maxAchievableEUExpr = `
 		), 0)
 	ELSE 0 END`
 
-// GetRecipesForItem returns all recipes that output this item.
-// Includes interface-compatible recipes: if machine A implements machine B,
-// recipes of B are also considered as if they belong to A — but only if A
-// can actually supply enough EU/t for the recipe, even at max upgrades (a
-// bronze machine capped at 2 EU/t cannot run a recipe that needs 8 EU/t,
-// even though it "implements" the base machine for lower-EU recipes).
-// A recipe qualifying for both its base machine and one or more
-// implementers is folded to a single row (DISTINCT ON id, preferring
-// is_direct=0) so e.g. Packer/Steel Packer show once as "Packer" instead
-// of as duplicate cards — only a recipe that ONLY an implementer can run
-// keeps that implementer's identity.
+// GetRecipesForItem returns all recipes that output this item, one row per
+// recipe. Includes interface-compatible recipes (if machine A implements
+// machine B, recipes of B are also considered A's, capped by A's max EU/t),
+// folding a recipe that qualifies for both its base machine and an
+// implementer to the base machine's row.
 func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([]*solver.RecipeRow, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT DISTINCT ON (id) id, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu
@@ -82,10 +76,8 @@ func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([
 	return d.scanRecipeRows(ctx, rows, "get recipes for item")
 }
 
-// GetRecipesForFluid returns all recipes that output this fluid.
-// Includes interface-compatible recipes; a recipe qualifying for both its
-// base machine and one or more implementers is folded to a single row —
-// see GetRecipesForItem's doc comment for the full rationale.
+// GetRecipesForFluid returns all recipes that output this fluid, one row per
+// recipe. Same interface/folding behavior as GetRecipesForItem.
 func (d *DB) GetRecipesForFluid(ctx context.Context, fluidModID, fluidID string) ([]*solver.RecipeRow, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT DISTINCT ON (id) id, machine_mod_id, machine_id, duration_ticks, eu_per_tick, total_eu

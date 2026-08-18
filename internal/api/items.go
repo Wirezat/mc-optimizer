@@ -34,10 +34,9 @@ func GetItemRecipesHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// buildRecipeCards builds a recipe card per row and, where the row's machine
-// has a usable slot layout, positions its I/O accordingly (recipecard.
-// ApplySlotLayout) instead of leaving it to the frontend's generic grid.
-// Slots are fetched once per distinct machine, not once per row.
+// buildRecipeCards builds a recipe card per row, applying each row's
+// machine's slot layout (recipecard.ApplySlotLayout). Slots are fetched once
+// per distinct machine.
 func buildRecipeCards(ctx context.Context, database *db.DB, rows []*solver.RecipeRow) ([]recipecard.Card, error) {
 	type machineKey struct{ modID, machineID string }
 	slotsByMachine := map[machineKey][]*model.MachineSlot{}

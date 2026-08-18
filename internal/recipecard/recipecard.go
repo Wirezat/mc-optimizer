@@ -98,11 +98,9 @@ func Build(r *solver.RecipeRow) Card {
 
 // ApplySlotLayout pairs card's inputs/outputs with the owning machine's
 // slots, setting X/Y only when every item on a side (inputs, or outputs)
-// resolves to one.
-//
-// TODO: multiblocks (MI's MultiblockMachines.java, IO's
-// multi_processing_array) have no fixed slot grid to source coordinates
-// from and always fall back to the frontend's grid layout.
+// resolves to one. Multiblocks (MI's MultiblockMachines.java, IO's
+// multi_processing_array) have no fixed slot grid and never resolve, always
+// falling back to the frontend's grid layout.
 func ApplySlotLayout(card *Card, slots []*model.MachineSlot) {
 	if itemIn, ok := resolveSlots(slots, "item_input", len(card.Inputs)); ok {
 		if fluidIn, ok := resolveSlots(slots, "fluid_input", len(card.FluidInputs)); ok {

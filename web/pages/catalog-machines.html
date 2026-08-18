@@ -14,6 +14,33 @@
         document.documentElement.classList.add('dark');
     })();
   </script>
+  <style>
+    .machine-icon-cell {
+      --machine-icon-cell-size: 32px;
+      width: var(--machine-icon-cell-size);
+      height: var(--machine-icon-cell-size);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* The texture fills the cell like an inventory icon; pixelated to match the game's own scaling. */
+    .machine-icon {
+      --machine-icon-size: 28px;
+      width: var(--machine-icon-size);
+      height: var(--machine-icon-size);
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+    /* Caps the hover grid's per-icon size regardless of variant count, so a
+       single-variant grid doesn't stretch its one cell to the full card width. */
+    .machine-variant-grid {
+      justify-items: center;
+    }
+    .machine-variant-grid .infocard-grid-cell {
+      --machine-hover-icon-size: 72px;
+      max-width: var(--machine-hover-icon-size);
+    }
+  </style>
 </head>
 <body class="app-shell">
   <header class="header">
@@ -49,15 +76,16 @@
           <table class="table">
             <thead>
               <tr>
+                <th style="width:40px;"></th>
                 <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
                 <th data-i18n="catalog.machines.col.machine_id"></th>
                 <th data-i18n="catalog.machines.col.max_eu_t"></th>
-                <th data-i18n="catalog.mods.detail.energy"></th>
+                <th data-i18n="catalog.machines.col.energy_type"></th>
                 <th data-i18n="catalog.machines.col.recipes"></th>
               </tr>
             </thead>
             <tbody id="machine-tbody">
-              <tr><td colspan="5" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
+              <tr><td colspan="6" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
             </tbody>
           </table>
         </div>
@@ -69,19 +97,20 @@
 
 <script type="module">
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
-  import { attachInlineEdit } from '/static/ui/js/inline-edit.js';
-  import { guard, apiFetch, isAdmin, getUser } from '/static/ui/js/auth.js';
+  import { guard, apiFetch, getUser } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
+  import { initIconCycle } from '/static/ui/js/icon-cycle.js';
+  import { initInfocards } from '/static/ui/js/infocard.js';
+  import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
 
   await load(getLang());
   applyI18n();
   guard();
   initHeader();
   await getUser();
-  const admin = isAdmin();
 
   const tbody    = document.getElementById('machine-tbody');
   const table    = tbody.closest('table');
@@ -96,47 +125,59 @@
   const openGroups = new Map();
   const groupRows = new Map();
 
-  function wireEnergyEdit(cell, machine) {
-    if (!admin) return;
-    attachInlineEdit(cell);
-    cell.addEventListener('inline-commit', async e => {
-      const raw = (e.detail.value || '').replace(/[^\d]/g, '');
-      const val = raw ? parseInt(raw, 10) : 0;
-      cell.textContent = val || '';
-      if (val === (machine.max_eu_per_tick || 0)) return;
-      const prevVal = machine.max_eu_per_tick;
-      machine.max_eu_per_tick = val;
-      const res = await apiFetch(`/api/mods/${encodeURIComponent(machine.mod_id)}/machines/${encodeURIComponent(machine.machine_id)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ max_eu_per_tick: val }),
-      });
-      if (!res?.ok) { machine.max_eu_per_tick = prevVal; cell.textContent = prevVal || ''; }
-    });
+  // Ungrouped machines get the same hover as grouped ones (name + energy),
+  // via a single-entry "variants" list instead of a real tier group.
+  function machineIconCellHTML(m) {
+    const variants = m.variants && m.variants.length > 1 ? m.variants : [m];
+    if (!variants.some(v => v.texture_url)) return `<span class="machine-icon-cell"></span>`;
+
+    const cycle = variants.length > 1
+      ? ` data-wui-cycle='${esc(JSON.stringify(variants.filter(v => v.texture_url).map(v => ({ src: v.texture_url }))))}'`
+      : '';
+    const first = variants.find(v => v.texture_url);
+    // data-hidpi-px matches --machine-icon-size above.
+    const triggerImg = `<img class="machine-icon" data-hidpi-px="28"${cycle} src="${esc(first.texture_url)}" alt="" loading="lazy" decoding="async" onerror="this.removeAttribute('src')">`;
+
+    // Reuses .infocard-grid/-grid-cell and .infocard-section/-row/-key/-val
+    // (same key/value pattern craftCell() uses for its "Amount" row). data-hidpi-px
+    // matches --machine-hover-icon-size above.
+    const grid = `<div class="infocard-grid machine-variant-grid" data-cols="${variants.length}">${
+      variants.map(v => `<div class="infocard-grid-cell">${v.texture_url ? `<img data-hidpi-px="72" src="${esc(v.texture_url)}" alt="">` : ''}</div>`).join('')
+    }</div>`;
+    const rows = `<div class="infocard-section">${
+      variants.map(v => `<div class="infocard-row"><span class="infocard-key">${esc(v.name)}</span><span class="infocard-val">${v.base_eu_per_tick || '—'} EU/t</span></div>`).join('')
+    }</div>`;
+
+    return `<span class="machine-icon-cell" data-infocard-inline>${triggerImg}</span>
+      <div class="infocard-def" hidden>${grid}${rows}</div>`;
   }
 
   function machineRowEl(m) {
-    const energyVal = m.max_eu_per_tick || '';
+    const energyVal = m.base_eu_per_tick || '';
     const recipesUrl = `/catalog/recipes?mod=${encodeURIComponent(m.mod_id)}&machine=${encodeURIComponent(m.machine_id)}`;
+    const tierBadge = m.variants && m.variants.length > 1
+      ? `<span class="badge badge-neutral" style="margin-left:var(--gap-inline);">${esc(t('catalog.machines.tier_count').replace('{n}', m.variants.length))}</span>`
+      : '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><a href="${esc(recipesUrl)}" class="row-name-link">${esc(m.name || m.machine_id)}</a></td>
+      <td>${machineIconCellHTML(m)}</td>
+      <td><a href="${esc(recipesUrl)}" class="row-name-link">${esc(m.name || m.machine_id)}</a>${tierBadge}</td>
       <td class="td-mono td-muted">${esc(m.machine_id)}</td>
-      <td>${admin
-        ? `<span class="field-editable td-muted" data-inline data-placeholder="—">${esc(energyVal)}</span>`
-        : `<span class="td-muted">${energyVal || '—'}</span>`}</td>
+      <td class="td-muted">${energyVal || '—'}</td>
       <td><span class="badge badge-neutral">${esc(m.energy_type || '—')}</span></td>
       <td>${m.recipe_count
         ? `<a href="${esc(recipesUrl)}" class="recipe-count-link">${m.recipe_count}</a>`
         : `<span class="td-muted">—</span>`}</td>`;
-    const energyCell = tr.querySelector('.field-editable');
-    if (energyCell) wireEnergyEdit(energyCell, m);
+    initHiDPIRender(tr);
+    initIconCycle(tr);
+    initInfocards(tr);
     return [tr];
   }
 
   function skeletonRowEl() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td><span class="skeleton-bar" style="width:24px;"></span></td>
       <td><span class="skeleton-bar" style="width:60%;"></span></td>
       <td><span class="skeleton-bar" style="width:50%;"></span></td>
       <td><span class="skeleton-bar" style="width:30%;"></span></td>
@@ -171,7 +212,10 @@
   function resetAndRender() {
     const q = searchEl.value.trim().toLowerCase();
     filtered = urlMod ? allMachines.filter(m => m.mod_id === urlMod) : allMachines;
-    if (q) filtered = filtered.filter(m => wuiFilter(m, q, ['name', 'machine_id', 'mod_name', 'energy_type', 'max_eu_per_tick']));
+    if (q) filtered = filtered.filter(m => {
+      if (wuiFilter(m, q, ['name', 'machine_id', 'mod_name', 'energy_type', 'base_eu_per_tick'])) return true;
+      return (m.variants || []).some(v => wuiFilter(v, q, ['name', 'machine_id']));
+    });
     countEl.textContent = filtered.length + ' machine' + (filtered.length !== 1 ? 's' : '');
 
     for (const vw of openGroups.values()) vw.destroy();
@@ -182,7 +226,7 @@
     groupBodies = [];
     tbody.innerHTML = '';
     if (!filtered.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_machines')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_machines')}</td></tr>`;
       return;
     }
 
@@ -199,7 +243,7 @@
       const hdBody = document.createElement('tbody');
       const hdRow = document.createElement('tr');
       hdRow.className = 'table-group-hd collapsed';
-      hdRow.innerHTML = `<td colspan="5"><span class="group-hd-arrow"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${machines.length}</span></td>`;
+      hdRow.innerHTML = `<td colspan="6"><span class="group-hd-arrow"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${machines.length}</span></td>`;
       hdBody.appendChild(hdRow);
 
       const rowsBody = document.createElement('tbody');
@@ -234,7 +278,10 @@
       primary:   r => r.name || r.machine_id,
       secondary: r => r.mod_name,
       fetch(q, offset) {
-        const rows = wuiFilter(allMachines, q, ['name', 'machine_id', 'mod_name', 'energy_type', 'max_eu_per_tick']);
+        const rows = allMachines.filter(m => {
+          if (wuiFilter([m], q, ['name', 'machine_id', 'mod_name', 'energy_type', 'base_eu_per_tick']).length) return true;
+          return (m.variants || []).some(v => wuiFilter([v], q, ['name', 'machine_id']).length);
+        });
         return Promise.resolve({ rows: rows.slice(offset, offset + 50), hasMore: offset + 50 < rows.length });
       },
       onSelect(r) { searchEl.value = r.name || r.machine_id; searchEl.dispatchEvent(new Event('input')); },

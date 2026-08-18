@@ -50,7 +50,6 @@ func (fakeImporterDB) UpsertMachineSlots(ctx context.Context, slots []model.Mach
 func (fakeImporterDB) AddMachineInterface(ctx context.Context, modID, machineID, baseModID, baseMachineID string) error {
 	return nil
 }
-func (fakeImporterDB) SeedVanillaMachineSlots(ctx context.Context) error { return nil }
 func (fakeImporterDB) UpsertDirectTagMembers(ctx context.Context, tagName string, members []string) error {
 	return nil
 }

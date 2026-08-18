@@ -587,43 +587,6 @@ func (d *DB) UpsertUpgradeTiers(ctx context.Context, tiers []model.UpgradeTier) 
 	return nil
 }
 
-// vanillaSlots defines the static slot layout for each built-in vanilla machine.
-// Populated once after JAR import when all machine_types rows exist.
-var vanillaSlots = []struct {
-	mod, machine string
-	idx          int16
-	typ          string
-	x, y         *int16
-	label        *string
-}{
-	// NOTE: crafting_table intentionally has no slots here — hand-crafting
-	// recipes (crafting_shaped/shapeless) are out of scope for this tool (see
-	// generate_mi_yml.py/generate_vanilla_yml.py doc comments) and no
-	// "crafting_table" machine_types row exists to hang slots off of.
-	// furnace / blast_furnace / smoker: input + fuel + output
-	{"minecraft", "furnace", 0, "item_input", nil, nil, nil},
-	{"minecraft", "furnace", 1, "item_input", nil, nil, strp("fuel")},
-	{"minecraft", "furnace", 2, "item_output", nil, nil, nil},
-	{"minecraft", "blast_furnace", 0, "item_input", nil, nil, nil},
-	{"minecraft", "blast_furnace", 1, "item_input", nil, nil, strp("fuel")},
-	{"minecraft", "blast_furnace", 2, "item_output", nil, nil, nil},
-	{"minecraft", "smoker", 0, "item_input", nil, nil, nil},
-	{"minecraft", "smoker", 1, "item_input", nil, nil, strp("fuel")},
-	{"minecraft", "smoker", 2, "item_output", nil, nil, nil},
-	// campfire: 4 inputs arranged 2×2
-	{"minecraft", "campfire", 0, "item_input", int16p(0), int16p(0), nil},
-	{"minecraft", "campfire", 1, "item_input", int16p(1), int16p(0), nil},
-	{"minecraft", "campfire", 2, "item_input", int16p(0), int16p(1), nil},
-	{"minecraft", "campfire", 3, "item_input", int16p(1), int16p(1), nil},
-	{"minecraft", "campfire", 4, "item_output", nil, nil, nil},
-	// stonecutter: 1 input + 1 output
-	{"minecraft", "stonecutter", 0, "item_input", nil, nil, nil},
-	{"minecraft", "stonecutter", 1, "item_output", nil, nil, nil},
-	// NOTE: smithing_table intentionally has no slots — not curated as a
-	// machine_types row (see vanilla.yml's machines: list), same reasoning as
-	// crafting_table above.
-}
-
 // LocalizeMachineNames resolves a translation key for each machine_type and stores it in
 // name_lang_key. The name column is set to initcap(machine_id) as a language-neutral fallback
 // (used when the key cannot be found at query time). Resolution priority for the key:
@@ -722,48 +685,6 @@ func (d *DB) SetMachinesUpgradable(ctx context.Context, modIDs []string) error {
 	if err != nil {
 		return fmt.Errorf("db: set machines upgradable: %w", err)
 	}
-	return nil
-}
-
-func int16p(v int16) *int16 { return &v }
-func strp(v string) *string { return &v }
-
-// SeedVanillaMachineSlots inserts the static slot layout for built-in vanilla machines
-// and updates machine_types with correct max_slots and energy_type.
-// Safe to call repeatedly (idempotent).
-func (d *DB) SeedVanillaMachineSlots(ctx context.Context) error {
-	for _, s := range vanillaSlots {
-		if _, err := d.Pool.Exec(ctx, `
-			INSERT INTO machine_slots (mod_id, machine_id, slot_index, slot_type, slot_x, slot_y, label)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
-			ON CONFLICT DO NOTHING
-		`, s.mod, s.machine, s.idx, s.typ, s.x, s.y, s.label); err != nil {
-			return fmt.Errorf("db: seed vanilla machine slots (%s:%s #%d): %w", s.mod, s.machine, s.idx, err)
-		}
-	}
-
-	// Set energy_type for fuel-burning machines.
-	for _, mID := range []string{"furnace", "smoker", "blast_furnace"} {
-		if _, err := d.Pool.Exec(ctx, `
-			UPDATE machine_types SET energy_type = 'fuel'
-			WHERE mod_id = 'minecraft' AND machine_id = $1
-		`, mID); err != nil {
-			return fmt.Errorf("db: seed vanilla machine slots: set energy_type for %s: %w", mID, err)
-		}
-	}
-
-	// Derive max_slots from actual slot count.
-	if _, err := d.Pool.Exec(ctx, `
-		UPDATE machine_types mt
-		SET max_slots = (
-			SELECT COUNT(*)::smallint FROM machine_slots ms
-			WHERE ms.mod_id = mt.mod_id AND ms.machine_id = mt.machine_id
-		)
-		WHERE mt.mod_id = 'minecraft'
-	`); err != nil {
-		return fmt.Errorf("db: seed vanilla machine slots: update max_slots: %w", err)
-	}
-
 	return nil
 }
 

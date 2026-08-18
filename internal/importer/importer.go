@@ -22,7 +22,6 @@ type ImporterDB interface {
 	UpsertMachineType(ctx context.Context, m model.MachineTypeDef) error
 	UpsertMachineSlots(ctx context.Context, slots []model.MachineSlotDef) error
 	AddMachineInterface(ctx context.Context, modID, machineID, baseModID, baseMachineID string) error
-	SeedVanillaMachineSlots(ctx context.Context) error
 	UpsertDirectTagMembers(ctx context.Context, tagName string, members []string) error
 	UpsertUpgradeTier(ctx context.Context, modID, name string, euBonusPerSlot int64, itemRef string) error
 }

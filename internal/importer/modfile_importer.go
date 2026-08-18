@@ -163,7 +163,6 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 	// 7. Machines — resolve name from translations then write.
 	enUS := def.Translations["en_us"]
 	miModIDs := []string{}
-	isVanilla := false
 	for _, m := range def.Machines {
 		name := m.LangKey
 		if enUS != nil {
@@ -181,17 +180,6 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 		// Collect MI-ecosystem mods for post-processing.
 		if m.Ecosystem == "modern_industrialization" {
 			miModIDs = append(miModIDs, def.ModID)
-		}
-		if m.Ecosystem == "vanilla" {
-			isVanilla = true
-		}
-	}
-
-	// Vanilla post-processing: sets energy_type='fuel' on furnace/smoker/blast_furnace
-	// (was silently blank before — display-only, doesn't affect solving, but wrong).
-	if isVanilla {
-		if err := imp.db.SeedVanillaMachineSlots(ctx); err != nil {
-			warn("vanilla machine slots: %v", err)
 		}
 	}
 

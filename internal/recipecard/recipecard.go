@@ -112,17 +112,28 @@ func Build(r *solver.RecipeRow) Card {
 // matches import order but isn't guaranteed. Revisit if that ever causes a
 // visibly wrong pairing.
 //
-// Also note: coverage is partial. Vanilla machines all have slot_x/slot_y
-// (docs/vanilla.yml). For Modern Industrialization, only the 14 machines
-// registered via SingleBlockCraftingMachines.registerMachineTiers() (+ their
-// bronze_/steel_ tier variants — 27 of 45 MI machines) have coordinates,
-// extracted from that source file's addSlot/addSlots calls by
-// scripts/import/inject_mi_slots.py. Still missing, and falling back to the
-// grid layout until someone extracts them the same way: MI's
-// SingleBlockSpecialMachines.java (boilers/generators/storage) and
-// MultiblockMachines.java (hatches, not a fixed GUI grid — needs a different
-// representation entirely), plus Extended Industrialization and
-// Industrialization Overdrive (different codebases, not yet surveyed).
+// Also note: coverage is now as complete as it can be from a fixed x/y grid.
+// Vanilla machines all have slot_x/slot_y (docs/vanilla.yml). For Modern
+// Industrialization, the 14 machines registered via
+// SingleBlockCraftingMachines.registerMachineTiers() (+ their bronze_/steel_
+// tier variants — 27 of 45 MI machines) have coordinates extracted from that
+// source file's addSlot/addSlots calls by scripts/import/inject_mi_slots.py.
+// Extended Industrialization's 4 single-block machines (bending_machine,
+// alloy_smelter, canning_machine, composter, + tier variants — all 10 EIO
+// machines this project tracks) and Industrialization Overdrive's
+// pyrolyse_oven are covered the same way by
+// scripts/import/inject_eio_io_slots.py.
+//
+// What's NOT covered, and never will be by this mechanism: MI's
+// SingleBlockSpecialMachines.java machines (boilers/generators/storage —
+// not in this project's machine list anyway) and every multiblock (MI's
+// MultiblockMachines.java: electric_blast_furnace, distillation_tower,
+// fusion_reactor, the steam boilers, etc.; IO's multi_processing_array).
+// Multiblocks source their items/fluids from hatch blocks placed in a 3D
+// structure, not a fixed in-GUI slot grid — MI's own CraftingMultiblockGui
+// confirms its GUI has no slots at all, just progress/EU. There is no
+// coordinate data to extract for these; they fall back to the grid layout
+// permanently, not just until someone gets around to it.
 func ApplySlotLayout(card *Card, slots []*model.MachineSlot) {
 	if itemIn, ok := resolveSlots(slots, "item_input", len(card.Inputs)); ok {
 		if fluidIn, ok := resolveSlots(slots, "fluid_input", len(card.FluidInputs)); ok {

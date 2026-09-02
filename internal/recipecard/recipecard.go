@@ -13,8 +13,6 @@ type Card struct {
 	MachineModID  string   `json:"machine_mod_id"`
 	MachineID     string   `json:"machine_id"`
 	DurationTicks int      `json:"duration_ticks"`
-	EUPerTick     int64    `json:"eu_per_tick"`
-	TotalEU       int64    `json:"total_eu"`
 	Inputs        []Input  `json:"inputs"`
 	Outputs       []Output `json:"outputs"`
 	FluidInputs   []Fluid  `json:"fluid_inputs"`
@@ -54,11 +52,11 @@ type Fluid struct {
 func Build(r *solver.RecipeRow) Card {
 	card := Card{
 		ID: r.ID, MachineModID: r.MachineMod, MachineID: r.MachineID,
-		DurationTicks: r.DurationTicks, EUPerTick: r.EUPerTick, TotalEU: r.TotalEU,
-		Inputs:       make([]Input, 0, len(r.ItemInputs)),
-		Outputs:      make([]Output, 0, len(r.ItemOutputs)),
-		FluidInputs:  make([]Fluid, 0, len(r.FluidInputs)),
-		FluidOutputs: make([]Fluid, 0, len(r.FluidOutputs)),
+		DurationTicks: r.DurationTicks,
+		Inputs:        make([]Input, 0, len(r.ItemInputs)),
+		Outputs:       make([]Output, 0, len(r.ItemOutputs)),
+		FluidInputs:   make([]Fluid, 0, len(r.FluidInputs)),
+		FluidOutputs:  make([]Fluid, 0, len(r.FluidOutputs)),
 	}
 	for _, in := range r.ItemInputs {
 		v := Input{

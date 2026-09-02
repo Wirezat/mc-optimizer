@@ -308,13 +308,35 @@ func (d *DB) ListActiveIOByFactory(ctx context.Context, factoryID uuid.UUID) ([]
 	return result, rows.Err()
 }
 
+// defaultVariantID is the id of the host's built-in variant, used for a group
+// whose machine's mod ships no plugin.
+const defaultVariantID = "default"
+
+// variantID falls back to the host default so the NOT NULL column never sees
+// an empty id from a caller that did not set one.
+func variantID(id string) string {
+	if id == "" {
+		return defaultVariantID
+	}
+	return id
+}
+
+// groupModConfig returns the group's config override, or an empty object,
+// which means the save-wide config applies.
+func groupModConfig(mg *model.MachineGroup) []byte {
+	if len(mg.ModConfig) == 0 {
+		return []byte("{}")
+	}
+	return mg.ModConfig
+}
+
 // ListMachineGroupsByPL returns all machine groups for a production line.
 func (d *DB) ListMachineGroupsByPL(ctx context.Context, plID uuid.UUID) ([]*model.MachineGroup, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT id, pl_id, machine_mod_id, machine_id, recipe_id,
-		       count, upgrade_tier_id, upgrade_count, status,
+		       count, status, mod_config, variant_id, current_variant_id,
 		       exact_count_num, exact_count_den,
-		       built_count, current_upgrade_count
+		       built_count
 		FROM machine_groups
 		WHERE pl_id = $1
 		ORDER BY machine_id
@@ -329,9 +351,9 @@ func (d *DB) ListMachineGroupsByPL(ctx context.Context, plID uuid.UUID) ([]*mode
 		mg := &model.MachineGroup{}
 		if err := rows.Scan(
 			&mg.ID, &mg.PLID, &mg.MachineModID, &mg.MachineID, &mg.RecipeID,
-			&mg.Count, &mg.UpgradeTierID, &mg.UpgradeCount, &mg.Status,
+			&mg.Count, &mg.Status, &mg.ModConfig, &mg.VariantID, &mg.CurrentVariantID,
 			&mg.ExactCountNum, &mg.ExactCountDen,
-			&mg.BuiltCount, &mg.CurrentUpgradeCount,
+			&mg.BuiltCount,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan machine group: %w", err)
 		}
@@ -345,16 +367,16 @@ func (d *DB) GetMachineGroup(ctx context.Context, id uuid.UUID) (*model.MachineG
 	mg := &model.MachineGroup{}
 	err := d.Pool.QueryRow(ctx, `
 		SELECT id, pl_id, machine_mod_id, machine_id, recipe_id,
-		       count, upgrade_tier_id, upgrade_count, status,
+		       count, status, mod_config, variant_id, current_variant_id,
 		       exact_count_num, exact_count_den,
-		       built_count, current_upgrade_count
+		       built_count
 		FROM machine_groups
 		WHERE id = $1
 	`, id).Scan(
 		&mg.ID, &mg.PLID, &mg.MachineModID, &mg.MachineID, &mg.RecipeID,
-		&mg.Count, &mg.UpgradeTierID, &mg.UpgradeCount, &mg.Status,
+		&mg.Count, &mg.Status, &mg.ModConfig, &mg.VariantID, &mg.CurrentVariantID,
 		&mg.ExactCountNum, &mg.ExactCountDen,
-		&mg.BuiltCount, &mg.CurrentUpgradeCount,
+		&mg.BuiltCount,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -363,24 +385,6 @@ func (d *DB) GetMachineGroup(ctx context.Context, id uuid.UUID) (*model.MachineG
 		return nil, fmt.Errorf("db: get machine group: %w", err)
 	}
 	return mg, nil
-}
-
-// UpdateMachineGroupUpgrades sets the upgrade tier, upgrade count, recomputed machine count,
-// and the new fractional exact count of a single group. A nil tierID clears the upgrade.
-func (d *DB) UpdateMachineGroupUpgrades(ctx context.Context, id uuid.UUID, tierID *uuid.UUID, upgradeCount, machineCount int, exactNum, exactDen int64) error {
-	tag, err := d.Pool.Exec(ctx, `
-		UPDATE machine_groups
-		SET upgrade_tier_id = $2, upgrade_count = $3, count = $4,
-		    exact_count_num = $5, exact_count_den = $6
-		WHERE id = $1
-	`, id, tierID, upgradeCount, machineCount, exactNum, exactDen)
-	if err != nil {
-		return fmt.Errorf("db: update machine group upgrades: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
 }
 
 // UpdateMachineGroupStatus sets the status of a single machine group.
@@ -398,16 +402,15 @@ func (d *DB) UpdateMachineGroupStatus(ctx context.Context, id uuid.UUID, status 
 	return nil
 }
 
-// UpdateMachineGroupBuildState sets the current (in-game) build state of a machine group —
-// how many of its target count are actually standing, and how many of its target upgrade
-// loadout are installed so far (same tier as upgrade_tier_id, just fewer of them) —
-// independent of the group's target count/upgrade_tier_id/upgrade_count.
-func (d *DB) UpdateMachineGroupBuildState(ctx context.Context, id uuid.UUID, builtCount, currentUpgradeCount int) error {
+// UpdateMachineGroupBuildState sets how many of a group's target machine count
+// are actually standing in-game, and stamps current_variant_id to the group's
+// target variant_id (Spec §5.3).
+func (d *DB) UpdateMachineGroupBuildState(ctx context.Context, id uuid.UUID, builtCount int) error {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE machine_groups
-		SET built_count = $2, current_upgrade_count = $3
+		SET built_count = $2, current_variant_id = variant_id
 		WHERE id = $1
-	`, id, builtCount, currentUpgradeCount)
+	`, id, builtCount)
 	if err != nil {
 		return fmt.Errorf("db: update machine group build state: %w", err)
 	}
@@ -417,37 +420,60 @@ func (d *DB) UpdateMachineGroupBuildState(ctx context.Context, id uuid.UUID, bui
 	return nil
 }
 
-// MachineGroupOwnerUserID resolves the user_id that owns a machine group
-// via the chain machine_groups → production_lines → factories → saves.
+// MachineGroupOwnerUserID resolves the user_id that owns a machine group.
 func (d *DB) MachineGroupOwnerUserID(ctx context.Context, groupID uuid.UUID) (uuid.UUID, error) {
-	var userID uuid.UUID
-	err := d.Pool.QueryRow(ctx, `
-		SELECT s.user_id
+	userID, _, err := d.MachineGroupScope(ctx, groupID)
+	return userID, err
+}
+
+// MachineGroupScope resolves the owning user and the save a machine group
+// belongs to, via the chain machine_groups → production_lines → factories →
+// saves. Returns ErrNotFound if the group does not exist.
+func (d *DB) MachineGroupScope(ctx context.Context, groupID uuid.UUID) (userID, saveID uuid.UUID, err error) {
+	err = d.Pool.QueryRow(ctx, `
+		SELECT s.user_id, s.id
 		FROM machine_groups mg
 		JOIN production_lines pl ON pl.id = mg.pl_id
 		JOIN factories f ON f.id = pl.factory_id
 		JOIN saves s ON s.id = f.save_id
 		WHERE mg.id = $1
-	`, groupID).Scan(&userID)
+	`, groupID).Scan(&userID, &saveID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return uuid.Nil, ErrNotFound
+		return uuid.Nil, uuid.Nil, ErrNotFound
 	}
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("db: machine group owner: %w", err)
+		return uuid.Nil, uuid.Nil, fmt.Errorf("db: machine group scope: %w", err)
 	}
-	return userID, nil
+	return userID, saveID, nil
 }
 
-// MarkAllPlannedAsBuilt sets all 'planned' machine groups in a production line to 'built',
-// and fills their current build state (built_count, current_upgrade_count) to match the
-// target — "mark all built" means the player finished building everything as planned.
-// Returns the number of rows updated.
+// UpdateMachineGroupVariant sets the variant a group targets together with the
+// machine count that variant needs. built_count is clamped to the new count so
+// the column's CHECK holds when a faster variant shrinks the group.
+func (d *DB) UpdateMachineGroupVariant(ctx context.Context, id uuid.UUID, variantID string, count int, exactNum, exactDen int64) error {
+	tag, err := d.Pool.Exec(ctx, `
+		UPDATE machine_groups
+		SET variant_id = $2, count = $3, exact_count_num = $4, exact_count_den = $5,
+		    built_count = LEAST(built_count, $3)
+		WHERE id = $1
+	`, id, variantID, count, exactNum, exactDen)
+	if err != nil {
+		return fmt.Errorf("db: update machine group variant: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkAllPlannedAsBuilt sets all 'planned' machine groups in a production line to 'built'
+// and fills their built count to match the target — "mark all built" means the player
+// finished building everything as planned. Returns the number of rows updated.
 func (d *DB) MarkAllPlannedAsBuilt(ctx context.Context, plID uuid.UUID) (int64, error) {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE machine_groups
 		SET status = 'built',
-		    built_count = count,
-		    current_upgrade_count = upgrade_count
+		    built_count = count
 		WHERE pl_id = $1 AND status = 'planned'
 	`, plID)
 	if err != nil {
@@ -512,11 +538,11 @@ func (d *DB) ConfirmSolverDraft(
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO machine_groups
 				(id, pl_id, machine_mod_id, machine_id, recipe_id,
-				 count, upgrade_tier_id, upgrade_count, status,
+				 count, status, mod_config, variant_id, current_variant_id,
 				 exact_count_num, exact_count_den)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		`, mg.ID, mg.PLID, mg.MachineModID, mg.MachineID, mg.RecipeID,
-			mg.Count, mg.UpgradeTierID, mg.UpgradeCount, mg.Status,
+			mg.Count, mg.Status, groupModConfig(mg), variantID(mg.VariantID), variantID(mg.CurrentVariantID),
 			mg.ExactCountNum, mg.ExactCountDen,
 		); err != nil {
 			return nil, fmt.Errorf("db: confirm solver draft: insert machine group: %w", err)
@@ -610,11 +636,11 @@ func (d *DB) ReplaceProductionLineContents(
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO machine_groups
 				(id, pl_id, machine_mod_id, machine_id, recipe_id,
-				 count, upgrade_tier_id, upgrade_count, status,
+				 count, status, mod_config, variant_id, current_variant_id,
 				 exact_count_num, exact_count_den)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		`, mg.ID, mg.PLID, mg.MachineModID, mg.MachineID, mg.RecipeID,
-			mg.Count, mg.UpgradeTierID, mg.UpgradeCount, mg.Status,
+			mg.Count, mg.Status, groupModConfig(mg), variantID(mg.VariantID), variantID(mg.CurrentVariantID),
 			mg.ExactCountNum, mg.ExactCountDen,
 		); err != nil {
 			return nil, fmt.Errorf("db: replace pl contents: insert machine group: %w", err)
@@ -634,4 +660,30 @@ func (d *DB) ReplaceProductionLineContents(
 		MachineGroups:  groups,
 		IO:             ios,
 	}, nil
+}
+
+// EstimateCurrentRateFraction returns the fraction (0..1) of a production line's target
+// output achievable with the groups' current build state — the minimum over machine
+// groups of builtCount/exactCount, since a chain's output is limited by its slowest link.
+func EstimateCurrentRateFraction(groups []*model.MachineGroup) float64 {
+	frac := 1.0
+	for _, mg := range groups {
+		// The lossless fractional machine count is the true requirement; fall back to
+		// the rounded count when it is unset.
+		exact := float64(mg.Count)
+		if mg.ExactCountDen > 0 && mg.ExactCountNum > 0 {
+			exact = float64(mg.ExactCountNum) / float64(mg.ExactCountDen)
+		}
+		if exact <= 0 {
+			continue
+		}
+		g := float64(mg.BuiltCount) / exact
+		if g > 1 {
+			g = 1 // rounding the count up can overshoot the exact requirement
+		}
+		if g < frac {
+			frac = g
+		}
+	}
+	return frac
 }

@@ -27,11 +27,8 @@ func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render
 		_ = rc.SetReadDeadline(time.Now().Add(10 * time.Minute))
 		_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Minute))
 
-		// Deferred, not called after the loop: a later file in a multi-file
-		// upload can fail and return early, after an earlier one already
-		// overwrote assets the cache rendered from. Invalidating on an upload
-		// that imported nothing is harmless — the next request just pays for
-		// a fresh render instead of a cache hit.
+		// Deferred, not called after the loop: a later file can fail and return
+		// early once an earlier one already overwrote rendered assets.
 		if renderCache != nil {
 			defer renderCache.Invalidate()
 		}
@@ -44,6 +41,13 @@ func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render
 		if len(headers) == 0 {
 			errBadRequest(w, "missing 'modfile' file field")
 			return
+		}
+
+		// Resolved once per request and attributed to any plugin a ZIP in
+		// this batch bundles; empty if the acting user cannot be resolved.
+		var uploadedBy string
+		if u, err := database.GetUserByID(r.Context(), userIDFromContext(r.Context())); err == nil {
+			uploadedBy = u.Username
 		}
 
 		var results []importer.ModFileResult
@@ -83,6 +87,7 @@ func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render
 			}
 
 			imp := importer.New(database, assetsDir)
+			imp.UploadedBy = uploadedBy
 			result, err := imp.RunModFile(r.Context(), tmpName)
 			if err != nil {
 				errInternal(w, fmt.Errorf("modfile import %s: %w", h.Filename, err))

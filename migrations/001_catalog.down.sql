@@ -9,7 +9,6 @@ DROP TABLE IF EXISTS recipe_fluid_inputs;
 DROP TABLE IF EXISTS recipe_item_outputs;
 DROP TABLE IF EXISTS recipe_item_inputs;
 DROP TABLE IF EXISTS recipes;
-DROP TABLE IF EXISTS upgrade_tiers;
 DROP TABLE IF EXISTS machine_types;
 DROP TABLE IF EXISTS tag_values;
 DROP TABLE IF EXISTS tag_members;

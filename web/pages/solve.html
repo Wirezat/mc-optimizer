@@ -162,30 +162,16 @@
     .mg-machine { color: var(--text); font-size: var(--text-sm); }
     .mg-recipe  { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mg-mod     { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
+    .mg-variant { font-size: var(--text-xs); color: var(--text-faint); }
+    /* Matches the read-only .mg-variant line it replaces, so a group with
+       alternatives does not jump in height against one without. */
+    .mg-variant-select {
+      --mg-variant-select-height: 1.6rem;
+      font-size: var(--text-xs);
+      height: var(--mg-variant-select-height);
+      padding-block: 0;
+    }
     .mg-util    { font-size: var(--text-xs); color: var(--text-muted); flex-shrink: 0; }
-    /* Upgrade badge — populated when OptimizeUpgrades is implemented */
-    .mg-upgrade {
-      font-size: var(--text-xs); color: var(--accent);
-      font-family: var(--font-mono); flex-shrink: 0; display: none;
-    }
-    .mg-upgrade:not(:empty) { display: inline; }
-    .mg-energy {
-      font-size: var(--text-xs); font-family: var(--font-mono); color: var(--text-muted);
-      flex-shrink: 0; min-width: 68px; text-align: right;
-    }
-    .mg-energy .unit { color: var(--text-faint); margin-left: 2px; }
-    .mg-energy.is-major { color: var(--text); font-weight: var(--weight-bold); }
-
-    .stat-value.energy { color: var(--accent); }
-
-    .energy-breakdown { margin-top: var(--gap-section); }
-    .energy-breakdown-title {
-      font-size: var(--text-xs); font-weight: var(--weight-bold); text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: var(--gap-inline);
-    }
-    .energy-bar-row { display: flex; align-items: center; gap: var(--gap-inline); padding: 3px 0; }
-    .energy-bar-label { font-size: var(--text-xs); color: var(--text-muted); width: 78px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .energy-bar-value { font-size: var(--text-xs); font-family: var(--font-mono); color: var(--text-faint); width: 64px; text-align: right; flex-shrink: 0; }
 
     /* ── IO profile ────────────────────────────────────────────────────────── */
     .io-section-label {
@@ -333,40 +319,17 @@
                 </div>
               </div>
 
-            </div>
-
-            <div style="display:flex;gap:var(--gap-section);flex-wrap:wrap;margin-top:var(--gap-container);">
-
-              <div class="field" id="tier-field" style="width:auto;">
-                <label class="field-label" data-i18n="solve.tier.label">Tier</label>
-                <div class="radio-group" style="flex-shrink:0;">
-                  <button class="radio-opt"        id="btn-tier-bronze"   data-i18n="solve.tier.bronze">Bronze</button>
-                  <button class="radio-opt"        id="btn-tier-steel"    data-i18n="solve.tier.steel">Steel</button>
-                  <button class="radio-opt active" id="btn-tier-electric" data-i18n="solve.tier.electric">Electric</button>
-                </div>
-              </div>
-
-              <div class="field" id="upgrade-field" style="width:auto;">
-                <label class="field-label" data-i18n="solve.upgrade.label">Upgrades</label>
-                <div style="display:flex;gap:var(--gap-inline);align-items:center;flex-wrap:wrap;">
-                  <div class="radio-group" style="flex-shrink:0;">
-                    <button class="radio-opt active" id="btn-upg-off"></button>
-                    <button class="radio-opt"        id="btn-upg-auto"></button>
-                    <button class="radio-opt"        id="btn-upg-fixed"></button>
-                  </div>
-                  <div id="upg-fixed-controls" style="display:none;gap:var(--gap-inline);align-items:center;flex-shrink:0;">
-                    <select class="input" id="upg-tier"></select>
-                    <input class="input" id="upg-count" type="number" min="0" max="64" step="1" value="0" style="width:5rem;" />
-                    <span class="step-label-desc" data-i18n="solve.upgrade.slots">slots</span>
-                  </div>
-                  <div id="upg-auto-controls" style="display:none;gap:var(--gap-inline);align-items:center;flex-shrink:0;">
-                    <span class="step-label-desc" data-i18n="solve.upgrade.max_tier">max tier</span>
-                    <select class="input" id="upg-auto-tier"></select>
-                  </div>
-                </div>
+              <!-- Second grid row. The grid is four columns wide, so these two
+                   sit under the target field: mod settings in column one, the
+                   plugin-declared selectors across the rest. -->
+              <div class="field" id="plugin-bar-field" style="display:none;">
+                <label class="field-label" id="plugin-bar-label" data-i18n="plugin.wizard.bar_label"></label>
+                <div id="plugin-bar" aria-labelledby="plugin-bar-label"
+                  style="display:flex;gap:var(--gap-inline);align-items:center;flex-wrap:wrap;"></div>
               </div>
 
             </div>
+
           </div>
         </div>
 
@@ -425,15 +388,14 @@
   import { renderGraph } from '/static/ui/js/components/graph.js';
   import { loadCatalog, lookupCatalog, iconTextHTML, catalogEntries } from '/static/js/catalog-registry.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
+  import { openPluginWizard } from '/static/js/plugin-wizard.js';
+  import { loadMachineHooks, columnsOf, cellText, resolveIndex } from '/static/js/plugin-machines.js';
 
   await load(getLang());
   applyI18n();
 
   document.getElementById('btn-target').textContent   = t('solve.mode.target');
   document.getElementById('btn-auto').textContent     = t('solve.mode.auto');
-  document.getElementById('btn-upg-off').textContent   = t('solve.upgrade.off');
-  document.getElementById('btn-upg-auto').textContent  = t('solve.upgrade.auto');
-  document.getElementById('btn-upg-fixed').textContent = t('solve.upgrade.fixed');
   document.getElementById('solve-btn').textContent    = t('solve.discover_btn');
   document.getElementById('confirm-btn').textContent  = t('solve.confirm_btn');
   // Demo mode: /demo/solve — same page, no factory/save backing it, no login
@@ -446,9 +408,6 @@
   const _discoverURL = _isDemo ? '/api/demo/discover' : '/api/factories/' + _factoryID + '/discover';
   const _solveURL    = _isDemo ? '/api/demo/solve'    : '/api/factories/' + _factoryID + '/solve';
   let _mode           = 'AUTO';
-  let _machineTier    = 'electric'; // 'bronze' | 'steel' | 'electric'
-  let _upgradeMode    = 'off'; // 'off' | 'auto' | 'fixed'
-  let _tiers          = [];
   let _draftID        = null;
   let _reqSeq         = 0; // bumped on every doDiscover/doSolve call; guards against out-of-order responses
   let _overrides      = {};
@@ -456,6 +415,11 @@
   let _tagResolutions = {};
   let _allowPartial = new Set();
   let _stopPoints   = new Set();
+  let _variantPins  = {}; // RecipeOptionKey → variant id, pinned by the user
+  // Plugin config per mod, owned by this page and frozen into the production
+  // line on confirm. A fresh chain starts empty, which every plugin reads as
+  // its own defaults.
+  let _modConfigs   = {};
   let _existingPLRates = new Map(); // itemKey -> {Num,Den} real aggregate output rate/min across this factory's PLs
   let _neededRates     = new Map(); // itemKey -> {Num,Den,TimeUnit} demand rate from the latest solve's IOProfile.Inputs
   let _cycleNodes   = new Set();
@@ -463,11 +427,107 @@
   let _chainItems   = [];
   let _names        = {};
   let _machineNames = {};
+  let _machineHooks   = new Map(); // plugin mod id → its machines binding
+  let _machineColumns = [];        // flattened plugin-declared chain columns
+  let _pluginMods     = {};        // "mod:machine" → plugin mod id
   let _modNames     = {};
   let _nameMap      = new Map(); // lowercase name → [{mod_id, item_id, _fluid, name}]
   let _allEntries   = [];        // flat sorted array for WuiAutocomplete
+  let _activeModIds = [];        // mod_ids active for this save; [] in demo mode (no wizard bar there)
+  let _saveID       = null;
 
   function modName(modID) { return _modNames[modID] || modID; }
+
+  // One button per mod that is both active for this save and ships a wizard
+  // (/api/mods' plugin.has_wizard). Label is the mod's own display name — not
+  // translated, it's the mod's identity, not host UI text.
+  function renderPluginBar(mods) {
+    const field = document.getElementById('plugin-bar-field');
+    const bar = document.getElementById('plugin-bar');
+    const withWizard = mods.filter(m => _activeModIds.includes(m.mod_id) && m.plugin?.has_wizard);
+    if (withWizard.length === 0) {
+      field.style.display = 'none';
+      bar.innerHTML = '';
+      return;
+    }
+    field.style.display = '';
+    bar.innerHTML = withWizard.map(m =>
+      `<button type="button" class="btn btn-ghost btn-sm" data-mod-id="${esc(m.mod_id)}">${esc(m.plugin.display_name)}</button>`
+    ).join('');
+  }
+
+  document.getElementById('plugin-bar').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-mod-id]');
+    if (!btn) return;
+    const modId = btn.dataset.modId;
+    openPluginWizard(modId, btn.textContent, {
+      config: _modConfigs[modId] || {},
+      onSave: async cfg => {
+        _modConfigs[modId] = cfg;
+        // The same setting becomes this world's default for the next chain. An
+        // already-confirmed line is untouched — it carries its own frozen copy.
+        const res = await apiFetch(`/api/saves/${_saveID}/mod-config-defaults/${encodeURIComponent(modId)}`, {
+          method: 'PUT',
+          body: JSON.stringify(cfg),
+        });
+        if (!res?.ok) throw new Error(`mod config default: ${res?.status}`);
+        // A changed tier re-points the rows, which discovers and solves on its
+        // own; otherwise only a solve that already ran can show the change.
+        if (applyMachineChoice()) return;
+        if (_targetItem && document.getElementById('result-card').style.display !== 'none') doSolve();
+      },
+    });
+  });
+
+  // Loads the machines binding of each named mod, once per mod, then re-renders
+  // what those bindings declare. Already-loaded and already-failed mods are
+  // skipped inside loadMachineHooks.
+  async function addMachineHooks(modIDs) {
+    const wanted = [...new Set(modIDs)].filter(m => !_machineHooks.has(m));
+    if (wanted.length) {
+      const fresh = await loadMachineHooks(wanted);
+      for (const [modID, m] of fresh) _machineHooks.set(modID, m);
+    }
+    _machineColumns = columnsOf(_machineHooks);
+  }
+
+  // Tops the hooks up with any mod the chain reached that was not active-listed.
+  function ensureMachineHooks() {
+    return addMachineHooks(Object.values(_pluginMods));
+  }
+
+  // Re-points every already-chosen chain row at the machine its plugin picks
+  // under that mod's own config, then re-discovers if anything moved. Returns
+  // whether it moved anything; a caller mid-doDiscover bails out on true.
+  function applyMachineChoice() {
+    let changed = false;
+    for (const item of _chainItems) {
+      if (!item.ChosenRecipeID) continue;
+      const key = itemKey(item.Item);
+      const newKey = machineKeyFor(item, item.ChosenRecipeID);
+      if (newKey && _overrides[key] !== newKey) {
+        _overrides[key] = newKey;
+        changed = true;
+      }
+    }
+    if (changed && _chainItems.length) doDiscover();
+    return changed;
+  }
+
+  // The option key of the machine that should run recipeID for this row: the
+  // plugin's pick under its config, or the recipe's own machine when no plugin
+  // has an opinion.
+  function machineKeyFor(item, recipeID) {
+    const candidates = (item.Options || []).filter(o => o.RecipeID === recipeID);
+    if (!candidates.length) return null;
+    const pluginMod = _pluginMods[`${candidates[0].MachineMod}:${candidates[0].MachineID}`];
+    const idx = pluginMod
+      ? resolveIndex(_machineHooks, pluginMod,
+          candidates.map(o => ({ mod_id: o.MachineMod, machine_id: o.MachineID })),
+          _modConfigs[pluginMod])
+      : -1;
+    return (idx >= 0 ? candidates[idx] : candidates[0]).Key;
+  }
 
   async function init() {
     let modsRes;
@@ -497,6 +557,7 @@
       document.getElementById('bc-factory').href        = '/factories/' + _factoryID;
 
       saveIDParam = '&save_id=' + encodeURIComponent(factory.save_id);
+      _saveID = factory.save_id;
 
       let saveRes, activeModsRes;
       [saveRes, modsRes, activeModsRes] = await Promise.all([
@@ -511,8 +572,8 @@
         document.getElementById('bc-save').href        = '/saves/' + factory.save_id;
       }
 
-      const activeModIds = activeModsRes?.ok ? (await activeModsRes.json()).mod_ids : [];
-      if (activeModIds.length === 0) {
+      _activeModIds = activeModsRes?.ok ? (await activeModsRes.json()).mod_ids : [];
+      if (_activeModIds.length === 0) {
         document.getElementById('no-mods-link').href = '/saves/' + factory.save_id + '?open=mods';
         document.getElementById('no-mods-banner').style.display = 'block';
       }
@@ -534,6 +595,20 @@
     if (modsRes?.ok) {
       const mods = await modsRes.json();
       for (const m of mods) _modNames[m.mod_id] = m.name;
+      // Demo mode has no save, so no config to persist a wizard's changes into.
+      if (!_isDemo) {
+        renderPluginBar(mods);
+        // Load the hooks from the active mod list rather than waiting for a
+        // chain: the tier selector has to be settable before the first
+        // discover, and a discover reaching a further mod tops them up later.
+        await addMachineHooks(mods
+          .filter(m => _activeModIds.includes(m.mod_id) && m.plugin)
+          .map(m => m.mod_id));
+        // Seed the chain from this world's defaults. They are read once, here;
+        // a confirmed line carries its own copy and never consults them again.
+        const defRes = await apiFetch(`/api/saves/${_saveID}/mod-config-defaults`);
+        if (defRes?.ok) _modConfigs = await defRes.json() || {};
+      }
     }
 
     // Preload items + fluids (already save-scoped by the backend) into the
@@ -548,10 +623,8 @@
       if (!_nameMap.has(k)) _nameMap.set(k, []);
       _nameMap.get(k).push({ mod_id, item_id, _fluid, name: displayName });
     }
-    // Built from the registry the page already loaded — fetching the catalog a
-    // second time here would double the payload and the server's texture lookups.
-    // Fluids first: when a fluid and a block-item share the same display name
-    // the fluid entry must win so IsFluid is set correctly.
+    // Built from the registry the page already loaded. Fluids first: when a
+    // fluid and a block-item share a display name, the fluid entry must win.
     const _catalog = catalogEntries();
     for (const e of _catalog) if (e.isFluid)  addEntry(e.modID, e.id, e.name, true);
     for (const e of _catalog) if (!e.isFluid) addEntry(e.modID, e.id, e.name, false);
@@ -591,6 +664,7 @@
           _tagOverrides = {};
           _allowPartial = new Set();
           _stopPoints   = new Set();
+          _variantPins  = {};
           _chainItems   = [];
           _neededRates  = new Map();
           hideChain();
@@ -602,128 +676,8 @@
 
   document.getElementById('btn-target').addEventListener('click', () => setMode('TARGET'));
   document.getElementById('btn-auto').addEventListener('click',   () => setMode('AUTO'));
-  document.getElementById('btn-upg-off').addEventListener('click',   () => setUpgradeMode('off'));
-  document.getElementById('btn-upg-auto').addEventListener('click',  () => setUpgradeMode('auto'));
-  document.getElementById('btn-upg-fixed').addEventListener('click', () => setUpgradeMode('fixed'));
   document.getElementById('solve-btn').addEventListener('click', doDiscover);
   document.getElementById('confirm-btn').addEventListener('click', doConfirm);
-
-  // Returns tier IDs up to and including the given max tier (by EU bonus) — the upgrades
-  // the auto solver is allowed to use.
-  function allowedTiersUpTo(maxTierID) {
-    const max = _tiers.find(tr => tr.id === maxTierID);
-    if (!max) return [];
-    return _tiers.filter(tr => tr.eu_bonus_per_slot <= max.eu_bonus_per_slot).map(tr => tr.id);
-  }
-
-  // Re-solve automatically when an upgrade control changes, but only once a result exists.
-  function reSolveIfShown() {
-    if (document.getElementById('result-card').style.display !== 'none') doSolve();
-  }
-
-  function setUpgradeMode(m) {
-    _upgradeMode = m;
-    document.getElementById('btn-upg-off').classList.toggle('active', m === 'off');
-    document.getElementById('btn-upg-auto').classList.toggle('active', m === 'auto');
-    document.getElementById('btn-upg-fixed').classList.toggle('active', m === 'fixed');
-    document.getElementById('upg-fixed-controls').style.display = m === 'fixed' ? 'flex' : 'none';
-    document.getElementById('upg-auto-controls').style.display  = m === 'auto'  ? 'flex' : 'none';
-    reSolveIfShown();
-  }
-
-  // Machine-tier prefix convention, matching the MI addon-machine naming pattern
-  // (see markdown/modern_industrialization.yml): bronze_/steel_ tiers implement
-  // their electric base type via machine_interfaces. steam_blast_furnace has no
-  // bronze_/steel_ prefix of its own but is the sole steam-tier option for the
-  // blast-furnace family, so it stands in for both buckets (see resolveOptionKeyForTier).
-  function machineTierOf(machineID) {
-    if (machineID.startsWith('bronze_')) return 'bronze';
-    if (machineID.startsWith('steel_'))  return 'steel';
-    if (machineID === 'steam_blast_furnace') return 'steam';
-    return 'electric';
-  }
-
-  // Within the 'electric' bucket, the blast-furnace family has two eligible machine
-  // variants (Cupronickel/Kanthal coils) with identical throughput but different EU/t
-  // ceilings — the backend has already filtered out whichever one can't run this
-  // recipe (see recipeBanned), so preferring Cupronickel when present always picks the
-  // cheaper-to-build option without needing any EU/t math here.
-  const ELECTRIC_PREFERENCE = ['electric_blast_furnace_cupronickel', 'electric_blast_furnace'];
-
-  function pickElectricOption(group) {
-    for (const id of ELECTRIC_PREFERENCE) {
-      const opt = group.find(o => o.MachineID === id);
-      if (opt) return opt;
-    }
-    return group.find(o => machineTierOf(o.MachineID) === 'electric');
-  }
-
-  // Resolve which RecipeOption.Key to use for a given RecipeID under the given
-  // Bronze/Steel/Electric tier. Falls back to the steam-only variant for bronze/steel
-  // when no dedicated bronze_/steel_ machine exists, then to electric as a last resort.
-  function resolveOptionKeyForTier(options, recipeID, tier) {
-    const group = (options || []).filter(o => o.RecipeID === recipeID);
-    if (!group.length) return null;
-
-    if (tier === 'bronze' || tier === 'steel') {
-      const wanted = group.find(o => machineTierOf(o.MachineID) === tier);
-      if (wanted) return wanted.Key;
-      const steam = group.find(o => machineTierOf(o.MachineID) === 'steam');
-      if (steam) return steam.Key;
-    }
-
-    const electric = pickElectricOption(group);
-    return (electric || group[0]).Key;
-  }
-
-  function setMachineTier(tier) {
-    _machineTier = tier;
-    document.getElementById('btn-tier-bronze').classList.toggle('active',   tier === 'bronze');
-    document.getElementById('btn-tier-steel').classList.toggle('active',    tier === 'steel');
-    document.getElementById('btn-tier-electric').classList.toggle('active', tier === 'electric');
-
-    // Re-resolve any already-chosen recipes to the new tier (same RecipeID,
-    // different machine variant) — a manual per-item pick stays a pick, it just
-    // follows the global tier like everything else unless the user picks a
-    // genuinely different recipe.
-    let changed = false;
-    for (const item of _chainItems) {
-      if (!item.ChosenRecipeID) continue;
-      const key = itemKey(item.Item);
-      const newOptKey = resolveOptionKeyForTier(item.Options, item.ChosenRecipeID, tier);
-      if (newOptKey && _overrides[key] !== newOptKey) {
-        _overrides[key] = newOptKey;
-        changed = true;
-      }
-    }
-    if (changed && _chainItems.length) doDiscover();
-  }
-  document.getElementById('btn-tier-bronze').addEventListener('click',   () => setMachineTier('bronze'));
-  document.getElementById('btn-tier-steel').addEventListener('click',    () => setMachineTier('steel'));
-  document.getElementById('btn-tier-electric').addEventListener('click', () => setMachineTier('electric'));
-
-  function fillTierSelect(sel) {
-    sel.innerHTML = '';
-    for (const tier of _tiers) {
-      const opt = document.createElement('option');
-      opt.value = tier.id;
-      opt.textContent = tier.name; // technical identifier, no i18n
-      sel.appendChild(opt);
-    }
-    if (_tiers.length) sel.value = _tiers[_tiers.length - 1].id; // default: highest tier
-  }
-
-  async function loadUpgradeTiers() {
-    const res = await apiFetch('/api/upgrade-tiers');
-    if (!res?.ok) return;
-    _tiers = await res.json();
-    fillTierSelect(document.getElementById('upg-tier'));
-    fillTierSelect(document.getElementById('upg-auto-tier'));
-  }
-  loadUpgradeTiers();
-  document.getElementById('upg-tier').addEventListener('change', reSolveIfShown);
-  document.getElementById('upg-count').addEventListener('change', reSolveIfShown);
-  document.getElementById('upg-auto-tier').addEventListener('change', reSolveIfShown);
 
   // Popover.js owns the floating panel itself (positioning + DOM removal on
   // outside-click/Escape); this listener only keeps the page-local "which
@@ -781,6 +735,7 @@
     _targetItem.ModID = this.value;
     _overrides    = {};
     _tagOverrides = {};
+    _variantPins  = {};
     _chainItems   = [];
     hideChain();
     hideResult();
@@ -801,6 +756,13 @@
   document.getElementById('result-machines').addEventListener('click', e => {
     const btn = e.target.closest('[data-action="togglePartial"]');
     if (btn) togglePartial(btn.dataset.recipeid);
+  });
+  document.getElementById('result-machines').addEventListener('change', e => {
+    const sel = e.target.closest('select[data-opt-key]');
+    if (!sel) return;
+    // A pin re-runs the solve; the page does not recompute counts itself.
+    _variantPins[sel.dataset.optKey] = sel.value;
+    doSolve();
   });
 
   async function doDiscover() {
@@ -831,10 +793,17 @@
     if (!res?.ok) { showStatus('solve-status', 'err', t('solve.discover_failed')); return; }
 
     const data = await res.json();
+    if (seq !== _reqSeq) return; // a newer discover/solve request has since started
     _chainItems      = data.Items || [];
     _tagResolutions  = data.TagResolutions || {};
     Object.assign(_names, data.Names || {});
     Object.assign(_machineNames, data.MachineNames || {});
+    _pluginMods = data.MachinePluginMods || {};
+    await ensureMachineHooks();
+    if (seq !== _reqSeq) return; // a newer discover/solve request has since started
+    // Re-point rows picked since the axis was last set at the axis's machine.
+    // On a move it has already started its own doDiscover; bail out here.
+    if (applyMachineChoice()) return;
     showStatus('solve-status', '', '');
     renderChainConfig();
     showChain();
@@ -891,9 +860,8 @@
     }
     const inCycle = _cycleNodes.has(key);
     const warnIcon = `<span class="cycle-warn${inCycle ? '' : ' cycle-warn-hidden'}"${inCycle ? ` title="${esc(t('solve.cycle_error.item_warn'))}"` : ''}>⚠</span>`;
-    // Prefer the machine the backend actually chose (item.ChosenMachineID) over
-    // re-deriving via RecipeID, which would just grab whichever tier variant
-    // happens to appear first in Options — not necessarily the one in use.
+    // Match on ChosenMachineID, not RecipeID alone: several machines share a
+    // recipe.
     const chosen = item.ChosenMachineID
       ? opts.find(o => o.RecipeID === item.ChosenRecipeID && o.MachineID === item.ChosenMachineID)
       : opts.find(o => o.RecipeID === item.ChosenRecipeID);
@@ -908,12 +876,8 @@
         `<button class="chain-override-btn" data-action="openChainPicker"
             data-key="${esc(key)}" data-with-stop="${withStop}">${changeLabel}</button>`;
     }
-    // No recipe chosen — this is already an implicit stop point (discover.go:
-    // "no override → stop here by default", and doSolve() builds its stop-point
-    // set straight from that flag), no separate accept action needed. If this
-    // factory already produces the item via another PL, label the picker button
-    // accordingly instead of the generic prompt; clicking it still opens the same
-    // picker, so choosing an explicit recipe here simply overrides the implicit stop.
+    // No recipe chosen is already an implicit stop point. If the factory
+    // produces the item via another PL, the picker button says so.
     const tag = alreadyInFactoryLabel(key);
     const label = tag ? tag.text : t('solve.chain.pick_recipe');
     return warnIcon +
@@ -924,6 +888,21 @@
   function renderChainConfig() {
     if (_chainView === 'graph') renderChainGraph();
     else renderChainTable();
+  }
+
+  // Cells for the plugin-declared columns of one chain row. A row whose
+  // machine belongs to another mod gets an empty cell in that mod's column.
+  function _chainPluginCells(item) {
+    if (!_machineColumns.length) return '';
+    const machineMod = item.ChosenMachineMod;
+    const machineID  = item.ChosenMachineID;
+    const pluginMod  = machineMod ? _pluginMods[`${machineMod}:${machineID}`] : '';
+    return _machineColumns.map(col => {
+      const text = (pluginMod && col.modID === pluginMod)
+        ? cellText(_machineHooks, pluginMod, { mod_id: machineMod, machine_id: machineID }, col.columnID)
+        : '';
+      return `<td>${esc(text)}</td>`;
+    }).join('');
   }
 
   function renderChainTable() {
@@ -940,6 +919,7 @@
       rows.push(`<tr>
         <td><span${title}>${iconTextHTML(target.Item.ModID, target.Item.ItemID, { isFluid: target.Item.IsFluid, name, subtitle: sub, size: 'sm', extraClass: 'chain-target-icontext' })}</span></td>
         <td><div class="chain-cell-recipe">${_chainRecipeCell(target, key, false)}</div></td>
+        ${_chainPluginCells(target)}
       </tr>`);
     }
 
@@ -950,7 +930,7 @@
       byLevel.get(item.Level).push(item);
     }
     for (const [level, items] of [...byLevel.entries()].sort((a, b) => a[0] - b[0])) {
-      rows.push(`<tr class="table-group-hd"><td colspan="2">${t('solve.chain.level').toUpperCase()} ${level}</td></tr>`);
+      rows.push(`<tr class="table-group-hd"><td colspan="${2 + _machineColumns.length}">${t('solve.chain.level').toUpperCase()} ${level}</td></tr>`);
       for (const item of items) {
         const key    = itemKey(item.Item);
         const name   = nameOf(item.Item);
@@ -959,6 +939,7 @@
         rows.push(`<tr${isStop ? ' class="tc-stopped"' : ''}>
           <td>${iconTextHTML(item.Item.ModID, item.Item.ItemID, { isFluid: item.Item.IsFluid, name, subtitle: sub, size: 'sm' })}</td>
           <td><div class="chain-cell-recipe">${_chainRecipeCell(item, key, true)}</div></td>
+          ${_chainPluginCells(item)}
         </tr>`);
       }
     }
@@ -966,6 +947,7 @@
       <thead><tr>
         <th>${esc(t('solve.chain.col.item'))}</th>
         <th>${esc(t('solve.col.recipe'))}</th>
+        ${_machineColumns.map(c => `<th>${esc(c.label)}</th>`).join('')}
       </tr></thead>
       <tbody>${rows.join('')}</tbody>
     </table>`);
@@ -1026,13 +1008,8 @@
       if (ci.Item.IsFluid) kind = (kind ? kind + ' ' : '') + 'tagged';
 
       const pickable = !ci.IsRawMaterial && !noOptions;
-      // One label, self-describing and clickable: current machine name once a
-      // recipe is chosen, otherwise an explicit prompt — replaces the old
-      // small ⋮ menu icon with actual status text the label itself carries.
-      // No recipe chosen is already an implicit stop point (see _chainRecipeCell's
-      // comment), so a factory that already produces this item elsewhere gets its
-      // own label here instead of a separate accept action — picking an explicit
-      // recipe via this same label's menu simply overrides the implicit stop.
+      // One clickable label: the machine name once a recipe is chosen, an
+      // explicit prompt otherwise, or the already-in-factory tag.
       const tag = chosen ? null : alreadyInFactoryLabel(key);
       const labelText = chosen
         ? (_machineNames[chosen.MachineMod + ':' + chosen.MachineID] || chosen.MachineID)
@@ -1087,30 +1064,24 @@
   }
 
   // Shared between the table picker (openChainPicker) and the graph view's
-  // node menu: same options, same tier-aware machine label, same action
-  // contract (action === RecipeID, or 'STOP' to clear the item's override
-  // and mark it a manual stop point — see selectChainOverride).
+  // node menu: same options, same machine label, same action contract
+  // (action === RecipeID, or 'STOP' to clear the item's override and mark it
+  // a manual stop point — see selectChainOverride).
   function buildRecipeMenu(item, key, { withStop = true } = {}) {
     const items = [];
     if (withStop && item.ChosenRecipeID) {
       items.push({ label: t('solve.chain.stop_action'), action: 'STOP', danger: true });
     }
-    // Dedupe by RecipeID — bronze/steel/electric variants of the same recipe
-    // (reachable via machine_interfaces) are ONE choice here; the global Tier
-    // selector decides which machine actually runs it, not this per-item picker.
-    const seenRecipes = new Set();
-    const distinctOptions = (item.Options || []).filter(opt => {
-      if (seenRecipes.has(opt.RecipeID)) return false;
-      seenRecipes.add(opt.RecipeID);
-      return true;
-    });
-    for (const opt of distinctOptions) {
-      // Show the machine name matching the currently active tier.
-      const tierKey = resolveOptionKeyForTier(item.Options, opt.RecipeID, _machineTier);
-      const tierOpt = (item.Options || []).find(o => o.Key === tierKey) || opt;
+    // One entry per recipe. The machines that reach a recipe through
+    // machine_interfaces are tiers of one choice, not separate choices — which
+    // of them runs it is the plugin's call, from its configured tier.
+    const seen = new Set();
+    for (const opt of item.Options || []) {
+      if (seen.has(opt.RecipeID)) continue;
+      seen.add(opt.RecipeID);
       const ins = (opt.Inputs || []).join(', ');
       items.push({
-        label: _machineNames[tierOpt.MachineMod + ':' + tierOpt.MachineID] || tierOpt.MachineID,
+        label: _machineNames[opt.MachineMod + ':' + opt.MachineID] || opt.MachineID,
         subtitle: ins ? '← ' + ins : '',
         action: opt.RecipeID,
         active: opt.RecipeID === item.ChosenRecipeID,
@@ -1135,14 +1106,15 @@
     btn.classList.add('active');
   }
 
+  // action is a RecipeID; which machine runs it comes from the plugin's tier,
+  // not from the picker.
   function selectChainOverride(key, recipeID) {
     if (recipeID === 'STOP') {
       delete _overrides[key];
       _stopPoints.add(key);
     } else {
       const item = _chainItems.find(ci => itemKey(ci.Item) === key);
-      const optKey = resolveOptionKeyForTier(item?.Options, recipeID, _machineTier);
-      _overrides[key] = optKey || recipeID;
+      _overrides[key] = (item && machineKeyFor(item, recipeID)) || recipeID;
       _stopPoints.delete(key);
     }
     closeAllPickers();
@@ -1191,10 +1163,8 @@
         TagOverrides:         _tagOverrides,
         FactoryState:         { ExistingOutputs: {} },
         AllowPartialMachines: [..._allowPartial],
-        UpgradeMode:          _upgradeMode,
-        UpgradeTier:          _upgradeMode === 'fixed' ? (document.getElementById('upg-tier').value || '') : '',
-        UpgradeCount:         _upgradeMode === 'fixed' ? (parseInt(document.getElementById('upg-count').value, 10) || 0) : 0,
-        AllowedTiers:         _upgradeMode === 'auto' ? allowedTiersUpTo(document.getElementById('upg-auto-tier').value) : [],
+        VariantPins:          _variantPins,
+        ModConfigs:           _modConfigs,
       }),
     });
 
@@ -1203,6 +1173,7 @@
 
     if (res?.status === 409) {
       const d = await res.json().catch(() => ({}));
+      if (seq !== _reqSeq) return; // a newer discover/solve request has since started
       if (d.error === 'CYCLE_BREAK_NEEDED') {
         showStatus('solve-status', '', '');
         showCycleError(d.cycle_nodes || []);
@@ -1211,23 +1182,39 @@
     }
     if (!res?.ok) {
       const d = await res?.json().catch(() => ({}));
-      showStatus('solve-status', 'err', d.message || t('msg.solve_failed'));
+      if (seq !== _reqSeq) return; // a newer discover/solve request has since started
+      const byCode = {
+        RATE_OVERFLOW: 'solve.error.rate_overflow',
+        NEGATIVE_RATE: 'solve.error.negative_rate',
+        NO_SOLUTION:   'solve.error.no_solution',
+      };
+      const msg = byCode[d.error] ? t(byCode[d.error]) : (d.message || t('msg.solve_failed'));
+      showStatus('solve-status', 'err', msg);
       return;
     }
 
     const data = await res.json();
+    if (seq !== _reqSeq) return; // a newer discover/solve request has since started
     _draftID = data.draft_id;
     Object.assign(_names, data.Names || {});
     showStatus('solve-status', '', '');
 
-    // Refresh the "already in factory" have/need numbers now that the chain has
-    // actual demand rates (only available post-solve, via IOProfile.Inputs) —
-    // re-render so the picker labels pick them up instead of the placeholder tag.
+    // Refresh the "already in factory" have/need numbers from IOProfile.Inputs,
+    // which only exists post-solve, and re-render so the labels pick them up.
     _neededRates = new Map();
     for (const e of (data.result?.IOProfile?.Inputs || [])) {
       _neededRates.set(itemKey(e.Item), { Num: e.Rate.Num, Den: e.Rate.Den, TimeUnit: e.TimeUnit });
     }
     renderChainConfig();
+
+    // A pin's key embeds the machine, so a stale one never matches wrongly —
+    // but nothing else drops it either. Prune against the groups this solve
+    // actually returned so pins don't accumulate for the rest of the page's life.
+    const liveGroupKeys = new Set((data.result?.MachineGroups || [])
+      .map(g => `${g.RecipeID}@${g.MachineMod}:${g.MachineID}`));
+    for (const k of Object.keys(_variantPins)) {
+      if (!liveGroupKeys.has(k)) delete _variantPins[k];
+    }
 
     const itemName = _targetItem?.name
       || (_targetItem?.TagRef ? '#' + _targetItem.TagRef : '')
@@ -1255,7 +1242,6 @@
     document.getElementById('result-card').style.display = '';
 
     const actualRate = fmtR(r.ActualRate);
-    const totalEU = (r.MachineGroups || []).reduce((sum, g) => sum + (g.EUPerTick || 0) * (g.Count || 0), 0);
     document.getElementById('result-stats').innerHTML = `
       <div class="stat">
         <span class="stat-label">${t('solve.stats.actual_rate')}</span>
@@ -1269,10 +1255,6 @@
         <span class="stat-label">${t('solve.stats.machine_groups')}</span>
         <span class="stat-value">${r.MachineGroups?.length ?? 0}</span>
       </div>
-      ${totalEU > 0 ? `<div class="stat">
-        <span class="stat-label">${t('solve.stats.power_draw')}</span>
-        <span class="stat-value energy">${totalEU} EU/t</span>
-      </div>` : ''}
       ${r.HadCycles ? `<div class="stat"><span class="stat-label" style="color:#f59e0b;">${t('solve.cycles_detected')}</span></div>` : ''}
     `;
 
@@ -1292,36 +1274,38 @@
       machEl.innerHTML = `<div style="color:var(--text-faint);font-size:var(--text-sm);">
         ${t('solve.no_machines_prefix')}${esc(itemName)}${t('solve.no_machines_suffix')}</div>`;
     } else {
-      const groupEU = groups.map(g => (g.EUPerTick || 0) * (g.Count || 0));
-      const maxGroupEU = Math.max(0, ...groupEU);
-      const anyEU = maxGroupEU > 0;
       const hdr = `<div class="mg-header">
         <div class="mg-count">${t('solve.col.count')}</div>
         <div style="flex:1">${t('solve.col.machine')}</div>
         <div style="min-width:36px;text-align:right">${t('solve.col.util')}</div>
-        ${anyEU ? `<div class="mg-energy">${t('solve.col.power')}</div>` : ''}
       </div>`;
-      machEl.innerHTML = hdr + groups.map((g, i) => {
+      machEl.innerHTML = hdr + groups.map(g => {
         const util    = g.Utilization?.Den ? Math.round(g.Utilization.Num/g.Utilization.Den*100) + '%' : '';
         const outName = g.RecipeOutput ? nameOf(g.RecipeOutput) : '';
         const outID   = g.RecipeOutput?.ItemID || '';
         const partial = _allowPartial.has(g.RecipeID);
         const partialLabel = partial ? t('solve.partial.active_label') : t('solve.partial.allow_label');
         const partialTitle = partial ? t('solve.partial.active_title') : t('solve.partial.allow_title');
-        const tierName = g.UpgradeTier ? (_tiers.find(t => t.id === g.UpgradeTier)?.name || g.UpgradeTier) : '';
-        const upgradeText = tierName ? `${esc(tierName)} ×${g.UpgradeCount}` : '';
-        const groupTotalEU = groupEU[i];
-        const isMajor = anyEU && groupTotalEU > 0 && groupTotalEU === maxGroupEU;
+        // The group's key on the wire is the same RecipeOptionKey the solver
+        // uses, rebuilt here from the fields the group already carries.
+        const optKey = `${g.RecipeID}@${g.MachineMod}:${g.MachineID}`;
+        const opts   = g.VariantOptions || [];
+        const variantCell = opts.length > 1
+          ? `<select class="input mg-variant-select" data-opt-key="${esc(optKey)}"
+                 title="${esc(t('solve.variant.pick_title'))}">` +
+            opts.map(o =>
+              `<option value="${esc(o.id)}"${o.id === g.VariantID ? ' selected' : ''}>${esc(o.label || t('solve.variant.default'))}</option>`
+            ).join('') + `</select>`
+          : `<div class="mg-variant">${g.Label ? esc(g.Label) : esc(t('solve.variant.default'))}</div>`;
         return `<div class="mg-row">
           <div class="mg-count">${g.Count}×</div>
           <div class="mg-info">
             <div class="mg-machine">${esc(g.MachineName || g.MachineID)}</div>
             ${outName ? `<div class="mg-recipe" title="${esc(outID)}">→ ${esc(outName)}</div>` : ''}
             <div class="mg-mod">${esc(modName(g.MachineMod))}</div>
+            ${variantCell}
           </div>
-          <div class="mg-upgrade">${upgradeText}</div>
           ${util ? `<div class="mg-util" style="${partial && util!=='100%' ? 'color:var(--text-faint);' : ''}">${util}</div>` : ''}
-          ${anyEU ? `<div class="mg-energy${isMajor ? ' is-major' : ''}">${groupTotalEU > 0 ? groupTotalEU + '<span class="unit">EU/t</span>' : '—'}</div>` : ''}
           <button class="partial-btn${partial ? ' active' : ''}"
             data-action="togglePartial" data-recipeid="${esc(g.RecipeID)}"
             title="${esc(partialTitle)}">${esc(partialLabel)}</button>
@@ -1359,24 +1343,6 @@
         <div style="flex:1;min-width:0;">${ioItemHTML(e)}</div>
         <div class="io-rate">${fmtR(e.Rate)} /${e.TimeUnit||unit}</div>
       </div>`).join('');
-    }
-    const byMod = new Map();
-    for (const g of (r.MachineGroups || [])) {
-      const eu = (g.EUPerTick || 0) * (g.Count || 0);
-      if (eu <= 0) continue;
-      byMod.set(g.MachineMod, (byMod.get(g.MachineMod) || 0) + eu);
-    }
-    if (byMod.size > 1) {
-      const maxModEU = Math.max(...byMod.values());
-      io += `<div class="energy-breakdown">
-        <div class="energy-breakdown-title">${t('solve.power_by_mod')}</div>
-        ${[...byMod.entries()].sort((a, b) => b[1] - a[1]).map(([mod, eu]) => `
-          <div class="energy-bar-row">
-            <div class="energy-bar-label" title="${esc(modName(mod))}">${esc(modName(mod))}</div>
-            <div class="wui-progress-track"><div class="wui-progress-fill" style="width:${Math.round(eu/maxModEU*100)}%"></div></div>
-            <div class="energy-bar-value">${eu} EU/t</div>
-          </div>`).join('')}
-      </div>`;
     }
     ioEl.innerHTML = io || `<span style="color:var(--text-faint);font-size:var(--text-sm);">—</span>`;
     initHiDPIRender(ioEl);

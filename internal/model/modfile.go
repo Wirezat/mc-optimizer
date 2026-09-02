@@ -4,7 +4,6 @@ package model
 type ModDef struct {
 	ModID        string
 	Name         string
-	EnergyType   string
 	Description  string
 	Author       string
 	License      string
@@ -19,7 +18,6 @@ type ModDef struct {
 	Items          []ItemDef
 	Fluids         []FluidDef
 	Tags           []TagDef
-	UpgradeTiers   []UpgradeTierDef
 	Machines       []MachineTypeDef
 	Recipes        []ModRecipeDef
 	BlockDrops     []BlockDrop
@@ -44,32 +42,22 @@ type TagDef struct {
 	Members []string // "mod_id:item_id"
 }
 
-type UpgradeTierDef struct {
-	Name           string
-	EUBonusPerSlot int64
-	ItemRef        string // "mod_id:item_id" — the item's own max_stack is the upgrade count cap
-}
-
 type MachineTypeDef struct {
-	ModID             string
-	MachineID         string
-	Name              string // resolved from lang key at import time
-	LangKey           string
-	Ecosystem         string // "vanilla" | "modern_industrialization" | "mekanism" | ...
-	BaseEnergyPerTick *int64
-	MaxEnergyPerTick  *int64
-	MaxSlots          *int16
-	EnergyType        *string // overrides mod-level energy_type if set
-	Upgradable        bool
-	Slots             []MachineSlotDef
+	ModID     string
+	MachineID string
+	Name      string // resolved from lang key at import time
+	LangKey   string
+	Slots     []MachineSlotDef
 	// Implements lists base machine refs ("mod_id:machine_id" or plain "machine_id"
 	// for same-mod) whose recipes this machine can also run — e.g. a steam-tier
 	// machine implementing its electric base type. Written to machine_interfaces.
 	Implements []string
-	// FixedRecipeEUCap, if set, is an additional ceiling on recipe eu/t that upgrades
-	// never raise — e.g. MI's Electric Blast Furnace coil tiers (cupronickel=32 vs.
-	// kanthal=128), independent of the normal MaxEnergyPerTick+upgrade-bonus cap.
-	FixedRecipeEUCap *int64
+	// Ecosystem names which plugin evaluates this machine; empty means the
+	// machine's own mod_id.
+	Ecosystem string
+	// ModData holds every mod-specific field from mod.yml, keyed as written.
+	// The host never interprets it, only passes it through to the plugin.
+	ModData map[string]any
 }
 
 type MachineSlotDef struct {
@@ -87,7 +75,6 @@ type ModRecipeDef struct {
 	MachineModID  string
 	MachineID     string
 	DurationTicks int
-	EnergyPerTick *int64
 	ItemInputs    []ModIODef
 	ItemOutputs   []ModIODef
 	FluidInputs   []ModFluidIODef
@@ -96,6 +83,9 @@ type ModRecipeDef struct {
 	// (each cell is a bare item id or tag name, "" for an empty cell). nil/empty
 	// for non-shaped recipes.
 	Shape []string
+	// ModData holds every mod-specific field from the recipe entry, keyed as
+	// written. The host never interprets it, only passes it through to the plugin.
+	ModData map[string]any
 }
 
 type ModIODef struct {

@@ -34,19 +34,31 @@ type draftPayload struct {
 type PLService struct {
 	db           *db.DB
 	autoScaleMax int64
+	variants     solver.VariantSource
 }
 
-// NewPLService creates a PLService with the given database and auto-scale cap.
-func NewPLService(database *db.DB, autoScaleMax int64) *PLService {
-	return &PLService{db: database, autoScaleMax: autoScaleMax}
+// NewPLService creates a PLService with the given database, auto-scale cap and
+// variant source.
+func NewPLService(database *db.DB, autoScaleMax int64, variants solver.VariantSource) *PLService {
+	return &PLService{db: database, autoScaleMax: autoScaleMax, variants: variants}
 }
 
-func (s *PLService) activeModsForFactory(ctx context.Context, factoryID uuid.UUID) (map[string]bool, error) {
+// solverFor builds a solver bound to a factory's active mods. The plugin config
+// travels with the request and belongs to the production line, so it is left
+// untouched here.
+func (s *PLService) solverFor(ctx context.Context, factoryID uuid.UUID, req *solver.SolveRequest) (*solver.Solver, error) {
 	factory, err := s.db.GetFactory(ctx, factoryID)
 	if err != nil {
 		return nil, err
 	}
-	return s.db.GetActiveMods(ctx, factory.SaveID)
+	activeMods, err := s.db.GetActiveMods(ctx, factory.SaveID)
+	if err != nil {
+		return nil, err
+	}
+	sv := solver.NewSolver(s.db, s.autoScaleMax)
+	sv.ActiveMods = activeMods
+	sv.VariantSource = s.variants
+	return sv, nil
 }
 
 // SolveOutput is returned by Solve and contains what the HTTP handler needs.
@@ -64,12 +76,10 @@ func (s *PLService) Solve(ctx context.Context, factoryID, userID uuid.UUID, req 
 		req.Mode, req.TargetRate.Num, req.TargetRate.Den, req.TimeUnit,
 		len(req.StopPoints))
 
-	activeMods, err := s.activeModsForFactory(ctx, factoryID)
+	sv, err := s.solverFor(ctx, factoryID, &req)
 	if err != nil {
 		return nil, err
 	}
-	sv := solver.NewSolver(s.db, s.autoScaleMax)
-	sv.ActiveMods = activeMods
 	result, err := sv.Solve(ctx, req)
 	if err != nil {
 		GoLog.Infof("solve: error: %v", err)
@@ -93,73 +103,6 @@ func (s *PLService) Solve(ctx context.Context, factoryID, userID uuid.UUID, req 
 		ExpiresAt: draft.ExpiresAt,
 		Result:    result,
 	}, nil
-}
-
-// SetGroupUpgrade applies an upgrade tier/count to a single machine group and recomputes
-// its machine count while preserving the group's current output rate (variant A: more
-// upgrades → fewer machines, no PL-wide rebalancing). A nil tierID or count<=0 clears the
-// upgrade. Returns the new machine count.
-func (s *PLService) SetGroupUpgrade(ctx context.Context, groupID uuid.UUID, tierID *uuid.UUID, upgradeCount int) (int, error) {
-	grp, err := s.db.GetMachineGroup(ctx, groupID)
-	if err != nil {
-		return 0, err
-	}
-	recipe, err := s.db.GetRecipe(ctx, grp.RecipeID.String())
-	if err != nil {
-		return 0, fmt.Errorf("service: get recipe: %w", err)
-	}
-	machine, err := s.db.GetMachineType(ctx, grp.MachineModID, grp.MachineID)
-	if err != nil {
-		return 0, fmt.Errorf("service: get machine: %w", err)
-	}
-	tiers, err := s.db.GetUpgradeTiers(ctx, grp.MachineModID)
-	if err != nil {
-		return 0, fmt.Errorf("service: get tiers: %w", err)
-	}
-	bonusOf := func(id string) int64 {
-		for _, t := range tiers {
-			if t.ID == id {
-				return t.EUBonusPerSlot
-			}
-		}
-		return 0
-	}
-
-	// Normalise the requested upgrade: an unknown tier or non-positive count clears it.
-	newTierStr := ""
-	if tierID != nil {
-		newTierStr = tierID.String()
-	}
-	if upgradeCount <= 0 || tierID == nil || bonusOf(newTierStr) == 0 {
-		tierID, upgradeCount, newTierStr = nil, 0, ""
-	}
-
-	oldTierStr := ""
-	if grp.UpgradeTierID != nil {
-		oldTierStr = grp.UpgradeTierID.String()
-	}
-
-	ticksOld := solver.EffectiveTicks(recipe, machine, bonusOf(oldTierStr), grp.UpgradeCount)
-	ticksNew := solver.EffectiveTicks(recipe, machine, bonusOf(newTierStr), upgradeCount)
-
-	// Recompute from the fractional exact count, preserving the group's required recipe rate
-	// (rate = exactOld / ticksOld). This is lossless and round-trip stable, unlike deriving
-	// from the rounded count. Legacy rows (no exact stored) fall back to the rounded count.
-	exactOld := solver.NewRational(grp.ExactCountNum, grp.ExactCountDen)
-	if grp.ExactCountNum == 0 {
-		exactOld = solver.NewRational(int64(grp.Count), 1)
-	}
-	newExact := exactOld
-	if ticksOld > 0 {
-		// newExact = exactOld × ticksNew / ticksOld
-		newExact = exactOld.Mul(solver.NewRational(ticksNew, 1)).Div(solver.NewRational(ticksOld, 1))
-	}
-	newCount := max(int(newExact.CeilInt()), 1)
-
-	if err := s.db.UpdateMachineGroupUpgrades(ctx, groupID, tierID, upgradeCount, newCount, newExact.Num, newExact.Den); err != nil {
-		return 0, err
-	}
-	return newCount, nil
 }
 
 // ConfirmInput carries the parsed body from the confirm endpoint.
@@ -209,7 +152,7 @@ func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input Conf
 		SolveRequest: reqJSON,
 	}
 
-	ios, groups, err := solveResultToContents(payload.Result)
+	ios, groups, err := solveResultToContents(payload.Result, payload.Request.ModConfigs)
 	if err != nil {
 		return nil, err
 	}
@@ -217,9 +160,11 @@ func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input Conf
 	return s.db.ConfirmSolverDraft(ctx, pl, ios, groups, input.DraftID)
 }
 
-// solveResultToContents converts a solver result into the persistable PLIO and MachineGroup
-// rows. New groups are returned with status "planned". Shared by Confirm and Resolve.
-func solveResultToContents(result solver.SolveResult) ([]*model.PLIO, []*model.MachineGroup, error) {
+// solveResultToContents converts a solver result into the persistable PLIO and
+// MachineGroup rows. New groups are returned with status "planned", each
+// carrying the plugin config it was solved under so a later change to the
+// save-wide config leaves the line alone. Shared by Confirm and Resolve.
+func solveResultToContents(result solver.SolveResult, modConfigs map[string]json.RawMessage) ([]*model.PLIO, []*model.MachineGroup, error) {
 	totalIO := len(result.IOProfile.Inputs) + len(result.IOProfile.Outputs)
 	ios := make([]*model.PLIO, 0, totalIO)
 	ioType := func(item solver.ItemRef) string {
@@ -256,28 +201,23 @@ func solveResultToContents(result solver.SolveResult) ([]*model.PLIO, []*model.M
 		if err != nil {
 			return nil, nil, fmt.Errorf("service: machine group %d: invalid recipe UUID %q: %w", i, mg.RecipeID, err)
 		}
-		var tierID *uuid.UUID
-		if mg.UpgradeTier != "" {
-			id, err := uuid.Parse(mg.UpgradeTier)
-			if err != nil {
-				return nil, nil, fmt.Errorf("service: machine group %d: invalid upgrade tier UUID %q: %w", i, mg.UpgradeTier, err)
-			}
-			tierID = &id
-		}
 		exactDen := mg.ExactCount.Den
 		if exactDen == 0 {
 			exactDen = 1
 		}
 		groups = append(groups, &model.MachineGroup{
-			MachineModID:  mg.MachineMod,
-			MachineID:     mg.MachineID,
-			RecipeID:      recipeID,
-			Count:         int(mg.Count),
-			UpgradeTierID: tierID,
-			UpgradeCount:  mg.UpgradeCount,
-			Status:        "planned",
+			MachineModID: mg.MachineMod,
+			MachineID:    mg.MachineID,
+			RecipeID:     recipeID,
+			Count:        int(mg.Count),
+			Status:       "planned",
+			VariantID:    mg.VariantID,
+			ModConfig:    modConfigs[mg.PluginMod],
+			// CurrentVariantID stays unset: nothing is built yet, so the DB
+			// default (the host variant) is the truthful build state.
 			ExactCountNum: mg.ExactCount.Num,
 			ExactCountDen: exactDen,
+			Costs:         mg.Costs,
 		})
 	}
 	return ios, groups, nil
@@ -286,11 +226,8 @@ func solveResultToContents(result solver.SolveResult) ([]*model.PLIO, []*model.M
 // ResolveInput carries optional overrides for re-solving a production line. Zero/empty
 // fields fall back to the line's stored request.
 type ResolveInput struct {
-	TargetRate   *solver.Rational
-	TimeUnit     string
-	UpgradeMode  string
-	UpgradeTier  string
-	UpgradeCount int
+	TargetRate *solver.Rational
+	TimeUnit   string
 }
 
 // Resolve re-solves an existing production line (e.g. to produce more output) using its
@@ -316,28 +253,21 @@ func (s *PLService) Resolve(ctx context.Context, plID uuid.UUID, in ResolveInput
 	if in.TimeUnit != "" {
 		req.TimeUnit = in.TimeUnit
 	}
-	if in.UpgradeMode != "" {
-		req.UpgradeMode = solver.UpgradeMode(in.UpgradeMode)
-		req.UpgradeTier = in.UpgradeTier
-		req.UpgradeCount = in.UpgradeCount
-	}
 
 	pl, err := s.db.GetProductionLine(ctx, plID)
 	if err != nil {
 		return nil, err
 	}
-	activeMods, err := s.activeModsForFactory(ctx, *pl.FactoryID)
+	sv, err := s.solverFor(ctx, *pl.FactoryID, &req)
 	if err != nil {
 		return nil, err
 	}
-	sv := solver.NewSolver(s.db, s.autoScaleMax)
-	sv.ActiveMods = activeMods
 	result, err := sv.Solve(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	ios, groups, err := solveResultToContents(result)
+	ios, groups, err := solveResultToContents(result, req.ModConfigs)
 	if err != nil {
 		return nil, err
 	}

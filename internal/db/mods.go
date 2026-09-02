@@ -130,10 +130,45 @@ func (d *DB) LookupMachineNames(ctx context.Context, machines []solver.MachineRe
 	return result, rows.Err()
 }
 
+// LookupMachinePluginMods resolves, for a set of (modID, machineID) pairs, the
+// mod whose plugin evaluates that machine: its ecosystem, or its own mod when
+// no ecosystem is set. The SQL mirrors solver.PluginMod, so the browser and
+// the solver agree on which plugin owns a machine.
+// Returns a map[modID+":"+machineID → pluginModID].
+func (d *DB) LookupMachinePluginMods(ctx context.Context, machines []solver.MachineRef) (map[string]string, error) {
+	if len(machines) == 0 {
+		return map[string]string{}, nil
+	}
+	modIDs := make([]string, len(machines))
+	machineIDs := make([]string, len(machines))
+	for i, m := range machines {
+		modIDs[i] = m.ModID
+		machineIDs[i] = m.MachineID
+	}
+	rows, err := d.Pool.Query(ctx, `
+		SELECT mt.mod_id, mt.machine_id, COALESCE(NULLIF(mt.ecosystem, ''), mt.mod_id)
+		FROM machine_types mt
+		WHERE (mt.mod_id, mt.machine_id) IN (SELECT unnest($1::text[]), unnest($2::text[]))
+	`, modIDs, machineIDs)
+	if err != nil {
+		return nil, fmt.Errorf("db: lookup machine plugin mods: %w", err)
+	}
+	defer rows.Close()
+	result := make(map[string]string, len(machines))
+	for rows.Next() {
+		var modID, machineID, pluginMod string
+		if err := rows.Scan(&modID, &machineID, &pluginMod); err != nil {
+			return nil, fmt.Errorf("db: lookup machine plugin mods: scan: %w", err)
+		}
+		result[modID+":"+machineID] = pluginMod
+	}
+	return result, rows.Err()
+}
+
 // ListMods returns all mods ordered by name, including optional Modrinth metadata.
 func (d *DB) ListMods(ctx context.Context) ([]*model.Mod, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT m.mod_id, m.name, m.energy_type,
+		SELECT m.mod_id, m.name,
 		       m.description, m.author, m.license,
 		       m.url_source, m.url_modrinth, m.url_wiki, m.url_issues, m.url_discord,
 		       m.modrinth_slug,
@@ -150,7 +185,7 @@ func (d *DB) ListMods(ctx context.Context) ([]*model.Mod, error) {
 	for rows.Next() {
 		m := &model.Mod{}
 		if err := rows.Scan(
-			&m.ModID, &m.Name, &m.EnergyType,
+			&m.ModID, &m.Name,
 			&m.Description, &m.Author, &m.License,
 			&m.URLSource, &m.URLModrinth, &m.URLWiki, &m.URLIssues, &m.URLDiscord,
 			&m.ModrinthSlug, &m.RecipeCount,
@@ -166,13 +201,13 @@ func (d *DB) ListMods(ctx context.Context) ([]*model.Mod, error) {
 }
 
 // CreateMod inserts a new mod. Caller must be an admin (enforced at API layer).
-func (d *DB) CreateMod(ctx context.Context, modID, name, energyType string) (*model.Mod, error) {
+func (d *DB) CreateMod(ctx context.Context, modID, name string) (*model.Mod, error) {
 	m := &model.Mod{}
 	err := d.Pool.QueryRow(ctx, `
-		INSERT INTO mods (mod_id, name, energy_type)
-		VALUES ($1, $2, $3)
-		RETURNING mod_id, name, energy_type
-	`, modID, name, energyType).Scan(&m.ModID, &m.Name, &m.EnergyType)
+		INSERT INTO mods (mod_id, name)
+		VALUES ($1, $2)
+		RETURNING mod_id, name
+	`, modID, name).Scan(&m.ModID, &m.Name)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrConflict
@@ -182,42 +217,24 @@ func (d *DB) CreateMod(ctx context.Context, modID, name, energyType string) (*mo
 	return m, nil
 }
 
-// UpdateMod patches name and/or energy_type for a mod. Caller must be an admin (enforced at API layer).
-func (d *DB) UpdateMod(ctx context.Context, modID string, name, energyType *string) error {
-	tag, err := d.Pool.Exec(ctx, `
-		UPDATE mods
-		SET
-			name        = COALESCE($2, name),
-			energy_type = COALESCE($3, energy_type)
-		WHERE mod_id = $1
-	`, modID, name, energyType)
-	if err != nil {
-		return fmt.Errorf("db: update mod: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // UpdateModFull overwrites all editable fields for a mod. Caller must be an admin.
-// Unlike UpdateModMetadata, this always overwrites (no COALESCE) — used for manual admin edits.
+// Unlike UpdateModMetadata, every field but name is overwritten unconditionally, including to NULL;
+// name falls back to its current value via COALESCE when nil.
 func (d *DB) UpdateModFull(ctx context.Context, modID string, u model.ModUpdate) error {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE mods SET
 			name          = COALESCE($2,  name),
-			energy_type   = COALESCE($3,  energy_type),
-			description   = $4,
-			author        = $5,
-			license       = $6,
-			url_source    = $7,
-			url_modrinth  = $8,
-			url_wiki      = $9,
-			url_issues    = $10,
-			url_discord   = $11,
-			modrinth_slug = $12
+			description   = $3,
+			author        = $4,
+			license       = $5,
+			url_source    = $6,
+			url_modrinth  = $7,
+			url_wiki      = $8,
+			url_issues    = $9,
+			url_discord   = $10,
+			modrinth_slug = $11
 		WHERE mod_id = $1
-	`, modID, u.Name, u.EnergyType,
+	`, modID, u.Name,
 		u.Description, u.Author, u.License,
 		u.URLSource, u.URLModrinth, u.URLWiki, u.URLIssues,
 		u.URLDiscord, u.ModrinthSlug)
@@ -230,16 +247,13 @@ func (d *DB) UpdateModFull(ctx context.Context, modID string, u model.ModUpdate)
 	return nil
 }
 
-// UpdateMachineType updates fields of a machine type. Caller must be an admin (enforced at API layer).
-func (d *DB) UpdateMachineType(ctx context.Context, modID, machineID string, name *string, baseEUPerTick, maxEUPerTick *int64) error {
+// UpdateMachineType updates the display name of a machine type. Caller must be an admin (enforced at API layer).
+func (d *DB) UpdateMachineType(ctx context.Context, modID, machineID string, name *string) error {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE machine_types
-		SET
-			name             = COALESCE($3, name),
-			base_eu_per_tick = COALESCE($4, base_eu_per_tick),
-			max_eu_per_tick  = COALESCE($5, max_eu_per_tick)
+		SET name = COALESCE($3, name)
 		WHERE mod_id = $1 AND machine_id = $2
-	`, modID, machineID, name, baseEUPerTick, maxEUPerTick)
+	`, modID, machineID, name)
 	if err != nil {
 		return fmt.Errorf("db: update machine type: %w", err)
 	}
@@ -702,9 +716,6 @@ func (d *DB) ListAllMachines(ctx context.Context) ([]*model.MachineType, error) 
 	rows, err := d.Pool.Query(ctx, `
 		SELECT mt.mod_id, mt.machine_id,
 		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
-		       COALESCE(mt.base_eu_per_tick, 0), COALESCE(mt.max_eu_per_tick, 0),
-		       COALESCE(mt.max_slots, 0), COALESCE(mt.energy_type, ''),
-		       COALESCE(mt.upgradable, false),
 		       (SELECT COUNT(*) FROM recipes r WHERE r.machine_mod_id = mt.mod_id AND r.machine_id = mt.machine_id)
 		FROM machine_types mt
 		ORDER BY mt.mod_id, mt.machine_id
@@ -716,11 +727,7 @@ func (d *DB) ListAllMachines(ctx context.Context) ([]*model.MachineType, error) 
 	var machines []*model.MachineType
 	for rows.Next() {
 		mt := &model.MachineType{}
-		if err := rows.Scan(
-			&mt.ModID, &mt.MachineID, &mt.Name,
-			&mt.BaseEUPerTick, &mt.MaxEUPerTick, &mt.MaxSlots,
-			&mt.EnergyType, &mt.Upgradable, &mt.RecipeCount,
-		); err != nil {
+		if err := rows.Scan(&mt.ModID, &mt.MachineID, &mt.Name, &mt.RecipeCount); err != nil {
 			return nil, fmt.Errorf("db: scan machine: %w", err)
 		}
 		machines = append(machines, mt)
@@ -806,7 +813,7 @@ func groupMachines(all []*model.MachineType, interfaces []MachineInterface) []*m
 		for _, v := range members {
 			grouped.RecipeCount += v.RecipeCount
 			grouped.Variants = append(grouped.Variants, model.MachineVariant{
-				ModID: v.ModID, MachineID: v.MachineID, Name: v.Name, BaseEUPerTick: v.BaseEUPerTick,
+				ModID: v.ModID, MachineID: v.MachineID, Name: v.Name,
 			})
 		}
 		out = append(out, &grouped)
@@ -831,9 +838,7 @@ func (d *DB) ListMachinesByMod(ctx context.Context, modID string) ([]*model.Mach
 	}
 
 	rows, err := d.Pool.Query(ctx, `
-		SELECT mod_id, machine_id, name,
-		       COALESCE(base_eu_per_tick, 0), COALESCE(max_eu_per_tick, 0),
-		       COALESCE(max_slots, 0), COALESCE(energy_type, '')
+		SELECT mod_id, machine_id, name
 		FROM machine_types
 		WHERE mod_id = $1
 		ORDER BY machine_id
@@ -846,11 +851,7 @@ func (d *DB) ListMachinesByMod(ctx context.Context, modID string) ([]*model.Mach
 	var machines []*model.MachineType
 	for rows.Next() {
 		mt := &model.MachineType{}
-		if err := rows.Scan(
-			&mt.ModID, &mt.MachineID, &mt.Name,
-			&mt.BaseEUPerTick, &mt.MaxEUPerTick, &mt.MaxSlots,
-			&mt.EnergyType,
-		); err != nil {
+		if err := rows.Scan(&mt.ModID, &mt.MachineID, &mt.Name); err != nil {
 			return nil, fmt.Errorf("db: scan machine: %w", err)
 		}
 		machines = append(machines, mt)
@@ -903,12 +904,12 @@ func (d *DB) UpdateRecipeName(ctx context.Context, recipeID string, name *string
 func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID, itemID, fluidModID, fluidID string) ([]*model.Recipe, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT id, machine_mod_id, machine_id, source_mod_id, machine_name, name,
-		       duration_ticks, eu_per_tick, total_eu
+		       duration_ticks
 		FROM (
 			SELECT r.id::text AS id, r.machine_mod_id, r.machine_id, r.source_mod_id,
 			       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name) AS machine_name,
 			       r.name,
-			       r.duration_ticks, r.eu_per_tick, r.total_eu
+			       r.duration_ticks
 			FROM recipes r
 			LEFT JOIN machine_types mt ON mt.mod_id = r.machine_mod_id AND mt.machine_id = r.machine_id
 			WHERE ( ($2 <> '' AND r.machine_mod_id = $1 AND r.machine_id = $2)
@@ -931,7 +932,7 @@ func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID
 			SELECT r.id::text AS id, mi.machine_mod_id, mi.machine_id, r.source_mod_id,
 			       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name) AS machine_name,
 			       r.name,
-			       r.duration_ticks, r.eu_per_tick, r.total_eu
+			       r.duration_ticks
 			FROM recipes r
 			JOIN machine_interfaces mi ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
 			LEFT JOIN machine_types mt ON mt.mod_id = mi.machine_mod_id AND mt.machine_id = mi.machine_id
@@ -956,7 +957,7 @@ func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID
 		rec := &model.Recipe{}
 		if err := rows.Scan(
 			&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.SourceModID, &rec.MachineName, &rec.Name,
-			&rec.DurationTicks, &rec.EUPerTick, &rec.TotalEU,
+			&rec.DurationTicks,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan recipe: %w", err)
 		}
@@ -969,7 +970,7 @@ func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*
 	rows, err := d.Pool.Query(ctx, `
 		SELECT r.id::text, r.machine_mod_id, r.machine_id, r.source_mod_id,
 		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
-		       r.name, r.duration_ticks, r.eu_per_tick, r.total_eu, r.shape
+		       r.name, r.duration_ticks, r.shape
 		FROM recipes r
 		LEFT JOIN machine_types mt ON mt.mod_id = r.machine_mod_id AND mt.machine_id = r.machine_id
 		WHERE r.machine_mod_id = $1
@@ -979,7 +980,7 @@ func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*
 
 		SELECT r.id::text, mi.machine_mod_id, mi.machine_id, r.source_mod_id,
 		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
-		       r.name, r.duration_ticks, r.eu_per_tick, r.total_eu, r.shape
+		       r.name, r.duration_ticks, r.shape
 		FROM recipes r
 		JOIN machine_interfaces mi ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
 		LEFT JOIN machine_types mt ON mt.mod_id = mi.machine_mod_id AND mt.machine_id = mi.machine_id
@@ -998,7 +999,7 @@ func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*
 		rec := &model.Recipe{}
 		if err := rows.Scan(
 			&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.SourceModID, &rec.MachineName, &rec.Name,
-			&rec.DurationTicks, &rec.EUPerTick, &rec.TotalEU, &rec.Shape,
+			&rec.DurationTicks, &rec.Shape,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan recipe: %w", err)
 		}
@@ -1036,11 +1037,11 @@ func (d *DB) CreateRecipe(ctx context.Context, modID string, req *model.CreateRe
 	// 1. Insert recipe.
 	rec := &model.Recipe{}
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO recipes (id, machine_mod_id, machine_id, source_mod_id, duration_ticks, eu_per_tick, total_eu)
-		VALUES (gen_random_uuid(), $1, $2, $1, $3, $4, $5)
-		RETURNING id::text, machine_mod_id, machine_id, source_mod_id, duration_ticks, eu_per_tick, total_eu
-	`, modID, req.MachineID, req.DurationTicks, req.EUPerTick, int64(req.DurationTicks)*req.EUPerTick,
-	).Scan(&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.SourceModID, &rec.DurationTicks, &rec.EUPerTick, &rec.TotalEU); err != nil {
+		INSERT INTO recipes (id, machine_mod_id, machine_id, source_mod_id, duration_ticks)
+		VALUES (gen_random_uuid(), $1, $2, $1, $3)
+		RETURNING id::text, machine_mod_id, machine_id, source_mod_id, duration_ticks
+	`, modID, req.MachineID, req.DurationTicks,
+	).Scan(&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.SourceModID, &rec.DurationTicks); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrConflict
 		}
@@ -1412,28 +1413,4 @@ func (d *DB) ListVillagerTrades(ctx context.Context, profession string, tier int
 		trades = append(trades, t)
 	}
 	return trades, rows.Err()
-}
-
-// ListUpgradeTiers returns all upgrade tiers across mods, cheapest (lowest EU bonus) first.
-// Used by the solve UI to populate the upgrade tier picker.
-func (d *DB) ListUpgradeTiers(ctx context.Context) ([]model.UpgradeTier, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT id, mod_id, name, COALESCE(eu_bonus_per_slot, 0), item_ref
-		FROM upgrade_tiers
-		ORDER BY eu_bonus_per_slot NULLS LAST, name
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("db: list upgrade tiers: %w", err)
-	}
-	defer rows.Close()
-
-	var tiers []model.UpgradeTier
-	for rows.Next() {
-		var t model.UpgradeTier
-		if err := rows.Scan(&t.ID, &t.ModID, &t.Name, &t.EUBonusPerSlot, &t.ItemID); err != nil {
-			return nil, fmt.Errorf("db: scan upgrade tier: %w", err)
-		}
-		tiers = append(tiers, t)
-	}
-	return tiers, rows.Err()
 }

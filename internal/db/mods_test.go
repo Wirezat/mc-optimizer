@@ -1,9 +1,11 @@
 package db
 
 import (
+	"context"
 	"testing"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
 // TestGroupMachines_FoldsImplementersIntoBase asserts groupMachines folds
@@ -11,12 +13,12 @@ import (
 // RecipeCount summed), while name-alike and multi-base machines stay ungrouped.
 func TestGroupMachines_FoldsImplementersIntoBase(t *testing.T) {
 	all := []*model.MachineType{
-		{ModID: "testmod", MachineID: "compressor", Name: "compressor", BaseEUPerTick: 10, RecipeCount: 5},
-		{ModID: "testmod", MachineID: "bronze_compressor", Name: "bronze_compressor", BaseEUPerTick: 2, RecipeCount: 3},
-		{ModID: "testmod", MachineID: "steel_compressor", Name: "steel_compressor", BaseEUPerTick: 4, RecipeCount: 0},
-		{ModID: "testmod", MachineID: "implosion_compressor", Name: "implosion_compressor", BaseEUPerTick: 10, RecipeCount: 3},
-		{ModID: "testmod", MachineID: "electric_blast_furnace", Name: "electric_blast_furnace", BaseEUPerTick: 10, RecipeCount: 7},
-		{ModID: "testmod", MachineID: "multi_processing_array", Name: "multi_processing_array", BaseEUPerTick: 10, RecipeCount: 2},
+		{ModID: "testmod", MachineID: "compressor", Name: "compressor", RecipeCount: 5},
+		{ModID: "testmod", MachineID: "bronze_compressor", Name: "bronze_compressor", RecipeCount: 3},
+		{ModID: "testmod", MachineID: "steel_compressor", Name: "steel_compressor", RecipeCount: 0},
+		{ModID: "testmod", MachineID: "implosion_compressor", Name: "implosion_compressor", RecipeCount: 3},
+		{ModID: "testmod", MachineID: "electric_blast_furnace", Name: "electric_blast_furnace", RecipeCount: 7},
+		{ModID: "testmod", MachineID: "multi_processing_array", Name: "multi_processing_array", RecipeCount: 2},
 	}
 	interfaces := []MachineInterface{
 		{MachineModID: "testmod", MachineID: "bronze_compressor", BaseModID: "testmod", BaseMachineID: "compressor"},
@@ -93,5 +95,52 @@ func TestGroupMachines_FoldsImplementersIntoBase(t *testing.T) {
 	}
 	if blastFurnaceRow.RecipeCount != 7 {
 		t.Errorf("electric_blast_furnace's recipe_count must not include multi_processing_array's, got %d", blastFurnaceRow.RecipeCount)
+	}
+}
+
+// The browser decides which plugin to ask about a machine, so it needs the
+// same answer solver.PluginMod gives in Go: the ecosystem when one is set,
+// the machine's own mod otherwise.
+func TestLookupMachinePluginMods(t *testing.T) {
+	d := testDB(t)
+	ctx := context.Background()
+
+	seedMod(t, d, "lmpm_host")
+	seedMod(t, d, "lmpm_addon")
+	seedMachineType(t, d, "lmpm_host", "own_machine")
+	seedMachineType(t, d, "lmpm_addon", "adopted_machine")
+	if _, err := d.Pool.Exec(ctx,
+		`UPDATE machine_types SET ecosystem = $1 WHERE mod_id = $2 AND machine_id = $3`,
+		"lmpm_host", "lmpm_addon", "adopted_machine"); err != nil {
+		t.Fatalf("set ecosystem: %v", err)
+	}
+
+	got, err := d.LookupMachinePluginMods(ctx, []solver.MachineRef{
+		{ModID: "lmpm_host", MachineID: "own_machine"},
+		{ModID: "lmpm_addon", MachineID: "adopted_machine"},
+	})
+	if err != nil {
+		t.Fatalf("LookupMachinePluginMods: %v", err)
+	}
+	want := map[string]string{
+		"lmpm_host:own_machine":      "lmpm_host",
+		"lmpm_addon:adopted_machine": "lmpm_host",
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("got[%q] = %q, want %q", k, got[k], v)
+		}
+	}
+}
+
+// An empty request must not reach the database at all.
+func TestLookupMachinePluginModsEmpty(t *testing.T) {
+	d := testDB(t)
+	got, err := d.LookupMachinePluginMods(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("LookupMachinePluginMods: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d entries, want 0", len(got))
 	}
 }

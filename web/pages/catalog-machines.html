@@ -79,13 +79,12 @@
                 <th style="width:40px;"></th>
                 <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
                 <th data-i18n="catalog.machines.col.machine_id"></th>
-                <th data-i18n="catalog.machines.col.max_eu_t"></th>
-                <th data-i18n="catalog.machines.col.energy_type"></th>
+                <th data-i18n="catalog.machines.col.costs"></th>
                 <th data-i18n="catalog.machines.col.recipes"></th>
               </tr>
             </thead>
             <tbody id="machine-tbody">
-              <tr><td colspan="6" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
+              <tr><td colspan="5" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
             </tbody>
           </table>
         </div>
@@ -125,8 +124,8 @@
   const openGroups = new Map();
   const groupRows = new Map();
 
-  // Ungrouped machines get the same hover as grouped ones (name + energy),
-  // via a single-entry "variants" list instead of a real tier group.
+  // Ungrouped machines get the same hover as grouped ones, via a single-entry
+  // "variants" list.
   function machineIconCellHTML(m) {
     const variants = m.variants && m.variants.length > 1 ? m.variants : [m];
     if (!variants.some(v => v.texture_url)) return `<span class="machine-icon-cell"></span>`;
@@ -144,16 +143,27 @@
     const grid = `<div class="infocard-grid machine-variant-grid" data-cols="${variants.length}">${
       variants.map(v => `<div class="infocard-grid-cell">${v.texture_url ? `<img data-hidpi-px="72" src="${esc(v.texture_url)}" alt="">` : ''}</div>`).join('')
     }</div>`;
-    const rows = `<div class="infocard-section">${
-      variants.map(v => `<div class="infocard-row"><span class="infocard-key">${esc(v.name)}</span><span class="infocard-val">${v.base_eu_per_tick || '—'} EU/t</span></div>`).join('')
-    }</div>`;
-
     return `<span class="machine-icon-cell" data-infocard-inline>${triggerImg}</span>
-      <div class="infocard-def" hidden>${grid}${rows}</div>`;
+      <div class="infocard-def" hidden>${grid}</div>`;
+  }
+
+  // Formats a plugin cost list as one comma-joined "resource amount" string.
+  // The resource key (eu, steam, fe, ...) is a technical identifier, like a
+  // mod or item id, and is never translated. No variant computed yet renders
+  // as the same muted placeholder the table uses elsewhere for "no data",
+  // never as a zero — that would claim knowledge the catalog doesn't have.
+  function costsCellHTML(costs) {
+    if (!costs || !costs.length) return '<span class="td-muted">—</span>';
+    return costs.map(c => `${esc(c.resource)} ${esc(fmtRational(c.amount.num, c.amount.den))}`).join(', ');
+  }
+
+  function fmtRational(num, den) {
+    if (!den || den === 1) return String(num);
+    const dec = num / den;
+    return Number.isInteger(dec) ? String(dec) : (num + '/' + den);
   }
 
   function machineRowEl(m) {
-    const energyVal = m.base_eu_per_tick || '';
     const recipesUrl = `/catalog/items?producedByMachine=${encodeURIComponent(m.mod_id + ':' + m.machine_id)}`;
     const tierBadge = m.variants && m.variants.length > 1
       ? `<span class="badge badge-neutral" style="margin-left:var(--gap-inline);">${esc(t('catalog.machines.tier_count').replace('{n}', m.variants.length))}</span>`
@@ -163,8 +173,7 @@
       <td>${machineIconCellHTML(m)}</td>
       <td><a href="${esc(recipesUrl)}" class="row-name-link">${esc(m.name || m.machine_id)}</a>${tierBadge}</td>
       <td class="td-mono td-muted">${esc(m.machine_id)}</td>
-      <td class="td-muted">${energyVal || '—'}</td>
-      <td><span class="badge badge-neutral">${esc(m.energy_type || '—')}</span></td>
+      <td class="td-muted">${costsCellHTML(m.costs)}</td>
       <td>${m.recipe_count
         ? `<a href="${esc(recipesUrl)}" class="recipe-count-link">${m.recipe_count}</a>`
         : `<span class="td-muted">—</span>`}</td>`;
@@ -180,7 +189,6 @@
       <td><span class="skeleton-bar" style="width:24px;"></span></td>
       <td><span class="skeleton-bar" style="width:60%;"></span></td>
       <td><span class="skeleton-bar" style="width:50%;"></span></td>
-      <td><span class="skeleton-bar" style="width:30%;"></span></td>
       <td><span class="skeleton-bar" style="width:40%;"></span></td>
       <td><span class="skeleton-bar" style="width:20%;"></span></td>`;
     return [tr];
@@ -213,7 +221,7 @@
     const q = searchEl.value.trim().toLowerCase();
     filtered = urlMod ? allMachines.filter(m => m.mod_id === urlMod) : allMachines;
     if (q) filtered = filtered.filter(m => {
-      if (wuiFilter(m, q, ['name', 'machine_id', 'mod_name', 'energy_type', 'base_eu_per_tick'])) return true;
+      if (wuiFilter(m, q, ['name', 'machine_id', 'mod_name'])) return true;
       return (m.variants || []).some(v => wuiFilter(v, q, ['name', 'machine_id']));
     });
     countEl.textContent = tCount(filtered.length, 'catalog.machines.count');
@@ -226,7 +234,7 @@
     groupBodies = [];
     tbody.innerHTML = '';
     if (!filtered.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_machines')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_machines')}</td></tr>`;
       return;
     }
 
@@ -243,7 +251,7 @@
       const hdBody = document.createElement('tbody');
       const hdRow = document.createElement('tr');
       hdRow.className = 'table-group-hd collapsed';
-      hdRow.innerHTML = `<td colspan="6"><span class="group-hd-arrow"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${machines.length}</span></td>`;
+      hdRow.innerHTML = `<td colspan="5"><span class="group-hd-arrow"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${machines.length}</span></td>`;
       hdBody.appendChild(hdRow);
 
       const rowsBody = document.createElement('tbody');
@@ -279,7 +287,7 @@
       secondary: r => r.mod_name,
       fetch(q, offset) {
         const rows = allMachines.filter(m => {
-          if (wuiFilter([m], q, ['name', 'machine_id', 'mod_name', 'energy_type', 'base_eu_per_tick']).length) return true;
+          if (wuiFilter([m], q, ['name', 'machine_id', 'mod_name']).length) return true;
           return (m.variants || []).some(v => wuiFilter([v], q, ['name', 'machine_id']).length);
         });
         return Promise.resolve({ rows: rows.slice(offset, offset + 50), hasMore: offset + 50 < rows.length });

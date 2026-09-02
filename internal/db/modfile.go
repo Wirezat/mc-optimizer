@@ -2,24 +2,33 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
 )
 
+// marshalModData JSON-encodes a mod's opaque extra fields for a mod_data
+// JSONB column, treating a nil/empty map as an explicit empty object.
+func marshalModData(m map[string]any) ([]byte, error) {
+	if len(m) == 0 {
+		return []byte("{}"), nil
+	}
+	return json.Marshal(m)
+}
+
 // UpsertMod inserts or updates a mod record. Fields that are empty strings are
 // not overwritten (DO UPDATE only touches non-empty values).
 func (d *DB) UpsertMod(ctx context.Context, m model.ModDef) error {
 	_, err := d.Pool.Exec(ctx, `
-		INSERT INTO mods (mod_id, name, energy_type, description, author, license,
+		INSERT INTO mods (mod_id, name, description, author, license,
 		                  modrinth_slug, url_source, url_modrinth, url_wiki, url_issues, url_discord)
-		VALUES ($1, $2, $3,
-		        NULLIF($4,''), NULLIF($5,''), NULLIF($6,''),
-		        NULLIF($7,''), NULLIF($8,''), NULLIF($9,''),
-		        NULLIF($10,''), NULLIF($11,''), NULLIF($12,''))
+		VALUES ($1, $2,
+		        NULLIF($3,''), NULLIF($4,''), NULLIF($5,''),
+		        NULLIF($6,''), NULLIF($7,''), NULLIF($8,''),
+		        NULLIF($9,''), NULLIF($10,''), NULLIF($11,''))
 		ON CONFLICT (mod_id) DO UPDATE SET
 		    name          = CASE WHEN EXCLUDED.name <> mods.mod_id THEN EXCLUDED.name ELSE mods.name END,
-		    energy_type   = EXCLUDED.energy_type,
 		    description   = COALESCE(NULLIF(EXCLUDED.description,''),  mods.description),
 		    author        = COALESCE(NULLIF(EXCLUDED.author,''),        mods.author),
 		    license       = COALESCE(NULLIF(EXCLUDED.license,''),       mods.license),
@@ -30,7 +39,7 @@ func (d *DB) UpsertMod(ctx context.Context, m model.ModDef) error {
 		    url_issues    = COALESCE(NULLIF(EXCLUDED.url_issues,''),    mods.url_issues),
 		    url_discord   = COALESCE(NULLIF(EXCLUDED.url_discord,''),   mods.url_discord)
 	`,
-		m.ModID, m.Name, m.EnergyType,
+		m.ModID, m.Name,
 		m.Description, m.Author, m.License,
 		m.ModrinthSlug, m.URLSource, m.URLModrinth,
 		m.URLWiki, m.URLIssues, m.URLDiscord,
@@ -45,7 +54,7 @@ func (d *DB) UpsertFluids(ctx context.Context, modID string, fluidIDs []string) 
 	}
 	// Ensure mod exists before inserting fluids.
 	if _, err := d.Pool.Exec(ctx, `
-		INSERT INTO mods (mod_id, name, energy_type) VALUES ($1, $1, 'NONE')
+		INSERT INTO mods (mod_id, name) VALUES ($1, $1)
 		ON CONFLICT (mod_id) DO NOTHING
 	`, modID); err != nil {
 		return fmt.Errorf("db: upsert fluids: ensure mod %s: %w", modID, err)
@@ -63,27 +72,18 @@ func (d *DB) UpsertFluids(ctx context.Context, modID string, fluidIDs []string) 
 
 // UpsertMachineType inserts or updates a machine_type record and its slots.
 func (d *DB) UpsertMachineType(ctx context.Context, m model.MachineTypeDef) error {
-	energyType := (*string)(nil)
-	if m.EnergyType != nil {
-		energyType = m.EnergyType
+	modData, err := marshalModData(m.ModData)
+	if err != nil {
+		return fmt.Errorf("db: upsert machine_type %s:%s: encode mod_data: %w", m.ModID, m.MachineID, err)
 	}
 	if _, err := d.Pool.Exec(ctx, `
-		INSERT INTO machine_types
-		    (mod_id, machine_id, name, base_eu_per_tick, max_eu_per_tick, max_slots, energy_type, upgradable, fixed_recipe_eu_cap)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO machine_types (mod_id, machine_id, name, ecosystem, mod_data)
+		VALUES ($1, $2, $3, NULLIF($4, ''), $5)
 		ON CONFLICT (mod_id, machine_id) DO UPDATE SET
-		    name                = EXCLUDED.name,
-		    base_eu_per_tick    = COALESCE(EXCLUDED.base_eu_per_tick, machine_types.base_eu_per_tick),
-		    max_eu_per_tick     = COALESCE(EXCLUDED.max_eu_per_tick,  machine_types.max_eu_per_tick),
-		    max_slots           = COALESCE(EXCLUDED.max_slots,        machine_types.max_slots),
-		    energy_type         = COALESCE(EXCLUDED.energy_type,      machine_types.energy_type),
-		    upgradable          = EXCLUDED.upgradable,
-		    fixed_recipe_eu_cap = EXCLUDED.fixed_recipe_eu_cap
-	`,
-		m.ModID, m.MachineID, m.Name,
-		m.BaseEnergyPerTick, m.MaxEnergyPerTick, m.MaxSlots,
-		energyType, m.Upgradable, m.FixedRecipeEUCap,
-	); err != nil {
+		    name      = EXCLUDED.name,
+		    ecosystem = EXCLUDED.ecosystem,
+		    mod_data  = EXCLUDED.mod_data
+	`, m.ModID, m.MachineID, m.Name, m.Ecosystem, modData); err != nil {
 		return fmt.Errorf("db: upsert machine_type %s:%s: %w", m.ModID, m.MachineID, err)
 	}
 	return d.UpsertMachineSlots(ctx, m.Slots)
@@ -133,24 +133,6 @@ func (d *DB) UpsertDirectTagMembers(ctx context.Context, tagName string, members
 		`, tagID, modID, itemID); err != nil {
 			return fmt.Errorf("db: upsert tag member %s: %w", ref, err)
 		}
-	}
-	return nil
-}
-
-// UpsertUpgradeTier inserts or updates an upgrade tier definition (e.g. MI's
-// basic/advanced/turbo/highly_advanced/quantum upgrade items with their
-// extraMaxEu bonus per slot). The item's own max_stack (items table) is the
-// upgrade count cap — not stored here, see GetUpgradeTiers.
-func (d *DB) UpsertUpgradeTier(ctx context.Context, modID, name string, euBonusPerSlot int64, itemRef string) error {
-	if _, err := d.Pool.Exec(ctx, `
-		INSERT INTO upgrade_tiers (id, mod_id, name, eu_bonus_per_slot, item_ref)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4)
-		ON CONFLICT (item_ref) DO UPDATE SET
-		    mod_id            = EXCLUDED.mod_id,
-		    name              = EXCLUDED.name,
-		    eu_bonus_per_slot = EXCLUDED.eu_bonus_per_slot
-	`, modID, name, euBonusPerSlot, itemRef); err != nil {
-		return fmt.Errorf("db: upsert upgrade tier %q: %w", itemRef, err)
 	}
 	return nil
 }

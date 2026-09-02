@@ -53,9 +53,9 @@
     .mg-build-field input.input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     .mg-build-field .mg-build-max { color: var(--text-faint); }
 
-    /* ── MG status toggle — same component as before, one extra state:
-       planned (nothing built) / partial (some machines or upgrades missing) /
-       built (complete). Derived from the numbers, click = fill/reset shortcut. */
+    /* ── MG status toggle — planned (nothing built) / partial (some machines
+       missing) / built (complete). Derived from the numbers, click =
+       fill/reset shortcut. */
     .mg-tog {
       display: inline-flex;
       align-items: center;
@@ -168,12 +168,11 @@
                     <th style="width:32px" data-i18n="solve.col.count"></th>
                     <th data-i18n="solve.col.machine"></th>
                     <th style="width:120px" data-i18n="solve.col.recipe"></th>
-                    <th style="width:105px" data-i18n="solve.upgrade.label"></th>
                     <th style="width:80px"></th>
                     <th style="width:36px"></th>
                   </tr></thead>
                   <tbody id="mg-list">
-                    <tr><td colspan="6"><span class="td-faint" data-i18n="common.loading"></span></td></tr>
+                    <tr><td colspan="5"><span class="td-faint" data-i18n="common.loading"></span></td></tr>
                   </tbody>
                 </table>
               </div>
@@ -216,18 +215,15 @@
 
   const _plID = window.location.pathname.split('/')[2];
   let _pl = null;
-  let _tiers = []; // upgrade tiers, for resolving upgrade_tier_id -> name (display only, no editor here)
   let _recipeOutputs = new Map(); // recipe_id -> display name of what it produces
 
   async function init() {
-    const [res, tRes] = await Promise.all([
+    const [res] = await Promise.all([
       apiFetch('/api/production-lines/' + _plID),
-      apiFetch('/api/upgrade-tiers'),
       loadCatalog(),
     ]);
     if (!res?.ok) { window.location.href = '/saves'; return; }
     _pl = await res.json();
-    if (tRes?.ok) _tiers = await tRes.json();
 
     const plTitle = _pl.target_item_name || _pl.target_item_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     document.title = 'MC Optimizer — ' + plTitle;
@@ -253,10 +249,8 @@
     render();
   }
 
-  // machine_groups only stores recipe_id, not what it produces — resolve via
-  // the recipe catalog (one fetch per distinct machine used, since that's the
-  // catalog's own filter granularity) so the machine-group rows can show
-  // "→ output name" like solve.html's draft result does.
+  // machine_groups stores only recipe_id, so the output name is resolved via
+  // the recipe catalog, one fetch per distinct machine.
   async function loadRecipeOutputs() {
     const machines = new Map(); // "mod:machine" -> {mod, machine}
     for (const g of (_pl.machine_groups || [])) {
@@ -290,11 +284,10 @@
       `<span id="pl-status-pill" class="badge ${tone}">${esc(t('status.' + status))}</span>`;
   }
 
-  // A group is complete when all its machines stand AND (if it has a target upgrade
-  // tier) all upgrades are installed. The whole line is complete when every group is.
+  // A group is complete when all its machines stand. The whole line is
+  // complete when every group is.
   function isGroupComplete(g) {
-    return (g.built_count || 0) >= g.count
-        && (!g.upgrade_tier_id || (g.current_upgrade_count || 0) >= g.upgrade_count);
+    return (g.built_count || 0) >= g.count;
   }
   function isLineComplete() {
     const mgs = _pl.machine_groups || [];
@@ -326,9 +319,6 @@
         <span class="detail-val">${esc(_pl.optimize_mode.toUpperCase())}</span>
       </div>
       ${statPair(t('common.rate'), rate, curRate, incomplete)}
-      ${(_pl.target_eu_per_tick || 0) > 0
-        ? statPair('EU/t', String(_pl.target_eu_per_tick), String(_pl.current_eu_per_tick || 0), incomplete)
-        : ''}
     `;
     initHiDPIRender(document.getElementById('pl-meta'));
   }
@@ -353,9 +343,7 @@
     }
   }
 
-  // Rate/upgrade editing (formerly "More output" resolve panel + per-group
-  // upgrade editor) is being redone separately — this bar is just status
-  // actions for now: mark machines built, archive the line.
+  // Status actions only: mark machines built, archive the line.
   function renderActionBar() {
     const bar = document.getElementById('action-bar');
 
@@ -374,16 +362,14 @@
   }
 
   // Machine-group rows render into the <tbody> of the .table set up in the
-  // page markup (thead columns are static HTML). Rate/upgrade editing for the
-  // TARGET loadout is being redone separately, not part of this pass — but the
-  // CURRENT build state (machines built / upgrades installed) is editable
-  // inline per row.
+  // page markup (thead columns are static HTML). The current build state
+  // (machines built) is editable inline per row.
   function renderMachineGroups() {
     const mgs       = _pl.machine_groups || [];
     const container = document.getElementById('mg-list');
 
     if (!mgs.length) {
-      container.innerHTML = `<tr><td colspan="6"><span class="td-faint">—</span></td></tr>`;
+      container.innerHTML = `<tr><td colspan="5"><span class="td-faint">—</span></td></tr>`;
       return;
     }
 
@@ -393,27 +379,23 @@
       btn.addEventListener('click', () => toggleMGStatus(btn.dataset.mgtoggle));
     });
     container.querySelectorAll('[data-built-input]').forEach(inp => {
-      inp.addEventListener('change', () => onBuildFieldChange(inp, 'built_count'));
-    });
-    container.querySelectorAll('[data-upg-input]').forEach(inp => {
-      inp.addEventListener('change', () => onBuildFieldChange(inp, 'current_upgrade_count'));
+      inp.addEventListener('change', () => onBuildFieldChange(inp));
     });
   }
 
   // Derived group status: planned (nothing built), partial (something but not
-  // everything), built (complete) — computed from built_count/current_upgrade_count,
-  // never stored directly. The toggle icon reflects it; clicking is a shortcut:
-  // planned/partial fill both numbers to target, built resets them to zero.
+  // everything), built (complete) — computed from built_count, never stored
+  // directly. The toggle icon reflects it; clicking is a shortcut: planned/partial
+  // fill the count to target, built resets it to zero.
   function groupState(g) {
     if (isGroupComplete(g)) return 'built';
-    if ((g.built_count || 0) === 0 && (g.current_upgrade_count || 0) === 0) return 'planned';
+    if ((g.built_count || 0) === 0) return 'planned';
     return 'partial';
   }
   const STATE_GLYPH = { planned: '⚒', partial: '◐', built: '✓' };
 
-  // Status-toggle cell: a clickable icon button while the line is active,
-  // else a plain static icon. canToggle is derived from _pl (module state)
-  // rather than passed down, since every cell-builder needs it independently.
+  // Status-toggle cell: a clickable icon button while the line is active, a
+  // plain static icon otherwise.
   function mgTogHTML(g) {
     const canToggle = _pl.status === 'active';
     const state     = groupState(g);
@@ -441,20 +423,12 @@
         <input class="input" type="number" min="0" max="${g.count}" step="1" value="${g.built_count || 0}"
                data-built-input="${esc(g.id)}" data-max="${g.count}" />
         <span class="mg-build-max">/${g.count}</span>
-      </label>
-      ${g.upgrade_tier_id ? `<label class="mg-build-field">
-        <span class="mg-build-field-label">${esc(t('production_line.build.upg'))}</span>
-        <input class="input" type="number" min="0" max="${g.upgrade_count}" step="1" value="${g.current_upgrade_count || 0}"
-               data-upg-input="${esc(g.id)}" data-max="${g.upgrade_count}" />
-        <span class="mg-build-max">/${g.upgrade_count}</span>
-      </label>` : ''}`;
+      </label>`;
   }
 
   function mgRowHTML(g) {
     const name    = machineName(g.machine_mod_id, g.machine_id);
     const outName = _recipeOutputs.get(g.recipe_id) || '—';
-    const tier    = g.upgrade_tier_id ? _tiers.find(tr => tr.id === g.upgrade_tier_id) : null;
-    const upgText = tier ? `${tier.name} ×${g.upgrade_count}` : '';
 
     return `<tr>
         <td>${esc(g.count)}×</td>
@@ -467,7 +441,6 @@
             </span>
         </td>
         <td class="td-mono" style="font-size:var(--text-xs)" title="${esc(outName)}">${esc(outName)}</td>
-        <td class="td-mono" style="font-size:var(--text-xs)" title="${esc(upgText)}">${esc(upgText)}</td>
         <td>${mgBuildFieldHTML(g)}</td>
         <td>${mgTogHTML(g)}</td>
     </tr>`;
@@ -496,8 +469,7 @@
 
   function ioRow(e, isPrimary) {
     const rate = fmtFrac(e.rate_num, e.rate_den) + ' /' + (_pl.time_unit || 't');
-    // Same fallback as targetName above: a name-less id (mid-import, before
-    // translations load) still reads as words instead of raw snake_case.
+    // Same fallback as targetName above: a name-less id reads as words.
     const name  = e.name || e.item_fluid_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     const label = iconTextHTML(e.mod_id, e.item_fluid_id, {
       isFluid:  e.io_type === 'fluid',
@@ -526,18 +498,13 @@
     if (res?.ok || res?.status === 204) reload();
   }
 
-  // Sends the group's new build state; the stored coarse status is kept in sync
-  // as a side effect ('built' when complete, 'planned' otherwise) so other views
-  // filtering on status stay correct. Always reloads — also on error, to snap an
-  // invalid input back to the server's state.
-  async function updateBuildState(g, builtCount, currentUpgradeCount) {
-    const complete = builtCount >= g.count
-      && (!g.upgrade_tier_id || currentUpgradeCount >= g.upgrade_count);
+  // Sends the group's new build state and keeps the coarse status in sync
+  // ('built' when complete, 'planned' otherwise). Always reloads, also on error.
+  async function updateBuildState(g, builtCount) {
     await apiFetch('/api/machine-groups/' + g.id + '/status', {
       method: 'PATCH', body: JSON.stringify({
-        status: complete ? 'built' : 'planned',
+        status: builtCount >= g.count ? 'built' : 'planned',
         built_count: builtCount,
-        current_upgrade_count: currentUpgradeCount,
       }),
     });
     reload();
@@ -551,20 +518,17 @@
   function toggleMGStatus(id) {
     const g = findGroup(id);
     if (!g) return;
-    if (isGroupComplete(g)) updateBuildState(g, 0, 0);
-    else updateBuildState(g, g.count, g.upgrade_tier_id ? g.upgrade_count : 0);
+    updateBuildState(g, isGroupComplete(g) ? 0 : g.count);
   }
 
-  function onBuildFieldChange(inp, field) {
-    const g = findGroup(inp.dataset.builtInput || inp.dataset.upgInput);
+  function onBuildFieldChange(inp) {
+    const g = findGroup(inp.dataset.builtInput);
     if (!g) return;
     const max = Number(inp.dataset.max);
     let v = Math.round(Number(inp.value));
     if (!Number.isFinite(v) || v < 0) v = 0;
     if (v > max) v = max;
-    const built = field === 'built_count' ? v : (g.built_count || 0);
-    const upg   = field === 'current_upgrade_count' ? v : (g.current_upgrade_count || 0);
-    updateBuildState(g, built, upg);
+    updateBuildState(g, v);
   }
 
   async function reload() {

@@ -18,19 +18,19 @@ import (
 
 // ModFileResult summarises one modfile ZIP import.
 type ModFileResult struct {
-	ModID          string   `json:"mod_id"`
-	Machines       int      `json:"machines"`
-	Recipes        int      `json:"recipes_imported"`
-	RecipesSkip    int      `json:"recipes_skipped"`
-	Items          int      `json:"items"`
-	Fluids         int      `json:"fluids"`
-	Translations   int      `json:"translations"`
-	Tags           int      `json:"tags"`
-	UpgradeTiers   int      `json:"upgrade_tiers"`
-	Textures       int      `json:"textures"`
-	BlockDrops     int      `json:"block_drops"`
-	VillagerTrades int      `json:"villager_trades"`
-	Warnings       []string `json:"warnings,omitempty"`
+	ModID           string   `json:"mod_id"`
+	Machines        int      `json:"machines"`
+	Recipes         int      `json:"recipes_imported"`
+	RecipesSkip     int      `json:"recipes_skipped"`
+	Items           int      `json:"items"`
+	Fluids          int      `json:"fluids"`
+	Translations    int      `json:"translations"`
+	Tags            int      `json:"tags"`
+	Textures        int      `json:"textures"`
+	BlockDrops      int      `json:"block_drops"`
+	VillagerTrades  int      `json:"villager_trades"`
+	PluginInstalled bool     `json:"plugin_installed"`
+	Warnings        []string `json:"warnings,omitempty"`
 }
 
 // RunModFile imports a single modfile ZIP.
@@ -68,6 +68,25 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 	def, err := ParseModFile(yamlData)
 	if err != nil {
 		return ModFileResult{}, fmt.Errorf("modfile: parse: %w", err)
+	}
+
+	// Plugin validation runs before any DB write below: a broken bundled
+	// plugin must never leave a half-imported mod behind.
+	bundle, err := findPluginBundle(zr.File)
+	if err != nil {
+		return ModFileResult{}, fmt.Errorf("modfile: %w", err)
+	}
+	var pluginDef *model.PluginDef
+	var pluginHasWizard bool
+	if bundle != nil {
+		pluginDef, err = ParsePluginFile(bundle.PluginYML)
+		if err != nil {
+			return ModFileResult{}, fmt.Errorf("modfile: %w", err)
+		}
+		pluginHasWizard, err = validatePluginJS(string(bundle.PluginJS))
+		if err != nil {
+			return ModFileResult{}, fmt.Errorf("modfile: %w", err)
+		}
 	}
 
 	res := ModFileResult{ModID: def.ModID}
@@ -151,18 +170,8 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 		res.Tags++
 	}
 
-	// 6b. Upgrade tiers.
-	for _, ut := range def.UpgradeTiers {
-		if err := imp.db.UpsertUpgradeTier(ctx, def.ModID, ut.Name, ut.EUBonusPerSlot, ut.ItemRef); err != nil {
-			warn("upgrade tier %q: %v", ut.Name, err)
-			continue
-		}
-		res.UpgradeTiers++
-	}
-
 	// 7. Machines — resolve name from translations then write.
 	enUS := def.Translations["en_us"]
-	miModIDs := []string{}
 	for _, m := range def.Machines {
 		name := m.LangKey
 		if enUS != nil {
@@ -176,15 +185,10 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 			continue
 		}
 		res.Machines++
-
-		// Collect MI-ecosystem mods for post-processing.
-		if m.Ecosystem == "modern_industrialization" {
-			miModIDs = append(miModIDs, def.ModID)
-		}
 	}
 
-	// 7b. Machine interfaces ("A implements B") — run after ALL machines are
-	// upserted, since AddMachineInterface requires both sides to already exist.
+	// 7b. Machine interfaces ("A implements B"), after all machines are upserted:
+	// AddMachineInterface requires both sides to exist.
 	for _, m := range def.Machines {
 		for _, ref := range m.Implements {
 			baseModID, baseMachineID, err := splitRef(ref, def.ModID)
@@ -197,18 +201,6 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 					warn("machine interface %s -> %s:%s: %v", m.MachineID, baseModID, baseMachineID, err)
 				}
 			}
-		}
-	}
-
-	// MI post-processing: default energy_type to 'eu' where the yaml didn't
-	// override it. Deliberately NOT calling SetMachinesUpgradable here — that
-	// blanket "upgradable=true for every eu machine" used to clobber the
-	// per-machine `upgradable: false` already curated in the yaml for steam
-	// tiers (bronze/steel) and fixed multiblocks (vacuum_freezer, etc). The
-	// yaml's own value (already written by UpsertMachineType above) is authoritative.
-	if len(miModIDs) > 0 {
-		if err := imp.db.SetMIEnergyType(ctx, miModIDs); err != nil {
-			warn("MI energy type: %v", err)
 		}
 	}
 
@@ -250,10 +242,8 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 		}
 		rel := strings.TrimPrefix(f.Name, "assets/")
 		dst := filepath.Join(imp.assetsDir, rel)
-		// A zip entry names its own path, so a crafted "assets/../../x" would
-		// have filepath.Join clean its way out of the asset tree and write
-		// anywhere the process can reach. Refuse rather than warn: an entry
-		// that tries this is not a mistake.
+		// A crafted entry path such as "assets/../../x" escapes the asset tree
+		// once filepath.Join cleans it.
 		if !underDir(imp.assetsDir, dst) {
 			warn("asset %s: path escapes the assets directory, skipped", f.Name)
 			continue
@@ -263,6 +253,22 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 			continue
 		}
 		res.Textures++
+	}
+
+	// 12. Record the plugin, now that everything else has succeeded.
+	if bundle != nil && pluginDef != nil {
+		if err := imp.db.UpsertModPlugin(ctx, db.ModPlugin{
+			ModID:       def.ModID,
+			DisplayName: pluginDef.DisplayName,
+			Version:     pluginDef.Version,
+			APIVersion:  pluginDef.APIVersion,
+			Source:      string(bundle.PluginJS),
+			HasWizard:   pluginHasWizard,
+			UploadedBy:  imp.UploadedBy,
+		}); err != nil {
+			return res, fmt.Errorf("modfile: record plugin: %w", err)
+		}
+		res.PluginInstalled = true
 	}
 
 	return res, nil
@@ -288,9 +294,7 @@ func ModRecipeToNormalized(r model.ModRecipeDef, sourceModID string) model.Norma
 		MachineID:   r.MachineID,
 		Duration:    r.DurationTicks,
 		Shape:       r.Shape,
-	}
-	if r.EnergyPerTick != nil {
-		norm.EUPerTick = *r.EnergyPerTick
+		ModData:     r.ModData,
 	}
 	for _, io := range r.ItemInputs {
 		norm.ItemInputs = append(norm.ItemInputs, model.NormalizedIO{

@@ -23,7 +23,7 @@ func GetFluidRecipesHandler(database *db.DB) http.HandlerFunc {
 			errInternal(w, err)
 			return
 		}
-		cards, err := buildRecipeCards(r.Context(), database, rows)
+		cards, err := buildRecipeCards(r.Context(), database, dedupeByRecipeID(rows))
 		if err != nil {
 			errInternal(w, err)
 			return

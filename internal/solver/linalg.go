@@ -10,6 +10,14 @@ var (
 	ErrUnderDetermined = errors.New("underdetermined system: infinite solutions")
 )
 
+// ErrNegativeRate reports a recipe the linear system can only satisfy by
+// running it backwards. A property of the recipe chain, not a server fault.
+type ErrNegativeRate struct{ RecipeID string }
+
+func (e *ErrNegativeRate) Error() string {
+	return fmt.Sprintf("solver: recipe %s has negative rate — check recipe chain", e.RecipeID)
+}
+
 // BuildStoichiometryMatrix creates the stoichiometry matrix S (items × recipes) from the recipe graph.
 // Returns S, the list of items, and the list of recipe IDs.
 func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ItemRef, []string) {
@@ -168,7 +176,7 @@ func SolveLinearSystem(g *RecipeGraph, targetRatePerTick Rational) (RateVector, 
 	}
 	for j, rate := range r {
 		if rate.IsNegative() {
-			return RateVector{}, fmt.Errorf("solver: recipe %s has negative rate — check recipe chain", recipeIDs[j])
+			return RateVector{}, &ErrNegativeRate{RecipeID: recipeIDs[j]}
 		}
 	}
 

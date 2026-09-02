@@ -4,7 +4,6 @@
 CREATE TABLE mods (
     mod_id        TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
-    energy_type   TEXT NOT NULL CHECK (energy_type IN ('EU', 'FE', 'SU', 'NONE', 'CUSTOM')),
     description   TEXT,
     author        TEXT,
     license       TEXT,
@@ -17,14 +16,14 @@ CREATE TABLE mods (
 );
 
 CREATE TABLE items (
-    mod_id    TEXT     NOT NULL REFERENCES mods(mod_id),
+    mod_id    TEXT     NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
     item_id   TEXT     NOT NULL,
     max_stack SMALLINT NOT NULL DEFAULT 64,
     PRIMARY KEY (mod_id, item_id)
 );
 
 CREATE TABLE fluids (
-    mod_id   TEXT NOT NULL REFERENCES mods(mod_id),
+    mod_id   TEXT NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
     fluid_id TEXT NOT NULL,
     PRIMARY KEY (mod_id, fluid_id)
 );
@@ -62,21 +61,15 @@ CREATE TABLE tag_values (
 CREATE INDEX ON tag_values (tag_name);
 
 CREATE TABLE machine_types (
-    mod_id              TEXT     NOT NULL REFERENCES mods(mod_id),
-    machine_id          TEXT     NOT NULL,
-    name                TEXT     NOT NULL,
-    base_eu_per_tick    BIGINT,
-    max_eu_per_tick     BIGINT,
-    max_slots           SMALLINT,
-    energy_type         TEXT,
-    upgradable          BOOLEAN  NOT NULL DEFAULT FALSE,
-    name_lang_key       TEXT,
-    -- Upgrade-immune ceiling on which recipes this machine can run, independent of
-    -- max_eu_per_tick (which upgrades add to). Models MI's Electric Blast Furnace
-    -- coil-tier system: cupronickel_coil caps runnable recipes at 32 EU/t no matter
-    -- how many upgrade items are inserted, even though the machine's normal upgrade
-    -- cap (128 EU/t) is identical to the kanthal_coil variant. NULL = no restriction.
-    fixed_recipe_eu_cap BIGINT,
+    mod_id        TEXT  NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
+    machine_id    TEXT  NOT NULL,
+    name          TEXT  NOT NULL,
+    -- Resolved i18n key for the display name (see LocalizeMachineNames); NULL falls back to name.
+    name_lang_key TEXT,
+    -- Which plugin evaluates this machine; NULL means the machine's own mod_id.
+    ecosystem     TEXT,
+    -- Everything mod-specific; the host never reads an individual field here.
+    mod_data      JSONB NOT NULL DEFAULT '{}'::jsonb,
     PRIMARY KEY (mod_id, machine_id)
 );
 
@@ -108,28 +101,19 @@ CREATE TABLE machine_interfaces (
         REFERENCES machine_types(mod_id, machine_id) ON DELETE CASCADE
 );
 
-CREATE TABLE upgrade_tiers (
-    id                UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
-    mod_id            TEXT   NOT NULL REFERENCES mods(mod_id),
-    name              TEXT   NOT NULL,
-    eu_bonus_per_slot BIGINT,
-    item_ref          TEXT   NOT NULL UNIQUE
-);
-
 -- shape: 9-element row-major 3×3 array for crafting_shaped recipes. NULL for non-shaped.
 CREATE TABLE recipes (
     id             UUID   PRIMARY KEY DEFAULT gen_random_uuid(),
     machine_mod_id TEXT   NOT NULL,
     machine_id     TEXT   NOT NULL,
     -- The mod whose modfile defines this recipe; may differ from machine_mod_id.
-    source_mod_id  TEXT   NOT NULL REFERENCES mods(mod_id),
+    source_mod_id  TEXT   NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
     name           TEXT,
     duration_ticks INT    NOT NULL,
-    eu_per_tick    BIGINT,
-    total_eu       BIGINT,
+    mod_data       JSONB  NOT NULL DEFAULT '{}'::jsonb,
     content_hash   TEXT,
     shape          TEXT[],
-    FOREIGN KEY (machine_mod_id, machine_id) REFERENCES machine_types(mod_id, machine_id)
+    FOREIGN KEY (machine_mod_id, machine_id) REFERENCES machine_types(mod_id, machine_id) ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX recipes_content_hash_idx ON recipes (content_hash) WHERE content_hash IS NOT NULL;
@@ -164,7 +148,7 @@ CREATE TABLE recipe_item_outputs (
     amount_den      INT  NOT NULL,
     probability_num INT  NOT NULL DEFAULT 1,
     probability_den INT  NOT NULL DEFAULT 1,
-    FOREIGN KEY (item_mod_id, item_id) REFERENCES items(mod_id, item_id)
+    FOREIGN KEY (item_mod_id, item_id) REFERENCES items(mod_id, item_id) ON DELETE CASCADE
 );
 
 CREATE TABLE recipe_fluid_inputs (
@@ -181,7 +165,7 @@ CREATE TABLE recipe_fluid_inputs (
         (fluid_mod_id IS NOT NULL AND fluid_id IS NOT NULL AND tag_id IS NULL) OR
         (fluid_mod_id IS NULL     AND fluid_id IS NULL     AND tag_id IS NOT NULL)
     ),
-    FOREIGN KEY (fluid_mod_id, fluid_id) REFERENCES fluids(mod_id, fluid_id)
+    FOREIGN KEY (fluid_mod_id, fluid_id) REFERENCES fluids(mod_id, fluid_id) ON DELETE CASCADE
 );
 
 CREATE TABLE recipe_fluid_outputs (
@@ -198,7 +182,7 @@ CREATE TABLE recipe_fluid_outputs (
         (fluid_mod_id IS NOT NULL AND fluid_id IS NOT NULL AND tag_id IS NULL) OR
         (fluid_mod_id IS NULL     AND fluid_id IS NULL     AND tag_id IS NOT NULL)
     ),
-    FOREIGN KEY (fluid_mod_id, fluid_id) REFERENCES fluids(mod_id, fluid_id)
+    FOREIGN KEY (fluid_mod_id, fluid_id) REFERENCES fluids(mod_id, fluid_id) ON DELETE CASCADE
 );
 
 CREATE TABLE valid_recipe_types (

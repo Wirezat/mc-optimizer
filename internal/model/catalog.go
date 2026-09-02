@@ -1,9 +1,10 @@
 package model
 
+import "github.com/Wirezat/production-optimizer/internal/plugins"
+
 type Mod struct {
 	ModID        string  `json:"mod_id"`
 	Name         string  `json:"name"`
-	EnergyType   string  `json:"energy_type"`
 	Description  *string `json:"description,omitempty"`
 	Author       *string `json:"author,omitempty"`
 	License      *string `json:"license,omitempty"`
@@ -14,13 +15,22 @@ type Mod struct {
 	URLDiscord   *string `json:"url_discord,omitempty"`
 	ModrinthSlug *string `json:"modrinth_slug,omitempty"`
 	RecipeCount  int     `json:"recipe_count"`
+	// Plugin is nil for a mod that ships no plugin.
+	Plugin *ModPluginInfo `json:"plugin,omitempty"`
+}
+
+// ModPluginInfo is what the frontend needs to know about an installed plugin:
+// how to label its wizard button and whether it has one at all.
+type ModPluginInfo struct {
+	DisplayName string `json:"display_name"`
+	Version     string `json:"version"`
+	HasWizard   bool   `json:"has_wizard"`
 }
 
 // ModUpdate carries the fields an admin may overwrite on a mod.
 // nil pointer = keep existing value; empty string = clear the field.
 type ModUpdate struct {
 	Name         *string
-	EnergyType   *string
 	Description  *string
 	Author       *string
 	License      *string
@@ -38,8 +48,7 @@ type Item struct {
 	Name       string  `json:"name"` // populated from translations (en_us); empty until JAR import
 	MaxStack   int16   `json:"max_stack"`
 	TextureURL *string `json:"texture_url,omitempty"`
-	// Set only when the texture is a sprite sheet, so a client knows to play it
-	// instead of showing all its frames at once.
+	// Set only when the texture is a sprite sheet.
 	Animation *TextureAnimation `json:"animation,omitempty"`
 }
 
@@ -80,38 +89,26 @@ type Fluid struct {
 }
 
 type MachineType struct {
-	ModID         string  `json:"mod_id"`
-	MachineID     string  `json:"machine_id"`
-	Name          string  `json:"name"`
-	BaseEUPerTick int64   `json:"base_eu_per_tick"`
-	MaxEUPerTick  int64   `json:"max_eu_per_tick"`
-	MaxSlots      int16   `json:"max_slots"`
-	EnergyType    string  `json:"energy_type"`
-	Upgradable    bool    `json:"upgradable"`
-	RecipeCount   int     `json:"recipe_count"`
-	TextureURL    *string `json:"texture_url,omitempty"`
+	ModID       string  `json:"mod_id"`
+	MachineID   string  `json:"machine_id"`
+	Name        string  `json:"name"`
+	RecipeCount int     `json:"recipe_count"`
+	TextureURL  *string `json:"texture_url,omitempty"`
 	// Variants holds every machine folded into this row (base + implementers),
 	// alphabetical by name; nil means a plain single icon, no cycle/hover.
 	Variants []MachineVariant `json:"variants,omitempty"`
+	// Costs is the operating cost of the machine's base (no-items) plugin
+	// variant, read from the variant cache. Nil means no variant has been
+	// computed for this machine yet — never presented as a zero cost.
+	Costs []plugins.Cost `json:"costs,omitempty"`
 }
 
-// MachineVariant is one machine folded into a grouped MachineType row, with
-// its own energy value since tiers differ (e.g. bronze vs. steel).
+// MachineVariant is one machine folded into a grouped MachineType row.
 type MachineVariant struct {
-	ModID         string  `json:"mod_id"`
-	MachineID     string  `json:"machine_id"`
-	Name          string  `json:"name"`
-	BaseEUPerTick int64   `json:"base_eu_per_tick"`
-	TextureURL    *string `json:"texture_url,omitempty"`
-}
-
-type UpgradeTier struct {
-	ID             string `json:"id"`
-	ModID          string `json:"mod_id"`
-	Name           string `json:"name"`
-	EUBonusPerSlot int64  `json:"eu_bonus_per_slot"`
-	ItemModID      string `json:"item_mod_id"`
-	ItemID         string `json:"item_id"`
+	ModID      string  `json:"mod_id"`
+	MachineID  string  `json:"machine_id"`
+	Name       string  `json:"name"`
+	TextureURL *string `json:"texture_url,omitempty"`
 }
 
 type MachineSlot struct {
@@ -144,7 +141,7 @@ type VillagerTradeView struct {
 	ResultCount    int     `json:"result_count"`
 	ResultModified bool    `json:"result_modified"`
 	// CostVariable marks an offer whose price the data does not fix; the counts
-	// are then a floor, which the UI has to say rather than imply.
+	// are a floor.
 	CostVariable bool `json:"cost_variable"`
 	MaxUses      *int `json:"max_uses,omitempty"`
 	XP           *int `json:"xp,omitempty"`

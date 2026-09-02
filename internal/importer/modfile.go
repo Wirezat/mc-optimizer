@@ -15,7 +15,6 @@ const exampleSentinel = "_example_"
 type rawModFile struct {
 	ModID        string `yaml:"mod_id"`
 	Name         string `yaml:"name"`
-	EnergyType   string `yaml:"energy_type"`
 	Description  string `yaml:"description"`
 	Author       string `yaml:"author"`
 	License      string `yaml:"license"`
@@ -44,39 +43,34 @@ type rawModFile struct {
 		Members []string `yaml:"members"`
 	} `yaml:"tags"`
 
-	UpgradeTiers []struct {
-		Name           string `yaml:"name"`
-		EUBonusPerSlot int64  `yaml:"eu_bonus_per_slot"`
-		Item           string `yaml:"item"`
-	} `yaml:"upgrade_tiers"`
-
 	Machines []struct {
-		ID                string   `yaml:"id"`
-		LangKey           string   `yaml:"lang_key"`
-		Ecosystem         string   `yaml:"ecosystem"`
-		BaseEnergyPerTick *int64   `yaml:"base_energy_per_tick"`
-		MaxEnergyPerTick  *int64   `yaml:"max_energy_per_tick"`
-		MaxSlots          *int16   `yaml:"max_slots"`
-		EnergyType        *string  `yaml:"energy_type"`
-		Upgradable        bool     `yaml:"upgradable"`
-		Implements        []string `yaml:"implements"`
-		FixedRecipeEUCap  *int64   `yaml:"fixed_recipe_eu_cap"`
-		Slots             []struct {
+		ID         string   `yaml:"id"`
+		LangKey    string   `yaml:"lang_key"`
+		Implements []string `yaml:"implements"`
+		// Ecosystem names which plugin evaluates this machine; empty means
+		// the machine's own mod_id.
+		Ecosystem string `yaml:"ecosystem"`
+		Slots     []struct {
 			Index int     `yaml:"index"`
 			Type  string  `yaml:"type"`
 			X     *int16  `yaml:"x"`
 			Y     *int16  `yaml:"y"`
 			Label *string `yaml:"label"`
 		} `yaml:"slots"`
+		// ModData collects every key not claimed by a field above, so a
+		// plugin can define arbitrary mod-specific machine fields.
+		ModData map[string]any `yaml:",inline"`
 	} `yaml:"machines"`
 
 	Recipes []struct {
 		Machine       string   `yaml:"machine"`
 		DurationTicks int      `yaml:"duration_ticks"`
-		EnergyPerTick *int64   `yaml:"energy_per_tick"`
 		Inputs        rawIO    `yaml:"inputs"`
 		Outputs       rawIO    `yaml:"outputs"`
 		Shape         []string `yaml:"shape"`
+		// ModData collects every key not claimed by a field above, so a
+		// plugin can define arbitrary mod-specific recipe fields.
+		ModData map[string]any `yaml:",inline"`
 	} `yaml:"recipes"`
 
 	BlockDrops []struct {
@@ -147,14 +141,9 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 	if raw.ModID == exampleSentinel {
 		return nil, fmt.Errorf("modfile: mod_id is still the example sentinel %q", exampleSentinel)
 	}
-	if raw.EnergyType == "" {
-		raw.EnergyType = "NONE"
-	}
-
 	def := &model.ModDef{
 		ModID:        raw.ModID,
 		Name:         strOrFallback(raw.Name, raw.ModID),
-		EnergyType:   raw.EnergyType,
 		Description:  raw.Description,
 		Author:       raw.Author,
 		License:      raw.License,
@@ -215,37 +204,18 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 		def.Tags = append(def.Tags, td)
 	}
 
-	// Upgrade tiers
-	for _, r := range raw.UpgradeTiers {
-		if isSentinel(r.Name) || isSentinel(r.Item) {
-			continue
-		}
-		def.UpgradeTiers = append(def.UpgradeTiers, model.UpgradeTierDef{
-			Name:           r.Name,
-			EUBonusPerSlot: r.EUBonusPerSlot,
-			ItemRef:        r.Item,
-		})
-	}
-
 	// Machines
 	for _, r := range raw.Machines {
 		if isSentinel(r.ID) {
 			continue
 		}
 		m := model.MachineTypeDef{
-			ModID:             raw.ModID,
-			MachineID:         r.ID,
-			LangKey:           r.LangKey,
-			Ecosystem:         r.Ecosystem,
-			BaseEnergyPerTick: r.BaseEnergyPerTick,
-			MaxEnergyPerTick:  r.MaxEnergyPerTick,
-			MaxSlots:          r.MaxSlots,
-			Upgradable:        r.Upgradable,
-			Implements:        r.Implements,
-			FixedRecipeEUCap:  r.FixedRecipeEUCap,
-		}
-		if r.EnergyType != nil && !isSentinel(*r.EnergyType) {
-			m.EnergyType = r.EnergyType
+			ModID:      raw.ModID,
+			MachineID:  r.ID,
+			LangKey:    r.LangKey,
+			Implements: r.Implements,
+			Ecosystem:  r.Ecosystem,
+			ModData:    r.ModData,
 		}
 		for _, s := range r.Slots {
 			m.Slots = append(m.Slots, model.MachineSlotDef{
@@ -274,8 +244,8 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 			MachineModID:  machineModID,
 			MachineID:     machineID,
 			DurationTicks: r.DurationTicks,
-			EnergyPerTick: r.EnergyPerTick,
 			Shape:         r.Shape,
+			ModData:       r.ModData,
 		}
 		for _, io := range r.Inputs.Items {
 			d, err := parseItemIO(io.Item, io.Tag, io.Amount, io.AmountNum, io.AmountDen, io.Probability, raw.ModID)

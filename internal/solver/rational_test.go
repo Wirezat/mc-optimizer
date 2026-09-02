@@ -1,6 +1,7 @@
 package solver
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -68,4 +69,68 @@ func TestRationalGCD(t *testing.T) {
 			t.Errorf("ugcd(%d,%d) = %d, want %d", c.a, c.b, got, c.want)
 		}
 	}
+}
+
+func TestRateArithmeticErrorClassifies(t *testing.T) {
+	cases := []struct {
+		panicValue any
+		want       error
+	}{
+		{"rational: int64 overflow", ErrRateOverflow},
+		{"LCM: MinInt64 unsupported", ErrRateDomain},
+		{"rational: division by zero", ErrRateDomain},
+		{"rational: zero denominator", ErrRateDomain},
+		{"runtime error: index out of range [3]", nil},
+		{errors.New("rational: int64 overflow"), nil},
+	}
+	for _, c := range cases {
+		got := rateArithmeticError(c.panicValue)
+		switch {
+		case c.want == nil && got != nil:
+			t.Errorf("rateArithmeticError(%v) = %v, want nil so the caller re-panics", c.panicValue, got)
+		case c.want != nil && !errors.Is(got, c.want):
+			t.Errorf("rateArithmeticError(%v) = %v, want %v", c.panicValue, got, c.want)
+		}
+	}
+}
+
+// The exported wrapper keeps the same classification: rate arithmetic becomes
+// an error, anything else stays a panic.
+func TestGuardRateArithmeticClassifiesOnlyRateArithmetic(t *testing.T) {
+	t.Run("overflow becomes an error", func(t *testing.T) {
+		var err error
+		func() {
+			defer GuardRateArithmetic(&err)
+			panic("rational: int64 overflow")
+		}()
+		if !errors.Is(err, ErrRateOverflow) {
+			t.Errorf("err = %v, want it to wrap ErrRateOverflow", err)
+		}
+	})
+
+	t.Run("domain error becomes an error", func(t *testing.T) {
+		var err error
+		func() {
+			defer GuardRateArithmetic(&err)
+			panic("rational: zero denominator")
+		}()
+		if !errors.Is(err, ErrRateDomain) {
+			t.Errorf("err = %v, want it to wrap ErrRateDomain", err)
+		}
+	})
+
+	t.Run("a bug still panics", func(t *testing.T) {
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatal("a non-arithmetic panic was swallowed; it must propagate")
+			}
+			if got, ok := r.(string); !ok || got != "runtime error: index out of range" {
+				t.Errorf("re-panicked with %v, want the original value unchanged", r)
+			}
+		}()
+		var err error
+		defer GuardRateArithmetic(&err)
+		panic("runtime error: index out of range")
+	})
 }

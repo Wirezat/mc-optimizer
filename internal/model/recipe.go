@@ -9,8 +9,6 @@ type Recipe struct {
 	MachineName   *string  `json:"machine_name,omitempty"`
 	Name          *string  `json:"name,omitempty"`
 	DurationTicks int      `json:"duration_ticks"`
-	EUPerTick     int64    `json:"eu_per_tick"`
-	TotalEU       int64    `json:"total_eu"`
 	Shape         []string `json:"shape,omitempty"`
 
 	ItemInputs   []RecipeItemIO  `json:"item_inputs"`
@@ -48,7 +46,6 @@ type RecipeFluidIO struct {
 type CreateRecipeRequest struct {
 	MachineID     string `json:"machine_id"`
 	DurationTicks int    `json:"duration_ticks"`
-	EUPerTick     int64  `json:"eu_per_tick"`
 
 	ItemInputs   []CreateRecipeItemIO  `json:"item_inputs"`
 	ItemOutputs  []CreateRecipeItemIO  `json:"item_outputs"`

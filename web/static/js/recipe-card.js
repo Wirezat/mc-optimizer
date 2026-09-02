@@ -156,7 +156,7 @@ export function recipeCardHTML(recipe, machineName) {
   return `<div class="recipe-card">
     <div class="recipe-card-meta">
       <a href="${esc(machineUrl)}" class="catalog-link">${esc(machineName || recipe.machine_id)}</a>
-      <span class="td-muted">${fmt0(recipe.duration_ticks, 't')} · ${fmt0(recipe.eu_per_tick)} EU/t</span>
+      <span class="td-muted">${fmt0(recipe.duration_ticks, 't')}</span>
     </div>
     <div class="crafting-layout">
       ${ioGrid(inputs)}

@@ -19,6 +19,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/api"
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/logging"
+	"github.com/Wirezat/production-optimizer/internal/plugins"
 	"github.com/Wirezat/production-optimizer/internal/render"
 	"github.com/Wirezat/production-optimizer/internal/service"
 )
@@ -71,7 +72,7 @@ func run() error {
 	defer database.Close()
 	GoLog.Infof("Database: %s", maskPassword(dbURL))
 
-// ── Background cleanup ticker ─────────────────────────────────────────
+	// ── Background cleanup ticker ─────────────────────────────────────────
 	// Purges expired tokens and solver_drafts.
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)
@@ -92,7 +93,12 @@ func run() error {
 		}
 	}()
 
-	plSvc := service.NewPLService(database, autoScaleMax)
+	// One compiled program per mod, shared by every request; the resolver
+	// compiles into it lazily on the first cache miss for that mod.
+	pluginRegistry := plugins.NewRegistry()
+	variantResolver := service.NewVariantResolver(database, pluginRegistry)
+
+	plSvc := service.NewPLService(database, autoScaleMax, variantResolver)
 
 	mux := http.NewServeMux()
 
@@ -167,7 +173,6 @@ func run() error {
 	mux.Handle("GET /api/mods/{mod_id}/modrinth-preview", adminOnly(api.ModrinthPreviewHandler(database)))
 	mux.Handle("DELETE /api/mods/{mod_id}", adminOnly(api.DeleteModHandler(database)))
 	mux.Handle("GET /api/machines", protected(api.ListAllMachinesHandler(database, "assets")))
-	mux.Handle("GET /api/upgrade-tiers", api.ListUpgradeTiersHandler(database)) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/mods/{mod_id}/machines", protected(api.ListMachinesHandler(database)))
 	mux.Handle("PATCH /api/mods/{mod_id}/machines/{machine_id}", adminOnly(api.UpdateMachineHandler(database)))
 	mux.Handle("GET /api/mods/{mod_id}/machines/{machine_id}/interfaces", protected(api.ListMachineInterfacesHandler(database)))
@@ -191,23 +196,26 @@ func run() error {
 	mux.Handle("GET /api/tag-members", protected(api.ListTagMembersHandler(database)))
 	mux.Handle("GET /api/trades", protected(api.ListVillagerTradesHandler(database)))
 
-	// Renders block models to icons on demand and caches the result. Created
-	// here because the import handler has to drop the cache once it has replaced
-	// the models and textures those renders came from.
+	// Renders block models to icons on demand and caches the result; the import
+	// handler drops the cache.
 	renderCache := render.NewCache(render.NewLoader("assets"))
 
 	mux.Handle("GET /api/import/status", adminOnly(api.ImportStatusHandler(database)))
 	mux.Handle("POST /api/import/modfile", adminOnly(api.ImportModFileHandler(database, "assets", renderCache)))
 
 	mux.Handle("PATCH /api/machine-groups/{group_id}/status", protected(api.UpdateMachineGroupStatusHandler(database)))
-	mux.Handle("PATCH /api/machine-groups/{group_id}/upgrades", protected(api.UpdateMachineGroupUpgradesHandler(database, plSvc)))
+	mux.Handle("PUT /api/machine-groups/{group_id}/variant", protected(api.SetGroupVariantHandler(database, variantResolver)))
+
+	mux.Handle("GET /plugin-assets/{mod_id}/plugin.js", protected(api.PluginAssetHandler(database)))
+	mux.Handle("GET /api/saves/{save_id}/mod-config-defaults", protected(api.GetSaveModConfigDefaultsHandler(database)))
+	mux.Handle("PUT /api/saves/{save_id}/mod-config-defaults/{mod_id}", protected(api.SetSaveModConfigDefaultHandler(database)))
 
 	mux.Handle("POST /api/factories/{factory_id}/discover", protected(api.DiscoverHandler(database)))
 	mux.Handle("POST /api/factories/{factory_id}/solve", protected(api.SolveHandler(database, plSvc)))
-	mux.Handle("POST /api/demo/discover", api.DemoDiscoverHandler(database)) // public: no factory/save behind this, safe to expose pre-login
-	mux.Handle("POST /api/demo/solve", api.DemoSolveHandler(database, autoScaleMax))    // public: no factory/save behind this, safe to expose pre-login
+	mux.Handle("POST /api/demo/discover", api.DemoDiscoverHandler(database))                          // public: no factory/save behind this, safe to expose pre-login
+	mux.Handle("POST /api/demo/solve", api.DemoSolveHandler(database, autoScaleMax, variantResolver)) // public: no factory/save behind this, safe to expose pre-login
 	mux.Handle("POST /api/factories/{factory_id}/production-line/confirm", protected(api.ConfirmProductionLineHandler(database, plSvc)))
-	mux.Handle("GET /api/factories/{factory_id}/production-lines", protected(api.ListProductionLinesHandler(database)))
+	mux.Handle("GET /api/factories/{factory_id}/production-lines", protected(api.ListProductionLinesHandler(database, variantResolver)))
 
 	mux.Handle("GET /api/production-lines/{line_id}", protected(api.GetProductionLineHandler(database)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/status", protected(api.UpdateProductionLineStatusHandler(database)))

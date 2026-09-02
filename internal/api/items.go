@@ -25,13 +25,32 @@ func GetItemRecipesHandler(database *db.DB) http.HandlerFunc {
 			errInternal(w, err)
 			return
 		}
-		cards, err := buildRecipeCards(r.Context(), database, rows)
+		cards, err := buildRecipeCards(r.Context(), database, dedupeByRecipeID(rows))
 		if err != nil {
 			errInternal(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, cards)
 	}
+}
+
+// dedupeByRecipeID keeps the first row per recipe id. GetRecipesForItem and
+// GetRecipesForFluid yield one row per candidate machine so the solver's chain
+// can offer them all, but a catalog page answers "what recipes exist" rather
+// than "which machine to build" — so it collapses back to one card per recipe.
+// The query orders each recipe's own machine first, so the kept row is always
+// that recipe's base machine.
+func dedupeByRecipeID(rows []*solver.RecipeRow) []*solver.RecipeRow {
+	seen := make(map[string]bool, len(rows))
+	out := make([]*solver.RecipeRow, 0, len(rows))
+	for _, row := range rows {
+		if seen[row.ID] {
+			continue
+		}
+		seen[row.ID] = true
+		out = append(out, row)
+	}
+	return out
 }
 
 // buildRecipeCards builds a recipe card per row, applying each row's

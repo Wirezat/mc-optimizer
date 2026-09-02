@@ -3,6 +3,7 @@ package importer
 import (
 	"context"
 
+	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
 )
 
@@ -14,8 +15,6 @@ type ImporterDB interface {
 	UpsertBlockDrops(ctx context.Context, drops []model.BlockDrop) error
 	UpsertVillagerTrades(ctx context.Context, trades []model.VillagerTrade) error
 	UpdateModMetadata(ctx context.Context, meta model.ModMetadata) error
-	SetMIEnergyType(ctx context.Context, modIDs []string) error
-	SetMachinesUpgradable(ctx context.Context, modIDs []string) error
 
 	UpsertMod(ctx context.Context, m model.ModDef) error
 	UpsertFluids(ctx context.Context, modID string, fluidIDs []string) error
@@ -23,13 +22,16 @@ type ImporterDB interface {
 	UpsertMachineSlots(ctx context.Context, slots []model.MachineSlotDef) error
 	AddMachineInterface(ctx context.Context, modID, machineID, baseModID, baseMachineID string) error
 	UpsertDirectTagMembers(ctx context.Context, tagName string, members []string) error
-	UpsertUpgradeTier(ctx context.Context, modID, name string, euBonusPerSlot int64, itemRef string) error
+	UpsertModPlugin(ctx context.Context, p db.ModPlugin) error
 }
 
 // Importer writes mod data to the database and the assets directory.
 type Importer struct {
 	db        ImporterDB
 	assetsDir string
+	// UploadedBy is attributed to any plugin recorded during import. The
+	// caller sets it after New; left empty when no user is identified.
+	UploadedBy string
 }
 
 // New creates an Importer.

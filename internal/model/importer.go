@@ -13,12 +13,9 @@ type BlockDrop struct {
 
 // VillagerTrade is one trade offer from a villager profession.
 //
-// SourceModID is the mod that defines the offer, which is not the mod of the
-// items being traded: vanilla's trade_rebalance datapack redefines minecraft's
-// own professions, so both sets have to be told apart by their definer.
-// TradeKey identifies the offer within that mod — profession, tier and the
-// item pair do not, since several offers can share all three and differ only
-// in an NBT modifier.
+// SourceModID is the mod that defines the offer, not the mod of the items being
+// traded. TradeKey identifies the offer within that mod; profession, tier and
+// item pair are not unique.
 type VillagerTrade struct {
 	SourceModID string
 	TradeKey    string
@@ -64,13 +61,16 @@ type NormalizedRecipe struct {
 	// from ModID (the machine's mod) for addon-added recipes.
 	SourceModID string
 	MachineID   string
-	EUPerTick   int64
 	Duration    int
 	ContentHash string
 
 	// Shape is a 9-element array for crafting_shaped recipes (row-major, 3×3).
 	// Each element is "mod:item_id", "#mod:tag", or "" for an empty slot.
 	Shape []string
+
+	// ModData holds every mod-specific field from the recipe entry, keyed as
+	// written. The host never interprets it, only passes it through to the plugin.
+	ModData map[string]any
 
 	ItemInputs   []NormalizedIO
 	ItemOutputs  []NormalizedIO

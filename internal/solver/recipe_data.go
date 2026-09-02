@@ -1,5 +1,7 @@
 package solver
 
+import "encoding/json"
+
 // RecipeRow is the lean recipe representation exchanged between the DB and solver.
 // Only the fields needed for rate calculations are present.
 type RecipeRow struct {
@@ -7,12 +9,12 @@ type RecipeRow struct {
 	MachineMod    string
 	MachineID     string
 	DurationTicks int
-	EUPerTick     int64
-	TotalEU       int64
-	ItemInputs    []RecipeRowItemIO
-	ItemOutputs   []RecipeRowItemIO
-	FluidInputs   []RecipeRowFluidIO
-	FluidOutputs  []RecipeRowFluidIO
+	// ModData is the recipe's opaque mod_data, passed through to a plugin unchanged.
+	ModData      json.RawMessage
+	ItemInputs   []RecipeRowItemIO
+	ItemOutputs  []RecipeRowItemIO
+	FluidInputs  []RecipeRowFluidIO
+	FluidOutputs []RecipeRowFluidIO
 }
 
 type RecipeRowItemIO struct {
@@ -37,20 +39,20 @@ type RecipeRowFluidIO struct {
 
 // MachineSpec holds the subset of machine properties the solver needs.
 type MachineSpec struct {
-	ModID         string
-	MachineID     string
-	EnergyType    string
-	BaseEUPerTick int64
-	MaxEUPerTick  int64
-	MaxSlots      int16
-	Upgradable    bool
-	// FixedRecipeEUCap, if set (>0), is an additional ceiling on which recipes this
-	// machine can run that upgrades never raise — e.g. MI's Electric Blast Furnace
-	// coil tiers (cupronickel=32, kanthal=128), independent of the normal
-	// MaxEUPerTick+upgrade-bonus cap. 0/unset means no extra restriction.
-	FixedRecipeEUCap int64
+	ModID     string
+	MachineID string
+	Name      string
+	// Ecosystem names the mod_id whose plugin evaluates this machine.
+	// Empty means the machine's own ModID.
+	Ecosystem string
+	// ModData is the machine's opaque mod_data.
+	ModData json.RawMessage
 }
 
+// filterByActiveMods keeps only rows whose own MachineMod is active. Filtering is
+// per candidate machine, not per recipe: a recipe with several machine candidates
+// (base plus machine_interfaces implementers) survives if ANY candidate's mod is
+// active, even when the base machine's mod is not.
 func filterByActiveMods(recipes []*RecipeRow, activeMods map[string]bool) []*RecipeRow {
 	if activeMods == nil {
 		return recipes
@@ -62,11 +64,4 @@ func filterByActiveMods(recipes []*RecipeRow, activeMods map[string]bool) []*Rec
 		}
 	}
 	return out
-}
-
-// UpgradeTierSpec holds the subset of upgrade tier properties the solver needs.
-type UpgradeTierSpec struct {
-	ID             string
-	EUBonusPerSlot int64
-	MaxStackSize   int64
 }

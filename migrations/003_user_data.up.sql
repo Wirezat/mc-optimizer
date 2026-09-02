@@ -65,23 +65,21 @@ CREATE TABLE machine_groups (
     machine_id      TEXT   NOT NULL,
     recipe_id       UUID   NOT NULL REFERENCES recipes(id),
     count           INT    NOT NULL,
-    upgrade_tier_id UUID   REFERENCES upgrade_tiers(id),
-    upgrade_count   INT    NOT NULL DEFAULT 0,
+    -- Opaque mod config, frozen from the solve that created this group.
+    mod_config         JSONB NOT NULL DEFAULT '{}'::jsonb,
+    -- Target variant selected vs. the variant actually built.
+    variant_id         TEXT  NOT NULL DEFAULT 'default',
+    current_variant_id TEXT  NOT NULL DEFAULT 'default',
     status          TEXT   NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'planned', 'built', 'archived')),
     -- Fractional exact machine count (rational num/den), mirroring
-    -- solver.MachineGroupDraft.ExactCount — lets upgrade edits recompute the count
+    -- solver.MachineGroupDraft.ExactCount — lets variant edits recompute the count
     -- from the true required rate (lossless) instead of from the rounded count.
     exact_count_num BIGINT NOT NULL DEFAULT 0,
     exact_count_den BIGINT NOT NULL DEFAULT 1,
-    -- Current (in-game) build state, independent of the target count/upgrade_tier_id/
-    -- upgrade_count above: a player often builds fewer machines than planned, or builds
-    -- them without the full upgrade loadout yet, and needs to track that partial state
-    -- separately from the target the solver computed. Current upgrades always track
-    -- toward the group's own target upgrade_tier_id — a player upgrades incrementally
-    -- toward the planned tier, never installs a different one — so only the count needs
-    -- to be tracked, not a separate tier. Like upgrade_count, this is per machine.
-    built_count           INT NOT NULL DEFAULT 0 CHECK (built_count >= 0 AND built_count <= count),
-    current_upgrade_count INT NOT NULL DEFAULT 0 CHECK (current_upgrade_count >= 0),
+    -- Current (in-game) build state, independent of the target count/variant above: a
+    -- player often builds fewer machines than planned, or hasn't reached the target
+    -- variant yet.
+    built_count      INT   NOT NULL DEFAULT 0 CHECK (built_count >= 0 AND built_count <= count),
     FOREIGN KEY (machine_mod_id, machine_id) REFERENCES machine_types(mod_id, machine_id)
 );
 

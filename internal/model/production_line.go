@@ -4,29 +4,33 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/Wirezat/production-optimizer/internal/plugins"
 	"github.com/google/uuid"
 )
 
 type ProductionLine struct {
-	ID               uuid.UUID       `json:"id"`
-	FactoryID        *uuid.UUID      `json:"factory_id,omitempty"`
-	ParentPLID       *uuid.UUID      `json:"parent_pl_id,omitempty"`
-	TargetModID      string          `json:"target_mod_id"`
-	TargetItemID     string          `json:"target_item_id"`
-	TargetIsFluid    bool            `json:"target_is_fluid"`
-	TargetItemName   string          `json:"target_item_name"`
-	RateNum          int             `json:"rate_num"`
-	RateDen          int             `json:"rate_den"`
-	TimeUnit         string          `json:"time_unit"`
-	OptimizeMode     string          `json:"optimize_mode"`
-	Status           string          `json:"status"`
-	PLGroupID        *uuid.UUID      `json:"pl_group_id,omitempty"`
-	Position         string          `json:"position"`
-	ModMissing       bool            `json:"mod_missing"`
-	SolveRequest     json.RawMessage `json:"-"`
-	TargetEUPerTick  int64           `json:"target_eu_per_tick,omitempty"`
-	CurrentEUPerTick int64           `json:"current_eu_per_tick,omitempty"`
-	CurrentRate      float64         `json:"current_rate"`
+	ID             uuid.UUID       `json:"id"`
+	FactoryID      *uuid.UUID      `json:"factory_id,omitempty"`
+	ParentPLID     *uuid.UUID      `json:"parent_pl_id,omitempty"`
+	TargetModID    string          `json:"target_mod_id"`
+	TargetItemID   string          `json:"target_item_id"`
+	TargetIsFluid  bool            `json:"target_is_fluid"`
+	TargetItemName string          `json:"target_item_name"`
+	RateNum        int             `json:"rate_num"`
+	RateDen        int             `json:"rate_den"`
+	TimeUnit       string          `json:"time_unit"`
+	OptimizeMode   string          `json:"optimize_mode"`
+	Status         string          `json:"status"`
+	PLGroupID      *uuid.UUID      `json:"pl_group_id,omitempty"`
+	Position       string          `json:"position"`
+	ModMissing     bool            `json:"mod_missing"`
+	SolveRequest   json.RawMessage `json:"-"`
+	CurrentRate    float64         `json:"current_rate"`
+	// Costs is the line's total operating cost per tick, summed across its
+	// machine groups' chosen variants. Computed on demand from the variant
+	// cache, never stored. ListProductionLinesHandler always sets it to a
+	// list (possibly empty); handlers that don't populate it leave it null.
+	Costs []plugins.Cost `json:"costs"`
 }
 
 type ProductionLineDetail struct {
@@ -36,21 +40,26 @@ type ProductionLineDetail struct {
 }
 
 type MachineGroup struct {
-	ID                  uuid.UUID  `json:"id"`
-	PLID                uuid.UUID  `json:"pl_id"`
-	MachineModID        string     `json:"machine_mod_id"`
-	MachineID           string     `json:"machine_id"`
-	RecipeID            uuid.UUID  `json:"recipe_id"`
-	Count               int        `json:"count"`
-	UpgradeTierID       *uuid.UUID `json:"upgrade_tier_id,omitempty"`
-	UpgradeCount        int        `json:"upgrade_count"`
-	Status              string     `json:"status"`
-	ExactCountNum       int64      `json:"exact_count_num"`
-	ExactCountDen       int64      `json:"exact_count_den"`
-	BuiltCount          int        `json:"built_count"`
-	CurrentUpgradeCount int        `json:"current_upgrade_count"`
-	EUPerTick           int64      `json:"eu_per_tick,omitempty"`
-	CurrentEUPerTick    int64      `json:"current_eu_per_tick,omitempty"`
+	ID           uuid.UUID `json:"id"`
+	PLID         uuid.UUID `json:"pl_id"`
+	MachineModID string    `json:"machine_mod_id"`
+	MachineID    string    `json:"machine_id"`
+	RecipeID     uuid.UUID `json:"recipe_id"`
+	Count        int       `json:"count"`
+	Status       string    `json:"status"`
+	// ModConfig overrides the save-wide plugin config for this group; an empty
+	// object means the save-wide config applies. Opaque to the host.
+	ModConfig json.RawMessage `json:"mod_config,omitempty"`
+	// VariantID is the operating variant this group targets, CurrentVariantID
+	// the one actually built in-game.
+	VariantID        string `json:"variant_id"`
+	CurrentVariantID string `json:"current_variant_id"`
+	ExactCountNum    int64  `json:"exact_count_num"`
+	ExactCountDen    int64  `json:"exact_count_den"`
+	BuiltCount       int    `json:"built_count"`
+	// Costs is the chosen variant's operating cost per tick. Computed on
+	// demand from the plugin, never stored.
+	Costs []plugins.Cost `json:"costs,omitempty"`
 }
 
 type PLIO struct {

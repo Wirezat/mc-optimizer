@@ -1,6 +1,11 @@
 package solver
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/Wirezat/production-optimizer/internal/plugins"
+)
 
 const (
 	TicksPerSecond = 20
@@ -14,27 +19,6 @@ const (
 	SolveModeTarget SolveMode = "TARGET"
 	SolveModeAuto   SolveMode = "AUTO"
 )
-
-// UpgradeMode controls how the solver applies machine upgrades.
-type UpgradeMode string
-
-const (
-	// UpgradeModeOff applies no upgrades; machines run at their base capacity.
-	UpgradeModeOff UpgradeMode = "off"
-	// UpgradeModeFixed applies a user-chosen tier and count to all upgradable groups.
-	UpgradeModeFixed UpgradeMode = "fixed"
-	// UpgradeModeAuto picks tier and count per group to minimise machine count.
-	UpgradeModeAuto UpgradeMode = "auto"
-)
-
-// defaultBaseMaxEU is the per-tick recipe cap for single-block electric (MI tier LV)
-// machines when machine_types.max_eu_per_tick is not set. Multiblock machines (128) can
-// be modelled by storing max_eu_per_tick explicitly in the DB.
-const defaultBaseMaxEU int64 = 32
-
-// maxUpgradeSlots caps the upgrade count when a machine has no max_slots recorded
-// (MI upgrade stacks are limited to a single stack of 64).
-const maxUpgradeSlots = 64
 
 type DraftStatus string
 
@@ -100,12 +84,14 @@ type SolveRequest struct {
 	TagOverrides         map[string]string // tagName → "mod_id:item_id"
 	FactoryState         FactoryState
 	AllowPartialMachines []string
-
-	// Upgrade options (MI machine upgrades). UpgradeMode defaults to off when empty.
-	UpgradeMode  UpgradeMode
-	UpgradeTier  string   // tier ID, used in fixed mode
-	UpgradeCount int      // slot count, used in fixed mode
-	AllowedTiers []string // tier IDs the auto mode may use; empty = all
+	// ModConfigs holds each mod's opaque plugin config, keyed by the mod that
+	// owns the plugin (a machine's ecosystem, or its own mod id).
+	ModConfigs map[string]json.RawMessage
+	// VariantPins fixes the operating variant of individual machine groups,
+	// keyed by RecipeOptionKey. A pin that names a missing or invalid variant
+	// is ignored, not an error: the config can change under a client that is
+	// still holding an older variant list.
+	VariantPins map[string]string
 }
 
 // TagResolution describes how a tag was resolved during solving.
@@ -148,10 +134,28 @@ type MachineGroupDraft struct {
 	Count        int64
 	ExactCount   Rational // fractional machine count before ceiling
 	Utilization  Rational
-	UpgradeTier  string
-	UpgradeCount int
 	Status       DraftStatus
-	EUPerTick    int64 // effective EU/t drawn by ONE machine in this group; 0 for non-eu machines
+	// VariantID, Label and Costs describe the operating configuration chosen for
+	// this group; Variant carries it whole, including any output overrides.
+	VariantID string
+	Label     string
+	// PluginMod is the mod whose plugin evaluated this group, so the confirm
+	// step can freeze that mod's config into the row.
+	PluginMod string
+	Costs     []plugins.Cost
+	Variant   plugins.Variant
+	// VariantOptions lists every runnable variant of this group so a client
+	// can offer the alternatives the automatic pick did not take.
+	VariantOptions []VariantOption
+}
+
+// VariantOption is one selectable operating variant of a machine group, as
+// offered to a client. Only the identity and the plugin's own label - the
+// full variant carries costs and installed items the client does not need to
+// render a picker.
+type VariantOption struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
 }
 
 type IOProfile struct {

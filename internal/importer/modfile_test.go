@@ -2,6 +2,72 @@ package importer
 
 import "testing"
 
+// Any machine or recipe field not claimed by a core column (id, lang_key,
+// ecosystem, implements, slots on a machine; machine, duration_ticks,
+// inputs, outputs, shape on a recipe) must land in ModData verbatim, and a
+// core field must never also leak into it — a plugin reads ModData as the
+// mod's own opaque config and a leaked core field would shadow whatever key
+// the mod author picked.
+func TestParseModFile_MachineAndRecipeModData(t *testing.T) {
+	data := []byte(`
+mod_id: test_mod
+machines:
+  - id: iron_furnace
+    ecosystem: modern_industrialization
+    energy_per_tick: 32
+    tier: electric
+recipes:
+  - machine: iron_furnace
+    duration_ticks: 100
+    energy_per_tick: 16
+    inputs:
+      items:
+        - item: minecraft:iron_ore
+          amount: 1
+    outputs:
+      items:
+        - item: iron_ingot
+          amount: 1
+`)
+	def, err := ParseModFile(data)
+	if err != nil {
+		t.Fatalf("ParseModFile: %v", err)
+	}
+	if len(def.Machines) != 1 {
+		t.Fatalf("got %d machines, want 1", len(def.Machines))
+	}
+	m := def.Machines[0]
+	if m.Ecosystem != "modern_industrialization" {
+		t.Errorf("Ecosystem = %q, want modern_industrialization", m.Ecosystem)
+	}
+	if got, ok := m.ModData["energy_per_tick"]; !ok || got != 32 {
+		t.Errorf("machine ModData[energy_per_tick] = %#v (ok=%v), want 32", got, ok)
+	}
+	if got, ok := m.ModData["tier"]; !ok || got != "electric" {
+		t.Errorf("machine ModData[tier] = %#v (ok=%v), want \"electric\"", got, ok)
+	}
+	if _, ok := m.ModData["ecosystem"]; ok {
+		t.Error("ecosystem must not also leak into ModData")
+	}
+	if _, ok := m.ModData["id"]; ok {
+		t.Error("id must not also leak into ModData")
+	}
+
+	if len(def.Recipes) != 1 {
+		t.Fatalf("got %d recipes, want 1", len(def.Recipes))
+	}
+	r := def.Recipes[0]
+	if got, ok := r.ModData["energy_per_tick"]; !ok || got != 16 {
+		t.Errorf("recipe ModData[energy_per_tick] = %#v (ok=%v), want 16", got, ok)
+	}
+	if _, ok := r.ModData["duration_ticks"]; ok {
+		t.Error("duration_ticks must not also leak into ModData")
+	}
+	if _, ok := r.ModData["machine"]; ok {
+		t.Error("machine must not also leak into ModData")
+	}
+}
+
 // A modfile predating the key field must still import, distinguished only as
 // far as the item pair allows — this is the fallback, not the fix.
 func TestParseModFile_VillagerTradeKeyFallsBackToItemPair(t *testing.T) {

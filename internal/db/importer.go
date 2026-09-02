@@ -23,21 +23,26 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 	mods := collectMods(rec)
 	for modID := range mods {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO mods (mod_id, name, energy_type)
-			VALUES ($1, $1, 'NONE')
+			INSERT INTO mods (mod_id, name)
+			VALUES ($1, $1)
 			ON CONFLICT (mod_id) DO NOTHING
 		`, modID); err != nil {
 			return false, fmt.Errorf("db: import recipe: upsert mod %s: %w", modID, err)
 		}
 	}
 
-	// 1b. Upsert the machine type for this recipe.
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO machine_types (mod_id, machine_id, name)
-		VALUES ($1, $2, $2)
-		ON CONFLICT (mod_id, machine_id) DO NOTHING
-	`, rec.ModID, rec.MachineID); err != nil {
-		return false, fmt.Errorf("db: import recipe: upsert machine type: %w", err)
+	// 1b. The machine must already be declared (via a mod's own machine list) —
+	// a recipe referencing an undeclared machine is a data error in the mod
+	// archive, not something to paper over with a stub row.
+	var machineExists bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM machine_types WHERE mod_id = $1 AND machine_id = $2)`,
+		rec.ModID, rec.MachineID,
+	).Scan(&machineExists); err != nil {
+		return false, fmt.Errorf("db: import recipe: check machine type: %w", err)
+	}
+	if !machineExists {
+		return false, fmt.Errorf("machine %s:%s is not declared by any mod", rec.ModID, rec.MachineID)
 	}
 
 	// 2. Upsert items referenced.
@@ -107,13 +112,27 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 		}
 	}
 
-	// 5. Check for duplicate via content_hash.
+	// 5. Known content_hash: keep the row and its id, refresh its mod_data.
 	var existing uuid.UUID
 	err = tx.QueryRow(ctx,
 		`SELECT id FROM recipes WHERE content_hash = $1`, rec.ContentHash,
 	).Scan(&existing)
 	if err == nil {
-		_ = tx.Rollback(ctx)
+		existingModData, mErr := marshalModData(rec.ModData)
+		if mErr != nil {
+			return false, fmt.Errorf("db: import recipe: encode mod_data: %w", mErr)
+		}
+		tag, uErr := tx.Exec(ctx,
+			`UPDATE recipes SET mod_data = $2 WHERE id = $1`, existing, existingModData)
+		if uErr != nil {
+			return false, fmt.Errorf("db: import recipe: refresh mod_data: %w", uErr)
+		}
+		if tag.RowsAffected() == 0 {
+			return false, fmt.Errorf("db: import recipe: recipe %s vanished before its mod_data could be refreshed", existing)
+		}
+		if cErr := tx.Commit(ctx); cErr != nil {
+			return false, fmt.Errorf("db: import recipe: commit mod_data refresh: %w", cErr)
+		}
 		return false, nil
 	}
 	if err != pgx.ErrNoRows {
@@ -126,12 +145,16 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 	if len(rec.Shape) > 0 {
 		shape = rec.Shape
 	}
+	modData, err := marshalModData(rec.ModData)
+	if err != nil {
+		return false, fmt.Errorf("db: import recipe: encode mod_data: %w", err)
+	}
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO recipes
-			(id, machine_mod_id, machine_id, source_mod_id, duration_ticks, eu_per_tick, total_eu, content_hash, shape)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+			(id, machine_mod_id, machine_id, source_mod_id, duration_ticks, mod_data, content_hash, shape)
+		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
 		RETURNING id
-	`, rec.ModID, rec.MachineID, rec.SourceModID, rec.Duration, rec.EUPerTick, int64(rec.Duration)*rec.EUPerTick, rec.ContentHash, shape,
+	`, rec.ModID, rec.MachineID, rec.SourceModID, rec.Duration, modData, rec.ContentHash, shape,
 	).Scan(&recipeID); err != nil {
 		return false, fmt.Errorf("db: import recipe: insert recipe: %w", err)
 	}
@@ -157,6 +180,12 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 
 	// 8. Insert item outputs.
 	for i, io := range rec.ItemOutputs {
+		// recipe_item_outputs.item_mod_id/item_id are NOT NULL, so a tag-only
+		// output has nowhere to go. parseItemIO produces one whenever a recipe
+		// names a tag on the output side.
+		if io.ModID == nil || io.ID == nil {
+			return false, fmt.Errorf("db: import recipe: output %d is a tag, which cannot be produced", i)
+		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO recipe_item_outputs
 				(id, recipe_id, sort_index, item_mod_id, item_id,
@@ -383,13 +412,10 @@ func (d *DB) UpdateModDisplayNames(ctx context.Context, names map[string]string)
 	return nil
 }
 
-// BulkUpsertItems inserts (or updates) items extracted from a mod definition, with
-// each item's own curated max_stack (yaml `max_stack`, default 64 if unspecified —
-// NOT hardcoded 64 regardless of curation, that was a bug: any yaml-curated max_stack
-// was silently discarded and reimports never updated an already-existing row).
-// The mod must already exist; items for unknown mods are silently skipped.
-// IDs that already exist in the fluids table are also skipped — block.* lang keys
-// are used for both items and fluids, so without this check fluids would be double-registered.
+// BulkUpsertItems inserts or updates items from a mod definition, each with its
+// own curated max_stack (yaml `max_stack`, default 64). The mod must already
+// exist; items for unknown mods are skipped, as are ids that already exist in
+// the fluids table.
 func (d *DB) BulkUpsertItems(ctx context.Context, modID string, items []model.ItemDef) error {
 	if len(items) == 0 {
 		return nil
@@ -413,8 +439,8 @@ func (d *DB) BulkUpsertItems(ctx context.Context, modID string, items []model.It
 	return nil
 }
 
-// MirrorFluidTranslations creates fluid.* translation keys from matching block.* keys.
-// Needed because lang files use block.{ns}.{id} for fluids, but the search layer expects fluid.{ns}.{id}.
+// MirrorFluidTranslations creates fluid.{ns}.{id} translation keys from the
+// matching block.{ns}.{id} keys.
 func (d *DB) MirrorFluidTranslations(ctx context.Context) error {
 	_, err := d.Pool.Exec(ctx, `
 		INSERT INTO translations (lang, lang_key, name)
@@ -554,39 +580,6 @@ func (d *DB) UpsertVillagerTrades(ctx context.Context, trades []model.VillagerTr
 	return nil
 }
 
-// UpsertUpgradeTiers inserts upgrade tier records from machine_upgrades.json datamaps.
-// Entries whose mod_id does not exist in the mods table are silently skipped.
-func (d *DB) UpsertUpgradeTiers(ctx context.Context, tiers []model.UpgradeTier) error {
-	if len(tiers) == 0 {
-		return nil
-	}
-	modIDs := make([]string, len(tiers))
-	names := make([]string, len(tiers))
-	bonuses := make([]int64, len(tiers))
-	itemModIDs := make([]string, len(tiers))
-	itemIDs := make([]string, len(tiers))
-	for i, t := range tiers {
-		modIDs[i] = t.ModID
-		names[i] = t.Name
-		bonuses[i] = t.EUBonusPerSlot
-		itemModIDs[i] = t.ItemModID
-		itemIDs[i] = t.ItemID
-	}
-	_, err := d.Pool.Exec(ctx, `
-		INSERT INTO upgrade_tiers (mod_id, name, eu_bonus_per_slot, item_ref)
-		SELECT mid, nm, bonus, imod || ':' || iid
-		FROM unnest($1::text[], $2::text[], $3::bigint[], $4::text[], $5::text[]) AS t(mid, nm, bonus, imod, iid)
-		WHERE EXISTS (SELECT 1 FROM mods WHERE mod_id = mid)
-		ON CONFLICT (item_ref) DO UPDATE
-		  SET name = EXCLUDED.name,
-		      eu_bonus_per_slot = EXCLUDED.eu_bonus_per_slot
-	`, modIDs, names, bonuses, itemModIDs, itemIDs)
-	if err != nil {
-		return fmt.Errorf("db: upsert upgrade tiers: %w", err)
-	}
-	return nil
-}
-
 // LocalizeMachineNames resolves a translation key for each machine_type and stores it in
 // name_lang_key. The name column is set to initcap(machine_id) as a language-neutral fallback
 // (used when the key cannot be found at query time). Resolution priority for the key:
@@ -630,60 +623,6 @@ func (d *DB) LocalizeMachineNames(ctx context.Context) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("db: localize machine names: %w", err)
-	}
-	return nil
-}
-
-// SetMIEnergyType sets energy_type = 'eu' for all machine_types belonging to the given mods.
-// Must be called before SetMachinesUpgradable so the upgradable filter can match.
-// Idempotent — safe to call on every import.
-func (d *DB) SetMIEnergyType(ctx context.Context, modIDs []string) error {
-	if len(modIDs) == 0 {
-		return nil
-	}
-	_, err := d.Pool.Exec(ctx, `
-		UPDATE machine_types
-		SET energy_type = 'eu'
-		WHERE mod_id = ANY($1)
-	`, modIDs)
-	if err != nil {
-		return fmt.Errorf("db: set MI energy type: %w", err)
-	}
-	return nil
-}
-
-// SetMISteamMachines overrides energy_type to 'steam' and clears upgradable for the given
-// machine IDs within the given mods. Must be called after SetMIEnergyType so it can
-// selectively undo the EU assignment for steam-only machines (coke_oven, steam_blast_furnace).
-// Idempotent — safe to call on every import.
-func (d *DB) SetMISteamMachines(ctx context.Context, modIDs []string, machineIDs []string) error {
-	if len(modIDs) == 0 || len(machineIDs) == 0 {
-		return nil
-	}
-	_, err := d.Pool.Exec(ctx, `
-		UPDATE machine_types
-		SET energy_type = 'steam', upgradable = false
-		WHERE mod_id = ANY($1) AND machine_id = ANY($2)
-	`, modIDs, machineIDs)
-	if err != nil {
-		return fmt.Errorf("db: set MI steam machines: %w", err)
-	}
-	return nil
-}
-
-// SetMachinesUpgradable marks all EU machines belonging to the given mods as upgradable.
-// Idempotent — safe to call on every import.
-func (d *DB) SetMachinesUpgradable(ctx context.Context, modIDs []string) error {
-	if len(modIDs) == 0 {
-		return nil
-	}
-	_, err := d.Pool.Exec(ctx, `
-		UPDATE machine_types
-		SET upgradable = true
-		WHERE mod_id = ANY($1) AND energy_type = 'eu'
-	`, modIDs)
-	if err != nil {
-		return fmt.Errorf("db: set machines upgradable: %w", err)
 	}
 	return nil
 }

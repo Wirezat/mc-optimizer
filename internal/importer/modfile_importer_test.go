@@ -8,8 +8,25 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
 )
+
+// ModRecipeToNormalized must carry ModData through unchanged — it is the
+// only place a recipe's mod-specific fields cross from the parsed modfile
+// into what actually reaches the database and, from there, a plugin.
+func TestModRecipeToNormalized_CarriesModData(t *testing.T) {
+	r := model.ModRecipeDef{
+		MachineModID:  "testmod",
+		MachineID:     "iron_furnace",
+		DurationTicks: 100,
+		ModData:       map[string]any{"energy_per_tick": 16},
+	}
+	norm := ModRecipeToNormalized(r, "testmod")
+	if got, ok := norm.ModData["energy_per_tick"]; !ok || got != 16 {
+		t.Errorf("norm.ModData[energy_per_tick] = %#v (ok=%v), want 16", got, ok)
+	}
+}
 
 // fakeImporterDB is a no-op ImporterDB for exercising RunModFile's control
 // flow without a real database.
@@ -33,10 +50,6 @@ func (fakeImporterDB) UpsertVillagerTrades(ctx context.Context, trades []model.V
 func (fakeImporterDB) UpdateModMetadata(ctx context.Context, meta model.ModMetadata) error {
 	return nil
 }
-func (fakeImporterDB) SetMIEnergyType(ctx context.Context, modIDs []string) error { return nil }
-func (fakeImporterDB) SetMachinesUpgradable(ctx context.Context, modIDs []string) error {
-	return nil
-}
 func (fakeImporterDB) UpsertMod(ctx context.Context, m model.ModDef) error { return nil }
 func (fakeImporterDB) UpsertFluids(ctx context.Context, modID string, fluidIDs []string) error {
 	return nil
@@ -53,8 +66,104 @@ func (fakeImporterDB) AddMachineInterface(ctx context.Context, modID, machineID,
 func (fakeImporterDB) UpsertDirectTagMembers(ctx context.Context, tagName string, members []string) error {
 	return nil
 }
-func (fakeImporterDB) UpsertUpgradeTier(ctx context.Context, modID, name string, euBonusPerSlot int64, itemRef string) error {
+func (fakeImporterDB) UpsertModPlugin(ctx context.Context, p db.ModPlugin) error { return nil }
+
+// recordingImporterDB wraps fakeImporterDB to count calls, so a test can
+// assert that a failed plugin validation left no DB write behind it.
+type recordingImporterDB struct {
+	fakeImporterDB
+	upsertModCalls    int
+	upsertPluginCalls []db.ModPlugin
+}
+
+func (r *recordingImporterDB) UpsertMod(ctx context.Context, m model.ModDef) error {
+	r.upsertModCalls++
 	return nil
+}
+
+func (r *recordingImporterDB) UpsertModPlugin(ctx context.Context, p db.ModPlugin) error {
+	r.upsertPluginCalls = append(r.upsertPluginCalls, p)
+	return nil
+}
+
+// buildFixtureZipWithPlugin writes a minimal mod ZIP with a plugin/ subtree
+// (plugin.yml + plugin.js) and returns its path.
+func buildFixtureZipWithPlugin(t *testing.T, pluginYML, pluginJS string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	mustWrite := func(name, content string) {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatalf("create %s: %v", name, err)
+		}
+		if _, err := w.Write([]byte(content)); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	mustWrite("mod.yml", "mod_id: test_mod\n")
+	mustWrite("plugin/plugin.yml", pluginYML)
+	mustWrite("plugin/plugin.js", pluginJS)
+	if err := zw.Close(); err != nil {
+		t.Fatalf("close zip writer: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "test_mod.zip")
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatalf("write zip fixture: %v", err)
+	}
+	return path
+}
+
+// A valid bundled plugin must be recorded with the fields from its
+// plugin.yml, its full plugin.js source, and the importer's UploadedBy.
+func TestRunModFile_InstallsBundledPlugin(t *testing.T) {
+	zipPath := buildFixtureZipWithPlugin(t,
+		"display_name: Test Plugin\nversion: 1.0.0\napi_version: 1\n",
+		"var plugin = { api_version: 1, evaluate: function () { return [] } }",
+	)
+	rdb := &recordingImporterDB{}
+	imp := New(rdb, t.TempDir())
+	imp.UploadedBy = "tester"
+
+	res, err := imp.RunModFile(context.Background(), zipPath)
+	if err != nil {
+		t.Fatalf("RunModFile: %v", err)
+	}
+	if !res.PluginInstalled {
+		t.Error("PluginInstalled = false, want true")
+	}
+	if len(rdb.upsertPluginCalls) != 1 {
+		t.Fatalf("UpsertModPlugin called %d times, want 1", len(rdb.upsertPluginCalls))
+	}
+	p := rdb.upsertPluginCalls[0]
+	if p.ModID != "test_mod" || p.DisplayName != "Test Plugin" || p.Version != "1.0.0" || p.APIVersion != 1 {
+		t.Errorf("got %+v, want test_mod / Test Plugin / 1.0.0 / 1", p)
+	}
+	if p.UploadedBy != "tester" {
+		t.Errorf("UploadedBy = %q, want %q", p.UploadedBy, "tester")
+	}
+}
+
+// A broken bundled plugin.js must fail the whole import before any DB write
+// happens — a plugin that only fails at record time would already have left
+// a half-imported mod behind it.
+func TestRunModFile_InvalidPluginJSFailsBeforeAnyDBWrite(t *testing.T) {
+	zipPath := buildFixtureZipWithPlugin(t,
+		"display_name: Test Plugin\nversion: 1.0.0\napi_version: 1\n",
+		"var plugin = { api_version: 1 }", // missing evaluate
+	)
+	rdb := &recordingImporterDB{}
+	imp := New(rdb, t.TempDir())
+
+	if _, err := imp.RunModFile(context.Background(), zipPath); err == nil {
+		t.Fatal("want error for invalid plugin.js, got nil")
+	}
+	if rdb.upsertModCalls != 0 {
+		t.Errorf("UpsertMod called %d times, want 0 — a broken plugin must not leave a half-imported mod behind", rdb.upsertModCalls)
+	}
+	if len(rdb.upsertPluginCalls) != 0 {
+		t.Errorf("UpsertModPlugin called %d times, want 0", len(rdb.upsertPluginCalls))
+	}
 }
 
 // buildFixtureZip writes a minimal mod ZIP (mod.yml + one assets/ texture

@@ -99,7 +99,7 @@ func TestApplySlotLayout_NoSlots_NoOp(t *testing.T) {
 func TestBuild_ItemAndTagInputs(t *testing.T) {
 	row := &solver.RecipeRow{
 		ID: "r1", MachineMod: "mi", MachineID: "compressor",
-		DurationTicks: 100, EUPerTick: 32, TotalEU: 3200,
+		DurationTicks: 100,
 		ItemInputs: []solver.RecipeRowItemIO{
 			{ItemModID: strp("mi"), ItemID: strp("iron_ingot"), AmountNum: 2, AmountDen: 1},
 			{TagID: strp("c:dusts/coal"), TagName: strp("c:dusts/coal"), AmountNum: 1, AmountDen: 1, NonConsuming: true},
@@ -117,8 +117,8 @@ func TestBuild_ItemAndTagInputs(t *testing.T) {
 	if card.ID != "r1" || card.MachineModID != "mi" || card.MachineID != "compressor" {
 		t.Fatalf("machine/id fields wrong: %+v", card)
 	}
-	if card.DurationTicks != 100 || card.EUPerTick != 32 || card.TotalEU != 3200 {
-		t.Fatalf("timing/energy fields wrong: %+v", card)
+	if card.DurationTicks != 100 {
+		t.Fatalf("duration field wrong: %+v", card)
 	}
 	if len(card.Inputs) != 2 {
 		t.Fatalf("expected 2 inputs, got %d", len(card.Inputs))
@@ -153,7 +153,7 @@ func TestBuild_ItemAndTagInputs(t *testing.T) {
 	if err := json.Unmarshal(b, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	for _, key := range []string{"id", "machine_mod_id", "machine_id", "duration_ticks", "eu_per_tick", "total_eu", "inputs", "outputs", "fluid_inputs", "fluid_outputs"} {
+	for _, key := range []string{"id", "machine_mod_id", "machine_id", "duration_ticks", "inputs", "outputs", "fluid_inputs", "fluid_outputs"} {
 		if _, ok := raw[key]; !ok {
 			t.Errorf("json output missing key %q: %v", key, raw)
 		}

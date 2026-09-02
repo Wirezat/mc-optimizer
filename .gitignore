@@ -19,7 +19,8 @@ pg_data/
 *.swp
 
 # Other
-markdown/*
+markdown/
+docs/*
 logs/
 /scripts/
 /.dockerignore
@@ -34,5 +35,6 @@ CLAUDE.md
 /assets/
 /temp mc jar/
 
-# Local-only planning docs (specs/plans) — never committed
-/docs/superpowers/
+# SDD workspace (git-ignored scratch)
+/.superpowers/
+/db-backups/

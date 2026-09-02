@@ -39,14 +39,6 @@
     /* modrinth fetch row */
     .mod-fetch-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
     .mod-fetch-status { font-size: var(--text-xs); color: var(--text-faint); }
-
-    /* energy select badge */
-    .badge-select {
-      appearance: none; border: none; background: var(--bg-hover);
-      color: var(--text-muted); font-size: var(--text-xs); font-weight: var(--weight-semibold);
-      border-radius: var(--radius); padding: 1px 6px; cursor: pointer;
-    }
-    .badge-select:focus { outline: 2px solid var(--accent); }
   </style>
 </head>
 <body class="app-shell">
@@ -105,12 +97,11 @@
                 <th style="width:24px;"></th>
                 <th style="width:100%;" data-i18n="catalog.mods.col.name"></th>
                 <th data-i18n="catalog.mods.col.mod_id"></th>
-                <th data-i18n="catalog.mods.col.energy_type"></th>
                 <th data-i18n="catalog.mods.col.recipes"></th>
               </tr>
             </thead>
             <tbody id="mod-tbody">
-              <tr><td colspan="5" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
+              <tr><td colspan="4" class="td-muted" style="padding:16px;text-align:center;" data-i18n="catalog.empty.loading"></td></tr>
             </tbody>
           </table>
         </div>
@@ -146,7 +137,6 @@
   async function saveMod(mod) {
     const body = {
       name:          mod.name,
-      energy_type:   mod.energy_type,
       description:   mod.description   ?? null,
       author:        mod.author        ?? null,
       license:       mod.license       ?? null,
@@ -169,13 +159,13 @@
   function renderMods() {
     const q = searchEl.value.trim().toLowerCase();
     const mods = q
-      ? allMods.filter(m => wuiFilter(m, q, ['mod_id', 'name', 'energy_type', 'modrinth_slug']))
+      ? allMods.filter(m => wuiFilter(m, q, ['mod_id', 'name', 'modrinth_slug']))
       : allMods;
 
     countEl.textContent = tCount(mods.length, 'catalog.mods.count');
 
     if (!mods.length) {
-      tbody.innerHTML = `<tr><td colspan="5" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_mods')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="td-muted" style="padding:16px;text-align:center;">${t('catalog.empty.no_mods')}</td></tr>`;
       return;
     }
 
@@ -190,17 +180,12 @@
             <input class="td-input" type="text" value="${esc(m.name)}" />
           </div>` : esc(m.name)}</td>
         <td class="td-mono td-muted">${esc(m.mod_id)}</td>
-        <td>${admin ? `
-          <select class="badge-select" data-wui-field="energy_type" data-mod-id="${esc(m.mod_id)}">
-            ${['EU','FE','SU','NONE','CUSTOM'].map(e =>
-              `<option${m.energy_type===e?' selected':''}>${e}</option>`).join('')}
-          </select>` : `<span class="badge badge-neutral">${esc(m.energy_type)}</span>`}</td>
         <td>${m.recipe_count
           ? `<a href="${esc(recipesUrl)}" class="recipe-count-link">${m.recipe_count}</a>`
           : `<span class="td-muted">—</span>`}</td>
       </tr>
       <tr class="table-expand-row" id="mod-${esc(m.mod_id)}">
-        <td colspan="5"><div class="table-expand-body" id="mod-body-${esc(m.mod_id)}">
+        <td colspan="4"><div class="table-expand-body" id="mod-body-${esc(m.mod_id)}">
           <span class="td-muted" style="font-size:var(--text-sm);">${t('catalog.empty.loading')}</span>
         </div></td>
       </tr>`;
@@ -278,9 +263,7 @@
           : esc(m.license)) +
         `</span></div>`
       : '';
-    const energyHTML = `<div class="detail-row"><span class="detail-key">${t('catalog.mods.detail.energy')}</span>
-      <span class="detail-val"><span class="badge badge-neutral">${esc(m.energy_type)}</span></span></div>`;
-    const metaRows = [authorHTML, licenseHTML, energyHTML].filter(Boolean).join('');
+    const metaRows = [authorHTML, licenseHTML].filter(Boolean).join('');
 
     return `
       <div class="mod-detail-layout">
@@ -515,18 +498,6 @@
     updateBadges(bodyEl, modID, counts);
   });
 
-  // Energy type select (inline in table row)
-  document.addEventListener('change', async e => {
-    const sel = e.target.closest('select[data-wui-field="energy_type"]');
-    if (!sel) return;
-    const modID = sel.dataset.modId;
-    const mod   = allMods.find(m => m.mod_id === modID);
-    if (!mod) return;
-    mod.energy_type = sel.value;
-    const ok = await saveMod(mod);
-    if (!ok) { sel.value = mod.energy_type; }
-  });
-
   // Name inline-edit (wui:cell-write from initClickToEdit)
   document.addEventListener('wui:cell-write', async e => {
     if (e.detail.field !== 'name') return;
@@ -554,7 +525,7 @@
       secondary: r => r.mod_id,
       fetch(q, offset) {
         let rows = allMods;
-        rows = wuiFilter(allMods, q, ['mod_id', 'name', 'energy_type', 'modrinth_slug']);
+        rows = wuiFilter(allMods, q, ['mod_id', 'name', 'modrinth_slug']);
         return Promise.resolve({ rows: rows.slice(offset, offset + 50), hasMore: offset + 50 < rows.length });
       },
       onSelect(r) { searchEl.value = r.name; searchEl.dispatchEvent(new Event('input')); },

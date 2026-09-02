@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wirezat/GoLog"
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/plugins"
 	"github.com/Wirezat/production-optimizer/internal/service"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
@@ -119,16 +121,22 @@ func respondDiscover(w http.ResponseWriter, r *http.Request, database *db.DB, re
 		errInternal(w, err)
 		return
 	}
+	machinePluginMods, err := database.LookupMachinePluginMods(r.Context(), machineRefs)
+	if err != nil {
+		errInternal(w, err)
+		return
+	}
 
 	namedItems := make([]namedChainItem, len(result.Items))
 	for i, ci := range result.Items {
 		namedItems[i] = namedChainItem{ChainItem: ci, Name: names[ci.Item.Key()]}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"Items":          namedItems,
-		"TagResolutions": resolveTagResolutions(result.TagResolutions, names),
-		"Names":          names,
-		"MachineNames":   machineNames,
+		"Items":             namedItems,
+		"TagResolutions":    resolveTagResolutions(result.TagResolutions, names),
+		"Names":             names,
+		"MachineNames":      machineNames,
+		"MachinePluginMods": machinePluginMods,
 	})
 }
 
@@ -251,6 +259,25 @@ func writeSolveError(w http.ResponseWriter, err error) bool {
 		})
 		return true
 	}
+	var negErr *solver.ErrNegativeRate
+	if errors.As(err, &negErr) {
+		// A chain that can only balance by running a recipe backwards is a
+		// property of the catalog, not a server fault. The recipe id goes to
+		// the log, not to the unauthenticated /api/demo/solve response.
+		GoLog.Warnf("solve: %v", err)
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+			"error": "NEGATIVE_RATE",
+		})
+		return true
+	}
+	if errors.Is(err, solver.ErrRateOverflow) || errors.Is(err, solver.ErrRateDomain) {
+		// A structured code, not a message: the client picks its own
+		// translated text (solve.error.rate_overflow), same as CYCLE_BREAK_NEEDED.
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
+			"error": "RATE_OVERFLOW",
+		})
+		return true
+	}
 	errInternal(w, err)
 	return true
 }
@@ -364,15 +391,20 @@ func SolveHandler(database *db.DB, svc *service.PLService) http.HandlerFunc {
 // construction). Kept as its own handler, not a wrapper around SolveHandler/
 // PLService.Solve, for the same reason as DemoDiscoverHandler: real-path
 // factory-state usage may grow over time and must not leak into demo mode.
-func DemoSolveHandler(database *db.DB, autoScaleMax int64) http.HandlerFunc {
+func DemoSolveHandler(database *db.DB, autoScaleMax int64, variants solver.VariantSource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		req, ok := decodeSolveRequest(w, r)
 		if !ok {
 			return
 		}
 		req.FactoryState = solver.FactoryState{}
+		// No save backs the demo page, so every mod is evaluated under its
+		// plugin's own defaults rather than a configured one.
+		req.ModConfigs = nil
 
-		result, err := solver.NewSolver(database, autoScaleMax).Solve(r.Context(), req)
+		sv := solver.NewSolver(database, autoScaleMax)
+		sv.VariantSource = variants
+		result, err := sv.Solve(r.Context(), req)
 		if writeSolveError(w, err) {
 			return
 		}
@@ -423,7 +455,7 @@ func ConfirmProductionLineHandler(database *db.DB, svc *service.PLService) http.
 }
 
 // ListProductionLinesHandler returns all production lines for a factory.
-func ListProductionLinesHandler(database *db.DB) http.HandlerFunc {
+func ListProductionLinesHandler(database *db.DB, variants solver.VariantSource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())
 		factoryID, ok := parseUUIDParam(w, r, "factory_id")
@@ -447,25 +479,34 @@ func ListProductionLinesHandler(database *db.DB) http.HandlerFunc {
 				errInternal(w, err)
 				return
 			}
-			for _, mg := range mgs {
-				if err := database.EnrichMachineGroupEU(r.Context(), mg); err != nil {
-					errInternal(w, err)
-					return
-				}
-				pl.TargetEUPerTick += mg.EUPerTick * int64(mg.Count)
-				pl.CurrentEUPerTick += mg.CurrentEUPerTick * int64(mg.BuiltCount)
-			}
-			frac, err := database.EstimateCurrentRateFraction(r.Context(), mgs)
-			if err != nil {
-				errInternal(w, err)
-				return
-			}
+			frac := db.EstimateCurrentRateFraction(mgs)
 			if pl.RateDen > 0 {
 				pl.CurrentRate = frac * float64(pl.RateNum) / float64(pl.RateDen)
 			}
+			pl.Costs = aggregateCosts(groupOperatingCosts(r, database, variants, mgs))
 		}
 		writeJSON(w, http.StatusOK, pls)
 	}
+}
+
+// groupOperatingCosts resolves each machine group's chosen operating variant
+// and scales its per-machine costs by the group's machine count. A group whose
+// variant no longer resolves contributes no costs.
+func groupOperatingCosts(r *http.Request, database *db.DB, variants solver.VariantSource, mgs []*model.MachineGroup) [][]plugins.Cost {
+	out := make([][]plugins.Cost, 0, len(mgs))
+	for _, mg := range mgs {
+		vs, err := groupVariants(r, database, variants, mg)
+		if err != nil {
+			GoLog.Warnf("production lines: resolve variants for group %s: %v", mg.ID, err)
+			continue
+		}
+		v, ok := findVariant(vs, mg.VariantID)
+		if !ok {
+			continue
+		}
+		out = append(out, scaleCosts(v.Costs, mg.Count))
+	}
+	return out
 }
 
 // GetProductionLineHandler fetches a single production line with its IO and machine groups.
@@ -504,19 +545,7 @@ func GetProductionLineHandler(database *db.DB) http.HandlerFunc {
 		if ios == nil {
 			ios = []*model.PLIO{}
 		}
-		for _, mg := range mgs {
-			if err := database.EnrichMachineGroupEU(r.Context(), mg); err != nil {
-				errInternal(w, err)
-				return
-			}
-			pl.TargetEUPerTick += mg.EUPerTick * int64(mg.Count)
-			pl.CurrentEUPerTick += mg.CurrentEUPerTick * int64(mg.BuiltCount)
-		}
-		frac, err := database.EstimateCurrentRateFraction(r.Context(), mgs)
-		if err != nil {
-			errInternal(w, err)
-			return
-		}
+		frac := db.EstimateCurrentRateFraction(mgs)
 		if pl.RateDen > 0 {
 			pl.CurrentRate = frac * float64(pl.RateNum) / float64(pl.RateDen)
 		}
@@ -563,8 +592,6 @@ func UpdateProductionLineStatusHandler(database *db.DB) http.HandlerFunc {
 
 // ResolveProductionLineHandler re-solves an existing line (e.g. for more output) using its
 // stored solver request with the given overrides, replacing its machine groups and IO.
-//
-//	"upgrade_mode":"auto"|"fixed"|"off", "upgrade_tier":"<uuid>", "upgrade_count":N}
 func ResolveProductionLineHandler(database *db.DB, svc *service.PLService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())
@@ -576,21 +603,15 @@ func ResolveProductionLineHandler(database *db.DB, svc *service.PLService) http.
 			return
 		}
 		var body struct {
-			TargetRate   *solver.Rational `json:"target_rate"`
-			TimeUnit     string           `json:"time_unit"`
-			UpgradeMode  string           `json:"upgrade_mode"`
-			UpgradeTier  string           `json:"upgrade_tier"`
-			UpgradeCount int              `json:"upgrade_count"`
+			TargetRate *solver.Rational `json:"target_rate"`
+			TimeUnit   string           `json:"time_unit"`
 		}
 		if !decodeJSON(w, r, &body) {
 			return
 		}
 		detail, err := svc.Resolve(r.Context(), plID, service.ResolveInput{
-			TargetRate:   body.TargetRate,
-			TimeUnit:     body.TimeUnit,
-			UpgradeMode:  body.UpgradeMode,
-			UpgradeTier:  body.UpgradeTier,
-			UpgradeCount: body.UpgradeCount,
+			TargetRate: body.TargetRate,
+			TimeUnit:   body.TimeUnit,
 		})
 		if err != nil {
 			var cycleErr *solver.ErrCycleBreakNeeded

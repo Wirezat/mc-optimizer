@@ -28,7 +28,6 @@ func ContentHash(n model.NormalizedRecipe) string {
 	type canonical struct {
 		Mod      string       `json:"m"`
 		Machine  string       `json:"mc"`
-		EU       int64        `json:"eu"`
 		Duration int          `json:"d"`
 		II       []itemEntry  `json:"ii"`
 		IO       []itemEntry  `json:"io"`
@@ -39,7 +38,6 @@ func ContentHash(n model.NormalizedRecipe) string {
 	c := canonical{
 		Mod:      n.ModID,
 		Machine:  n.MachineID,
-		EU:       n.EUPerTick,
 		Duration: n.Duration,
 	}
 	for _, io := range n.ItemInputs {

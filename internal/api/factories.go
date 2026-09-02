@@ -5,10 +5,13 @@ import (
 	"errors"
 	"maps"
 	"net/http"
+	"sort"
 	"strings"
 
+	"github.com/Wirezat/GoLog"
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/plugins"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
 )
@@ -379,4 +382,81 @@ func requireFactoryOwner(r *http.Request, w http.ResponseWriter, database *db.DB
 		return errors.New("forbidden")
 	}
 	return nil
+}
+
+// aggregateCosts sums costs per resource across groups, sorted alphabetically
+// by resource. A resource whose running sum overflows int64 is dropped.
+func aggregateCosts(groups [][]plugins.Cost) []plugins.Cost {
+	sums := map[string]solver.Rational{}
+	dropped := map[string]bool{}
+	for _, costs := range groups {
+		for _, c := range costs {
+			if c.Amount.Den == 0 || dropped[c.Resource] {
+				continue
+			}
+			addCostSafely(sums, dropped, c.Resource, solver.NewRational(c.Amount.Num, c.Amount.Den))
+		}
+	}
+	keys := make([]string, 0, len(sums))
+	for k := range sums {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]plugins.Cost, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, plugins.Cost{
+			Resource: k,
+			Amount:   plugins.Rational{Num: sums[k].Num, Den: sums[k].Den},
+		})
+	}
+	return out
+}
+
+// addCostSafely adds amount into sums[resource]. An overflowing resource is
+// removed from sums and marked dropped.
+func addCostSafely(sums map[string]solver.Rational, dropped map[string]bool, resource string, amount solver.Rational) {
+	var err error
+	func() {
+		defer solver.GuardRateArithmetic(&err)
+		if have, ok := sums[resource]; ok {
+			sums[resource] = have.Add(amount)
+		} else {
+			sums[resource] = amount
+		}
+	}()
+	if err != nil {
+		delete(sums, resource)
+		dropped[resource] = true
+		GoLog.Warnf("aggregateCosts: dropping resource %q: %v", resource, err)
+	}
+}
+
+// scaleCosts multiplies one machine's per-tick costs by its group's machine
+// count, guarding overflow the same way aggregateCosts does: an overflowing
+// resource is dropped rather than shown wrong.
+func scaleCosts(costs []plugins.Cost, count int) []plugins.Cost {
+	if count <= 0 || len(costs) == 0 {
+		return nil
+	}
+	out := make([]plugins.Cost, 0, len(costs))
+	for _, c := range costs {
+		if c.Amount.Den == 0 {
+			continue
+		}
+		scaled, err := scaleCostSafely(c.Amount, count)
+		if err != nil {
+			GoLog.Warnf("scaleCosts: dropping resource %q scaling by %d: %v", c.Resource, count, err)
+			continue
+		}
+		out = append(out, plugins.Cost{Resource: c.Resource, Amount: scaled})
+	}
+	return out
+}
+
+// scaleCostSafely multiplies a cost amount by count, turning a rate-arithmetic
+// panic into an error.
+func scaleCostSafely(amount plugins.Rational, count int) (result plugins.Rational, err error) {
+	defer solver.GuardRateArithmetic(&err)
+	scaled := solver.NewRational(amount.Num, amount.Den).Mul(solver.RationalFromInt(int64(count)))
+	return plugins.Rational{Num: scaled.Num, Den: scaled.Den}, nil
 }

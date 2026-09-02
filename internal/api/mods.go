@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -27,8 +28,29 @@ func ListAllMachinesHandler(database *db.DB, assetsDir string) http.HandlerFunc 
 			machines = []*model.MachineType{}
 		}
 		attachMachineTextures(machines, assetsDir)
+		if err := attachMachineCosts(r.Context(), database, machines); err != nil {
+			errInternal(w, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, machines)
 	}
+}
+
+// attachMachineCosts populates each machine's base operating cost from the
+// variant cache, leaving it nil when no variant has been computed for it —
+// the catalog never presents a missing measurement as a zero cost.
+func attachMachineCosts(ctx context.Context, database *db.DB, machines []*model.MachineType) error {
+	for _, m := range machines {
+		costs, err := database.GetAnyBaseVariantCosts(ctx, m.ModID, m.MachineID)
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				continue
+			}
+			return err
+		}
+		m.Costs = costs
+	}
+	return nil
 }
 
 // attachMachineTextures populates TextureURL on each machine and each of its
@@ -47,22 +69,8 @@ func attachMachineTextures(machines []*model.MachineType, assetsDir string) {
 	}
 }
 
-// ListUpgradeTiersHandler returns all upgrade tiers for the solve UI's tier picker.
-func ListUpgradeTiersHandler(database *db.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		tiers, err := database.ListUpgradeTiers(r.Context())
-		if err != nil {
-			errInternal(w, err)
-			return
-		}
-		if tiers == nil {
-			tiers = []model.UpgradeTier{}
-		}
-		writeJSON(w, http.StatusOK, tiers)
-	}
-}
-
-// ListModsHandler returns all mods.
+// ListModsHandler returns all mods, each with its installed plugin's
+// display name and wizard flag.
 func ListModsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		mods, err := database.ListMods(r.Context())
@@ -73,24 +81,47 @@ func ListModsHandler(database *db.DB) http.HandlerFunc {
 		if mods == nil {
 			mods = []*model.Mod{}
 		}
+		if err := attachModPlugins(r, database, mods); err != nil {
+			errInternal(w, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, mods)
 	}
+}
+
+// attachModPlugins fills Mod.Plugin from the installed plugins, leaving it nil
+// for every mod that ships none.
+func attachModPlugins(r *http.Request, database *db.DB, mods []*model.Mod) error {
+	installed, err := database.ListModPlugins(r.Context())
+	if err != nil {
+		return err
+	}
+	byMod := make(map[string]*model.ModPluginInfo, len(installed))
+	for _, p := range installed {
+		byMod[p.ModID] = &model.ModPluginInfo{
+			DisplayName: p.DisplayName,
+			Version:     p.Version,
+			HasWizard:   p.HasWizard,
+		}
+	}
+	for _, m := range mods {
+		m.Plugin = byMod[m.ModID]
+	}
+	return nil
 }
 
 // CreateModHandler creates a new mod. Admin only (enforced at route level).
 func CreateModHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			ModID      string `json:"mod_id"`
-			Name       string `json:"name"`
-			EnergyType string `json:"energy_type"`
+			ModID string `json:"mod_id"`
+			Name  string `json:"name"`
 		}
 		if !decodeJSON(w, r, &body) {
 			return
 		}
 		body.ModID = strings.TrimSpace(body.ModID)
 		body.Name = strings.TrimSpace(body.Name)
-		body.EnergyType = strings.TrimSpace(body.EnergyType)
 		if body.ModID == "" {
 			errBadRequest(w, "mod_id is required")
 			return
@@ -99,11 +130,7 @@ func CreateModHandler(database *db.DB) http.HandlerFunc {
 			errBadRequest(w, "name is required")
 			return
 		}
-		if body.EnergyType == "" {
-			errBadRequest(w, "energy_type is required")
-			return
-		}
-		m, err := database.CreateMod(r.Context(), body.ModID, body.Name, body.EnergyType)
+		m, err := database.CreateMod(r.Context(), body.ModID, body.Name)
 		if err != nil {
 			if errors.Is(err, db.ErrConflict) {
 				errConflict(w, "mod_id already exists")
@@ -126,7 +153,6 @@ func UpdateModHandler(database *db.DB) http.HandlerFunc {
 		}
 		var body struct {
 			Name         *string `json:"name"`
-			EnergyType   *string `json:"energy_type"`
 			Description  *string `json:"description"`
 			Author       *string `json:"author"`
 			License      *string `json:"license"`
@@ -147,15 +173,8 @@ func UpdateModHandler(database *db.DB) http.HandlerFunc {
 				return
 			}
 		}
-		if body.EnergyType != nil {
-			*body.EnergyType = strings.ToUpper(strings.TrimSpace(*body.EnergyType))
-			if *body.EnergyType == "" {
-				errBadRequest(w, "energy_type must not be empty")
-				return
-			}
-		}
 		u := model.ModUpdate{
-			Name: body.Name, EnergyType: body.EnergyType,
+			Name:        body.Name,
 			Description: body.Description, Author: body.Author, License: body.License,
 			URLSource: body.URLSource, URLModrinth: body.URLModrinth, URLWiki: body.URLWiki,
 			URLIssues: body.URLIssues, URLDiscord: body.URLDiscord, ModrinthSlug: body.ModrinthSlug,
@@ -255,7 +274,7 @@ func ListMachinesHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// UpdateMachineHandler updates the display name and/or base EU/tick of a machine type.
+// UpdateMachineHandler updates the display name of a machine type.
 // Admin only (enforced at route level). PATCH /api/mods/{mod_id}/machines/{machine_id}
 func UpdateMachineHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -266,9 +285,7 @@ func UpdateMachineHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		var body struct {
-			Name          *string `json:"name"`
-			BaseEUPerTick *int64  `json:"base_eu_per_tick"`
-			MaxEUPerTick  *int64  `json:"max_eu_per_tick"`
+			Name *string `json:"name"`
 		}
 		if !decodeJSON(w, r, &body) {
 			return
@@ -280,7 +297,7 @@ func UpdateMachineHandler(database *db.DB) http.HandlerFunc {
 				return
 			}
 		}
-		err := database.UpdateMachineType(r.Context(), modID, machineID, body.Name, body.BaseEUPerTick, body.MaxEUPerTick)
+		err := database.UpdateMachineType(r.Context(), modID, machineID, body.Name)
 		if err != nil {
 			if errors.Is(err, db.ErrNotFound) {
 				errNotFound(w)
@@ -484,10 +501,6 @@ func CreateModRecipeHandler(database *db.DB) http.HandlerFunc {
 		}
 		if body.DurationTicks <= 0 {
 			errBadRequest(w, "duration_ticks must be positive")
-			return
-		}
-		if body.EUPerTick < 0 {
-			errBadRequest(w, "eu_per_tick must be non-negative")
 			return
 		}
 		recipe, err := database.CreateRecipe(r.Context(), modID, &body)

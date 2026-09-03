@@ -33,8 +33,10 @@ CLAUDE.md
 
 # Import Data
 /assets/
-/temp mc jar/
+
+# Offline-Werkbank: jars, kuratierte modfiles, Python-Pipeline, gebaute ZIPs.
+# Nichts davon liest der Server.
+/mod-sources/
 
 # SDD workspace (git-ignored scratch)
 /.superpowers/
-/db-backups/

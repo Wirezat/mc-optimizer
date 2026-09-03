@@ -2,11 +2,8 @@ package api
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/Wirezat/production-optimizer/internal/db"
@@ -69,18 +66,6 @@ func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render
 			tmp.Close()
 			defer os.Remove(tmpName)
 
-			// Archive the uploaded ZIP in assetsDir/uploads/ for operator reference.
-			base := strings.TrimSuffix(filepath.Base(h.Filename), ".zip")
-			archiveName := fmt.Sprintf("%s_%d.zip", base, time.Now().Unix())
-			archiveDir := filepath.Join(assetsDir, "uploads")
-			_ = os.MkdirAll(archiveDir, 0o755)
-			if src, err2 := os.Open(tmpName); err2 == nil {
-				if dst, err3 := os.Create(filepath.Join(archiveDir, archiveName)); err3 == nil {
-					_, _ = io.Copy(dst, src)
-					dst.Close()
-				}
-				src.Close()
-			}
 			if copyErr != nil {
 				errInternal(w, fmt.Errorf("write temp file %s: %w", h.Filename, copyErr))
 				return

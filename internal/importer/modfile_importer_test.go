@@ -47,9 +47,6 @@ func (fakeImporterDB) UpsertBlockDrops(ctx context.Context, drops []model.BlockD
 func (fakeImporterDB) UpsertVillagerTrades(ctx context.Context, trades []model.VillagerTrade) error {
 	return nil
 }
-func (fakeImporterDB) UpdateModMetadata(ctx context.Context, meta model.ModMetadata) error {
-	return nil
-}
 func (fakeImporterDB) UpsertMod(ctx context.Context, m model.ModDef) error { return nil }
 func (fakeImporterDB) UpsertFluids(ctx context.Context, modID string, fluidIDs []string) error {
 	return nil

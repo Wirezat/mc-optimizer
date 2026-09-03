@@ -168,21 +168,6 @@ func (d *DB) MovePLToGroup(ctx context.Context, plID uuid.UUID, groupID *uuid.UU
 	return nil
 }
 
-// SetPLGroup assigns (or clears) the group for a production line.
-func (d *DB) SetPLGroup(ctx context.Context, plID uuid.UUID, groupID *uuid.UUID) error {
-	tag, err := d.Pool.Exec(ctx,
-		`UPDATE production_lines SET pl_group_id = $2 WHERE id = $1`,
-		plID, groupID,
-	)
-	if err != nil {
-		return fmt.Errorf("db: set pl group: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // ProductionLineOwnerUserID resolves the user_id that owns a production line
 // via the chain production_lines → factories → saves.
 func (d *DB) ProductionLineOwnerUserID(ctx context.Context, plID uuid.UUID) (uuid.UUID, error) {

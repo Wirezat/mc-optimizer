@@ -93,8 +93,8 @@ func (d *DB) LookupItemNames(ctx context.Context, items []solver.ItemRef) (map[s
 	return result, nil
 }
 
-// LookupMachineNames resolves en_us display names for a set of (modID, machineID) pairs.
-// Uses name_lang_key for i18n lookup, falls back to name (titlecase).
+// LookupMachineNames resolves display names for a set of (modID, machineID) pairs.
+// The name is resolved from the modfile's lang_key at import time and stored on the row.
 // Returns a map[modID+":"+machineID → name].
 func (d *DB) LookupMachineNames(ctx context.Context, machines []solver.MachineRef) (map[string]string, error) {
 	if len(machines) == 0 {
@@ -108,10 +108,7 @@ func (d *DB) LookupMachineNames(ctx context.Context, machines []solver.MachineRe
 	}
 	rows, err := d.Pool.Query(ctx, `
 		SELECT mt.mod_id, mt.machine_id,
-		       COALESCE(
-		           (SELECT t.name FROM translations t WHERE t.lang = 'en_us' AND t.lang_key = mt.name_lang_key),
-		           mt.name
-		       )
+		       mt.name
 		FROM machine_types mt
 		WHERE (mt.mod_id, mt.machine_id) IN (SELECT unnest($1::text[]), unnest($2::text[]))
 	`, modIDs, machineIDs)
@@ -218,8 +215,8 @@ func (d *DB) CreateMod(ctx context.Context, modID, name string) (*model.Mod, err
 }
 
 // UpdateModFull overwrites all editable fields for a mod. Caller must be an admin.
-// Unlike UpdateModMetadata, every field but name is overwritten unconditionally, including to NULL;
-// name falls back to its current value via COALESCE when nil.
+// Every field but name is overwritten unconditionally, including to NULL; name falls
+// back to its current value via COALESCE when nil.
 func (d *DB) UpdateModFull(ctx context.Context, modID string, u model.ModUpdate) error {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE mods SET
@@ -279,30 +276,6 @@ func (d *DB) UpdateItem(ctx context.Context, modID, itemID, name string) error {
 	`, modID, itemID, name)
 	if err != nil {
 		return fmt.Errorf("db: update item: %w", err)
-	}
-	return nil
-}
-
-// UpdateModMetadata stores Modrinth-fetched metadata for a mod.
-// Only updates fields that are currently NULL, so manually set values are preserved.
-func (d *DB) UpdateModMetadata(ctx context.Context, meta model.ModMetadata) error {
-	_, err := d.Pool.Exec(ctx, `
-		UPDATE mods SET
-			description   = COALESCE(description,   NULLIF($2, '')),
-			author        = COALESCE(author,         NULLIF($3, '')),
-			license       = COALESCE(license,        NULLIF($4, '')),
-			url_source    = COALESCE(url_source,     NULLIF($5, '')),
-			url_modrinth  = COALESCE(url_modrinth,   NULLIF($6, '')),
-			url_wiki      = COALESCE(url_wiki,       NULLIF($7, '')),
-			url_issues    = COALESCE(url_issues,     NULLIF($8, '')),
-			url_discord   = COALESCE(url_discord,    NULLIF($9, '')),
-			modrinth_slug = COALESCE(modrinth_slug,  NULLIF($10, ''))
-		WHERE mod_id = $1
-	`, meta.ModID, meta.Description, meta.Author, meta.License,
-		meta.URLSource, meta.URLModrinth, meta.URLWiki, meta.URLIssues,
-		meta.URLDiscord, meta.ModrinthSlug)
-	if err != nil {
-		return fmt.Errorf("db: update mod metadata %s: %w", meta.ModID, err)
 	}
 	return nil
 }
@@ -715,7 +688,7 @@ func (d *DB) ListTagMembers(ctx context.Context) ([]model.TagMember, error) {
 func (d *DB) ListAllMachines(ctx context.Context) ([]*model.MachineType, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT mt.mod_id, mt.machine_id,
-		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
+		       mt.name,
 		       (SELECT COUNT(*) FROM recipes r WHERE r.machine_mod_id = mt.mod_id AND r.machine_id = mt.machine_id)
 		FROM machine_types mt
 		ORDER BY mt.mod_id, mt.machine_id
@@ -907,7 +880,7 @@ func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID
 		       duration_ticks
 		FROM (
 			SELECT r.id::text AS id, r.machine_mod_id, r.machine_id, r.source_mod_id,
-			       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name) AS machine_name,
+			       mt.name AS machine_name,
 			       r.name,
 			       r.duration_ticks
 			FROM recipes r
@@ -930,7 +903,7 @@ func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID
 			-- the "attribute recipes to the mod that added them" fix — this is
 			-- purely additive for the machine drill-down view).
 			SELECT r.id::text AS id, mi.machine_mod_id, mi.machine_id, r.source_mod_id,
-			       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name) AS machine_name,
+			       mt.name AS machine_name,
 			       r.name,
 			       r.duration_ticks
 			FROM recipes r
@@ -969,7 +942,7 @@ func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID
 func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*model.Recipe, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT r.id::text, r.machine_mod_id, r.machine_id, r.source_mod_id,
-		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
+		       mt.name,
 		       r.name, r.duration_ticks, r.shape
 		FROM recipes r
 		LEFT JOIN machine_types mt ON mt.mod_id = r.machine_mod_id AND mt.machine_id = r.machine_id
@@ -979,7 +952,7 @@ func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*
 		UNION
 
 		SELECT r.id::text, mi.machine_mod_id, mi.machine_id, r.source_mod_id,
-		       COALESCE((SELECT t.name FROM translations t WHERE t.lang='en_us' AND t.lang_key = mt.name_lang_key), mt.name),
+		       mt.name,
 		       r.name, r.duration_ticks, r.shape
 		FROM recipes r
 		JOIN machine_interfaces mi ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id

@@ -51,21 +51,11 @@ CREATE TABLE tag_members (
     FOREIGN KEY (item_mod_id, item_id) REFERENCES items(mod_id, item_id) ON DELETE CASCADE
 );
 
--- Stores raw tag file values per tag name for cross-JAR tag resolution.
-CREATE TABLE tag_values (
-    tag_name TEXT NOT NULL,
-    value    TEXT NOT NULL,
-    PRIMARY KEY (tag_name, value)
-);
-
-CREATE INDEX ON tag_values (tag_name);
 
 CREATE TABLE machine_types (
     mod_id        TEXT  NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
     machine_id    TEXT  NOT NULL,
     name          TEXT  NOT NULL,
-    -- Resolved i18n key for the display name (see LocalizeMachineNames); NULL falls back to name.
-    name_lang_key TEXT,
     -- Which plugin evaluates this machine; NULL means the machine's own mod_id.
     ecosystem     TEXT,
     -- Everything mod-specific; the host never reads an individual field here.
@@ -185,17 +175,6 @@ CREATE TABLE recipe_fluid_outputs (
     FOREIGN KEY (fluid_mod_id, fluid_id) REFERENCES fluids(mod_id, fluid_id) ON DELETE CASCADE
 );
 
-CREATE TABLE valid_recipe_types (
-    id                UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-    pattern           TEXT    NOT NULL UNIQUE,
-    is_regex          BOOLEAN NOT NULL DEFAULT FALSE,
-    target_mod_id     TEXT,
-    target_machine_id TEXT,
-    FOREIGN KEY (target_mod_id, target_machine_id)
-        REFERENCES machine_types(mod_id, machine_id) ON DELETE SET NULL
-);
-
-CREATE INDEX ON valid_recipe_types (target_mod_id, target_machine_id);
 
 -- Block loot drops: what a block yields when broken.
 CREATE TABLE block_drops (

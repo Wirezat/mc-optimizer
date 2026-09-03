@@ -14,7 +14,6 @@ type ImporterDB interface {
 	BulkUpsertItems(ctx context.Context, modID string, items []model.ItemDef) error
 	UpsertBlockDrops(ctx context.Context, drops []model.BlockDrop) error
 	UpsertVillagerTrades(ctx context.Context, trades []model.VillagerTrade) error
-	UpdateModMetadata(ctx context.Context, meta model.ModMetadata) error
 
 	UpsertMod(ctx context.Context, m model.ModDef) error
 	UpsertFluids(ctx context.Context, modID string, fluidIDs []string) error

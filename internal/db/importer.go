@@ -260,102 +260,6 @@ func (d *DB) UpsertTranslations(ctx context.Context, lang string, entries map[st
 	return nil
 }
 
-// UpsertTagValues stores raw tag values for a given tag name.
-// If replace=true, all existing values for that tag are deleted first.
-func (d *DB) UpsertTagValues(ctx context.Context, tagName string, values []string, replace bool) error {
-	if len(values) == 0 && !replace {
-		return nil
-	}
-	tx, err := d.Pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("db: upsert tag values: begin: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	if replace {
-		if _, err := tx.Exec(ctx, `DELETE FROM tag_values WHERE tag_name = $1`, tagName); err != nil {
-			return fmt.Errorf("db: upsert tag values: delete: %w", err)
-		}
-	}
-	if len(values) > 0 {
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO tag_values (tag_name, value)
-			SELECT $1, unnest($2::text[])
-			ON CONFLICT DO NOTHING
-		`, tagName, values); err != nil {
-			return fmt.Errorf("db: upsert tag values: insert: %w", err)
-		}
-	}
-	return tx.Commit(ctx)
-}
-
-// LoadAllTagValues loads all raw tag values from the DB, returning map[tagName][]value.
-func (d *DB) LoadAllTagValues(ctx context.Context) (map[string][]string, error) {
-	rows, err := d.Pool.Query(ctx, `SELECT tag_name, value FROM tag_values ORDER BY tag_name, value`)
-	if err != nil {
-		return nil, fmt.Errorf("db: load all tag values: %w", err)
-	}
-	defer rows.Close()
-
-	result := make(map[string][]string)
-	for rows.Next() {
-		var tagName, value string
-		if err := rows.Scan(&tagName, &value); err != nil {
-			return nil, fmt.Errorf("db: load all tag values: scan: %w", err)
-		}
-		result[tagName] = append(result[tagName], value)
-	}
-	return result, rows.Err()
-}
-
-// UpsertTagMembers writes the fully resolved tag→items mapping.
-// For each tag, existing members are replaced with the resolved list.
-// Only items that exist in the items table are inserted.
-func (d *DB) UpsertTagMembers(ctx context.Context, resolved map[string][]string) error {
-	if len(resolved) == 0 {
-		return nil
-	}
-	tx, err := d.Pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("db: upsert tag members: begin: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	for tagName, items := range resolved {
-		var tagID uuid.UUID
-		if err := tx.QueryRow(ctx, `
-			INSERT INTO tags (id, name) VALUES (gen_random_uuid(), $1)
-			ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-			RETURNING id
-		`, tagName).Scan(&tagID); err != nil {
-			return fmt.Errorf("db: upsert tag members: upsert tag %q: %w", tagName, err)
-		}
-
-		if _, err := tx.Exec(ctx, `DELETE FROM tag_members WHERE tag_id = $1`, tagID); err != nil {
-			return fmt.Errorf("db: upsert tag members: delete old members for %q: %w", tagName, err)
-		}
-
-		if len(items) == 0 {
-			continue
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO tag_members (tag_id, item_mod_id, item_id)
-			SELECT $1, split_part(v, ':', 1), split_part(v, ':', 2)
-			FROM unnest($2::text[]) AS v
-			WHERE EXISTS (
-				SELECT 1 FROM items i
-				WHERE i.mod_id  = split_part(v, ':', 1)
-				  AND i.item_id = split_part(v, ':', 2)
-			)
-			ON CONFLICT DO NOTHING
-		`, tagID, items); err != nil {
-			return fmt.Errorf("db: upsert tag members: insert for %q: %w", tagName, err)
-		}
-	}
-
-	return tx.Commit(ctx)
-}
-
 func upsertItem(ctx context.Context, tx pgx.Tx, modID, itemID string) error {
 	_, err := tx.Exec(ctx, `
 		INSERT INTO items (mod_id, item_id, max_stack)
@@ -394,24 +298,6 @@ func upsertTag(ctx context.Context, tx pgx.Tx, name string) (uuid.UUID, error) {
 	return id, nil
 }
 
-// UpdateModDisplayNames updates the display name for each mod in the map.
-// Only updates rows where name currently equals mod_id (the default), preserving manually set names.
-func (d *DB) UpdateModDisplayNames(ctx context.Context, names map[string]string) error {
-	for modID, displayName := range names {
-		if displayName == "" || displayName == modID {
-			continue
-		}
-		_, err := d.Pool.Exec(ctx, `
-			UPDATE mods SET name = $2
-			WHERE mod_id = $1 AND name = $1
-		`, modID, displayName)
-		if err != nil {
-			return fmt.Errorf("db: update mod display name %s: %w", modID, err)
-		}
-	}
-	return nil
-}
-
 // BulkUpsertItems inserts or updates items from a mod definition, each with its
 // own curated max_stack (yaml `max_stack`, default 64). The mod must already
 // exist; items for unknown mods are skipped, as are ids that already exist in
@@ -435,27 +321,6 @@ func (d *DB) BulkUpsertItems(ctx context.Context, modID string, items []model.It
 	`, modID, ids, maxStacks)
 	if err != nil {
 		return fmt.Errorf("db: bulk upsert items for mod %s: %w", modID, err)
-	}
-	return nil
-}
-
-// MirrorFluidTranslations creates fluid.{ns}.{id} translation keys from the
-// matching block.{ns}.{id} keys.
-func (d *DB) MirrorFluidTranslations(ctx context.Context) error {
-	_, err := d.Pool.Exec(ctx, `
-		INSERT INTO translations (lang, lang_key, name)
-		SELECT t.lang,
-		       'fluid.' || f.mod_id || '.' || f.fluid_id,
-		       t.name
-		FROM translations t
-		JOIN fluids f ON f.mod_id   = split_part(t.lang_key, '.', 2)
-		             AND f.fluid_id = split_part(t.lang_key, '.', 3)
-		WHERE t.lang_key LIKE 'block.%.%'
-		  AND split_part(t.lang_key, '.', 1) = 'block'
-		ON CONFLICT (lang, lang_key) DO NOTHING
-	`)
-	if err != nil {
-		return fmt.Errorf("db: mirror fluid translations: %w", err)
 	}
 	return nil
 }
@@ -576,53 +441,6 @@ func (d *DB) UpsertVillagerTrades(ctx context.Context, trades []model.VillagerTr
 		resMods, resItems, resCounts, modified, variable, maxUses, xps)
 	if err != nil {
 		return fmt.Errorf("db: upsert villager trades: %w", err)
-	}
-	return nil
-}
-
-// LocalizeMachineNames resolves a translation key for each machine_type and stores it in
-// name_lang_key. The name column is set to initcap(machine_id) as a language-neutral fallback
-// (used when the key cannot be found at query time). Resolution priority for the key:
-//  1. Exact block.{mod}.{machine_id}
-//  2. Exact rei_categories.{mod}.{machine_id}
-//  3. rei_categories.{mod}.{tier}_{machine_id} where lower(name) = replace(machine_id,'_',' ')
-//  4. block.{mod}.{tier}_{machine_id} with the same name check
-//
-// name_lang_key = NULL means no key found; callers fall back to name.
-// Idempotent — safe to call on every import.
-func (d *DB) LocalizeMachineNames(ctx context.Context) error {
-	_, err := d.Pool.Exec(ctx, `
-		UPDATE machine_types mt
-		SET
-			name_lang_key = COALESCE(
-				-- 1. exact block.* key
-				(SELECT t.lang_key FROM translations t
-				 WHERE t.lang = 'en_us'
-				   AND t.lang_key = 'block.' || mt.mod_id || '.' || mt.machine_id
-				 LIMIT 1),
-				-- 2. exact rei_categories.* key
-				(SELECT t.lang_key FROM translations t
-				 WHERE t.lang = 'en_us'
-				   AND t.lang_key = 'rei_categories.' || mt.mod_id || '.' || mt.machine_id
-				 LIMIT 1),
-				-- 3. rei_categories.{mod}.{tier}_{machine_id} where name matches generic form
-				(SELECT t.lang_key FROM translations t
-				 WHERE t.lang = 'en_us'
-				   AND t.lang_key LIKE 'rei_categories.' || mt.mod_id || '.%' || mt.machine_id
-				   AND lower(t.name) = replace(mt.machine_id, '_', ' ')
-				 LIMIT 1),
-				-- 4. block.{mod}.{tier}_{machine_id} with same name check
-				(SELECT t.lang_key FROM translations t
-				 WHERE t.lang = 'en_us'
-				   AND t.lang_key LIKE 'block.' || mt.mod_id || '.%' || mt.machine_id
-				   AND lower(t.name) = replace(mt.machine_id, '_', ' ')
-				 LIMIT 1)
-			),
-			name = initcap(replace(mt.machine_id, '_', ' '))
-		WHERE mt.name = mt.machine_id OR mt.name_lang_key IS NULL
-	`)
-	if err != nil {
-		return fmt.Errorf("db: localize machine names: %w", err)
 	}
 	return nil
 }

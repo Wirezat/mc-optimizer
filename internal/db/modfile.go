@@ -107,13 +107,22 @@ func (d *DB) UpsertMachineSlots(ctx context.Context, slots []model.MachineSlotDe
 	return nil
 }
 
-// UpsertDirectTagMembers inserts explicit tag members (already resolved mod_id:item_id pairs).
+// UpsertDirectTagMembers replaces a tag's members with the given list (already
+// resolved mod_id:item_id pairs). Replacing rather than adding is what makes a
+// reimport that drops a member actually drop it; the whole tag is rewritten in
+// one transaction so a failing member leaves the previous membership intact.
 func (d *DB) UpsertDirectTagMembers(ctx context.Context, tagName string, members []string) error {
 	if len(members) == 0 {
 		return nil
 	}
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("db: upsert tag %q: begin: %w", tagName, err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
 	var tagID string
-	if err := d.Pool.QueryRow(ctx, `
+	if err := tx.QueryRow(ctx, `
 		INSERT INTO tags (id, name)
 		VALUES (gen_random_uuid(), $1)
 		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
@@ -121,12 +130,15 @@ func (d *DB) UpsertDirectTagMembers(ctx context.Context, tagName string, members
 	`, tagName).Scan(&tagID); err != nil {
 		return fmt.Errorf("db: upsert tag %q: %w", tagName, err)
 	}
+	if _, err := tx.Exec(ctx, `DELETE FROM tag_members WHERE tag_id = $1`, tagID); err != nil {
+		return fmt.Errorf("db: upsert tag %q: clear members: %w", tagName, err)
+	}
 	for _, ref := range members {
 		modID, itemID, err := splitColonRef(ref)
 		if err != nil {
 			return fmt.Errorf("db: tag member %q: %w", ref, err)
 		}
-		if _, err := d.Pool.Exec(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO tag_members (tag_id, item_mod_id, item_id)
 			VALUES ($1, $2, $3)
 			ON CONFLICT DO NOTHING
@@ -134,7 +146,7 @@ func (d *DB) UpsertDirectTagMembers(ctx context.Context, tagName string, members
 			return fmt.Errorf("db: upsert tag member %s: %w", ref, err)
 		}
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 func splitColonRef(ref string) (modID, id string, err error) {

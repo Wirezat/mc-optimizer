@@ -110,6 +110,7 @@ func (s *Solver) solve(ctx context.Context, req SolveRequest) (SolveResult, erro
 		var k int64
 		groups, actualRatePerTick, k, scaleWarns = s.ScaleToInteger(groups, rv, req.TargetItem, s.AutoScaleMax, allowPartial)
 		warnings = append(warnings, scaleWarns...)
+		groups = repickVariants(groups, req)
 		if k > 1 {
 			kRat := NewRational(k, 1)
 			scaled := make(map[string]Rational, len(rv.ItemRates))

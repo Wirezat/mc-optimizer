@@ -98,6 +98,7 @@ func (s *Solver) CalculateMachineGroups(ctx context.Context, g *RecipeGraph, rv 
 			Costs:          choice.variant.Costs,
 			Variant:        choice.variant,
 			VariantOptions: variantOptions(vs),
+			variants:       vs,
 			ExactCount:     choice.exact,
 			Count:          choice.count,
 			Utilization:    choice.utilization,

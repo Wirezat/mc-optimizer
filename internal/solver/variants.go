@@ -254,6 +254,40 @@ func syncVariantOutputs(g *RecipeGraph, base map[string]outputBaseline, groups [
 	return changed
 }
 
+// repickVariants repeats the automatic variant choice for every unpinned group
+// after AUTO scaling. The pick in CalculateMachineGroups saw the unscaled
+// request rate, where nearly every group is a fraction of one machine and no
+// upgrade can pay off. Each group keeps its recipe rate, so only its count and
+// utilization move; variants that override outputs are left out because the
+// rates were solved on the catalog amounts.
+func repickVariants(groups []MachineGroupDraft, req SolveRequest) []MachineGroupDraft {
+	for i := range groups {
+		g := &groups[i]
+		if len(g.variants) < 2 || len(g.Variant.Outputs) > 0 {
+			continue
+		}
+		if _, pinned := pinnedVariant(g.variants, req.VariantPins[RecipeOptionKey(g.RecipeID, g.MachineMod, g.MachineID)]); pinned {
+			continue
+		}
+		candidates := make([]plugins.Variant, 0, len(g.variants))
+		for _, v := range g.variants {
+			if len(v.Outputs) == 0 {
+				candidates = append(candidates, v)
+			}
+		}
+		recipeRate := g.ExactCount.Mul(NewRational(g.Variant.Rate.Num, g.Variant.Rate.Den))
+		best, count, ok := PickVariant(candidates, recipeRate)
+		if !ok || best.ID == g.VariantID {
+			continue
+		}
+		g.Variant, g.VariantID, g.Label, g.Costs = best, best.ID, best.Label, best.Costs
+		g.ExactCount = recipeRate.Div(NewRational(best.Rate.Num, best.Rate.Den))
+		g.Count = count
+		g.Utilization = g.ExactCount.Div(NewRational(count, 1))
+	}
+	return groups
+}
+
 // RecountForVariant recomputes a machine group's counts when it switches from
 // variant from to variant to, reconstructing the recipe rate from the group's
 // fractional count under the old variant. Returns the new machine count and

@@ -147,6 +147,9 @@ type MachineGroupDraft struct {
 	// VariantOptions lists every runnable variant of this group so a client
 	// can offer the alternatives the automatic pick did not take.
 	VariantOptions []VariantOption
+	// variants is the full list the pick was made from, kept off the wire so
+	// AUTO mode can pick again once the chain is scaled to whole machines.
+	variants []plugins.Variant
 }
 
 // VariantOption is one selectable operating variant of a machine group, as

@@ -434,7 +434,6 @@
   "solve.target_placeholder": "Search for item or fluid…",
   "solve.title": "New Production Line",
   "solve.variant.default": "Default",
-  "solve.variant.pick_title": "Operating variant for this machine group",
   "solve.warning.auto_scale_bottleneck": "No factory size up to {max_scale}× runs every machine at 100%. Scaled so the busiest machine is fully used; the others run below 100%.",
   "solve.warning.plugin_failed": "The plugin of mod {mod} could not be evaluated. Its machines were costed at their nominal recipe duration.",
   "solve.warning.recipe_not_runnable": "No operating configuration of {machine} can run recipe {recipe}. The base configuration was costed instead.",

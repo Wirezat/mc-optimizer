@@ -163,14 +163,6 @@
     .mg-recipe  { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mg-mod     { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
     .mg-variant { font-size: var(--text-xs); color: var(--text-faint); }
-    /* Matches the read-only .mg-variant line it replaces, so a group with
-       alternatives does not jump in height against one without. */
-    .mg-variant-select {
-      --mg-variant-select-height: 1.6rem;
-      font-size: var(--text-xs);
-      height: var(--mg-variant-select-height);
-      padding-block: 0;
-    }
     .mg-util    { font-size: var(--text-xs); color: var(--text-muted); flex-shrink: 0; }
 
     /* ── IO profile ────────────────────────────────────────────────────────── */
@@ -415,7 +407,6 @@
   let _tagResolutions = {};
   let _allowPartial = new Set();
   let _stopPoints   = new Set();
-  let _variantPins  = {}; // RecipeOptionKey → variant id, pinned by the user
   // Plugin config per mod, owned by this page and frozen into the production
   // line on confirm. A fresh chain starts empty, which every plugin reads as
   // its own defaults.
@@ -664,7 +655,6 @@
           _tagOverrides = {};
           _allowPartial = new Set();
           _stopPoints   = new Set();
-          _variantPins  = {};
           _chainItems   = [];
           _neededRates  = new Map();
           hideChain();
@@ -735,7 +725,6 @@
     _targetItem.ModID = this.value;
     _overrides    = {};
     _tagOverrides = {};
-    _variantPins  = {};
     _chainItems   = [];
     hideChain();
     hideResult();
@@ -756,13 +745,6 @@
   document.getElementById('result-machines').addEventListener('click', e => {
     const btn = e.target.closest('[data-action="togglePartial"]');
     if (btn) togglePartial(btn.dataset.recipeid);
-  });
-  document.getElementById('result-machines').addEventListener('change', e => {
-    const sel = e.target.closest('select[data-opt-key]');
-    if (!sel) return;
-    // A pin re-runs the solve; the page does not recompute counts itself.
-    _variantPins[sel.dataset.optKey] = sel.value;
-    doSolve();
   });
 
   async function doDiscover() {
@@ -1166,7 +1148,6 @@
         TagOverrides:         _tagOverrides,
         FactoryState:         { ExistingOutputs: {} },
         AllowPartialMachines: [..._allowPartial],
-        VariantPins:          _variantPins,
         ModConfigs:           _modConfigs,
       }),
     });
@@ -1209,15 +1190,6 @@
       _neededRates.set(itemKey(e.Item), { Num: e.Rate.Num, Den: e.Rate.Den, TimeUnit: e.TimeUnit });
     }
     renderChainConfig();
-
-    // A pin's key embeds the machine, so a stale one never matches wrongly —
-    // but nothing else drops it either. Prune against the groups this solve
-    // actually returned so pins don't accumulate for the rest of the page's life.
-    const liveGroupKeys = new Set((data.result?.MachineGroups || [])
-      .map(g => `${g.RecipeID}@${g.MachineMod}:${g.MachineID}`));
-    for (const k of Object.keys(_variantPins)) {
-      if (!liveGroupKeys.has(k)) delete _variantPins[k];
-    }
 
     const itemName = _targetItem?.name
       || (_targetItem?.TagRef ? '#' + _targetItem.TagRef : '')
@@ -1289,17 +1261,8 @@
         const partial = _allowPartial.has(g.RecipeID);
         const partialLabel = partial ? t('solve.partial.active_label') : t('solve.partial.allow_label');
         const partialTitle = partial ? t('solve.partial.active_title') : t('solve.partial.allow_title');
-        // The group's key on the wire is the same RecipeOptionKey the solver
-        // uses, rebuilt here from the fields the group already carries.
-        const optKey = `${g.RecipeID}@${g.MachineMod}:${g.MachineID}`;
-        const opts   = g.VariantOptions || [];
-        const variantCell = opts.length > 1
-          ? `<select class="input mg-variant-select" data-opt-key="${esc(optKey)}"
-                 title="${esc(t('solve.variant.pick_title'))}">` +
-            opts.map(o =>
-              `<option value="${esc(o.id)}"${o.id === g.VariantID ? ' selected' : ''}>${esc(o.label || t('solve.variant.default'))}</option>`
-            ).join('') + `</select>`
-          : `<div class="mg-variant">${g.Label ? esc(g.Label) : esc(t('solve.variant.default'))}</div>`;
+        // The variant is the solver's pick; the page never offers alternatives.
+        const variantCell = `<div class="mg-variant">${g.Label ? esc(g.Label) : esc(t('solve.variant.default'))}</div>`;
         return `<div class="mg-row">
           <div class="mg-count">${g.Count}×</div>
           <div class="mg-info">

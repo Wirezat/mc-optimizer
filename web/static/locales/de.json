@@ -434,7 +434,6 @@
   "solve.target_placeholder": "Item oder Flüssigkeit suchen…",
   "solve.title": "Neue Produktionslinie",
   "solve.variant.default": "Standard",
-  "solve.variant.pick_title": "Betriebsvariante dieser Maschinengruppe",
   "solve.warning.auto_scale_bottleneck": "Keine Fabrikgröße bis {max_scale}× lässt alle Maschinen auf 100% laufen. Hochskaliert, sodass die am stärksten ausgelastete Maschine voll genutzt wird; die übrigen laufen unter 100%.",
   "solve.warning.plugin_failed": "Das Plugin der Mod {mod} konnte nicht ausgewertet werden. Ihre Maschinen wurden mit der nominalen Rezeptdauer gerechnet.",
   "solve.warning.recipe_not_runnable": "Keine Betriebskonfiguration von {machine} kann Rezept {recipe} ausführen. Gerechnet wurde stattdessen die Basiskonfiguration.",

@@ -903,3 +903,60 @@ func TestChooseVariantIgnoresInvalidPin(t *testing.T) {
 		t.Errorf("count = %d, want 1", c.count)
 	}
 }
+
+// perRecipeSource answers each recipe with its own variant list, so a chain can
+// hold one group that has an upgrade on offer and one that does not.
+type perRecipeSource struct {
+	vs map[string][]plugins.Variant
+}
+
+func (p *perRecipeSource) Variants(_ context.Context, _ *MachineSpec, r *RecipeRow, _ json.RawMessage) ([]plugins.Variant, error) {
+	if vs, ok := p.vs[r.ID]; ok {
+		return vs, nil
+	}
+	return []plugins.Variant{DefaultVariant(r)}, nil
+}
+
+// In AUTO mode the first variant pick sees the unscaled request rate, where
+// every group is a fraction of one machine and no upgrade can pay off. Once the
+// chain is scaled to whole machines (7 and 3 here) the pick must be repeated at
+// the real rate: the 7-machine group collapses to 1 fast machine, the group
+// without an upgrade stays as it was.
+func TestSolveAutoRepicksVariantsAfterScaling(t *testing.T) {
+	store, target := chainStub(2)
+	src := &perRecipeSource{vs: map[string][]plugins.Variant{
+		"recipe:t1": {
+			{ID: "base", Rate: plugins.Rational{Num: 1, Den: 7}, Valid: true},
+			{ID: "fast", Rate: plugins.Rational{Num: 1, Den: 1}, Valid: true,
+				Items: []plugins.Item{{Ref: "m:upgrade", Count: 1}}},
+		},
+		"recipe:t2": {
+			{ID: "base", Rate: plugins.Rational{Num: 1, Den: 3}, Valid: true},
+		},
+	}}
+	s := NewSolver(store, 1000)
+	s.VariantSource = src
+	res, err := s.Solve(context.Background(), SolveRequest{
+		TargetItem: target,
+		TargetRate: NewRational(1, 100),
+		TimeUnit:   "t",
+		Mode:       SolveModeAuto,
+	})
+	if err != nil {
+		t.Fatalf("Solve: %v", err)
+	}
+	byRecipe := map[string]MachineGroupDraft{}
+	for _, g := range res.MachineGroups {
+		byRecipe[g.RecipeID] = g
+	}
+	t1, t2 := byRecipe["recipe:t1"], byRecipe["recipe:t2"]
+	if t1.VariantID != "fast" || t1.Count != 1 {
+		t.Errorf("t1 = %s x%d, want fast x1", t1.VariantID, t1.Count)
+	}
+	if t2.VariantID != "base" || t2.Count != 3 {
+		t.Errorf("t2 = %s x%d, want base x3", t2.VariantID, t2.Count)
+	}
+	if got := res.ActualRate; got.Num != 1 || got.Den != 1 {
+		t.Errorf("actual rate = %d/%d per tick, want 1/1: re-picking must keep the scaled rate", got.Num, got.Den)
+	}
+}

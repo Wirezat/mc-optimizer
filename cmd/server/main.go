@@ -203,7 +203,7 @@ func run() error {
 	mux.Handle("GET /api/import/status", adminOnly(api.ImportStatusHandler(database)))
 	mux.Handle("POST /api/import/modfile", adminOnly(api.ImportModFileHandler(database, "assets", renderCache)))
 
-	mux.Handle("PATCH /api/machine-groups/{group_id}/status", protected(api.UpdateMachineGroupStatusHandler(database)))
+	mux.Handle("PATCH /api/machine-groups/{group_id}/status", protected(api.UpdateMachineGroupStatusHandler(database, variantResolver)))
 	mux.Handle("PUT /api/machine-groups/{group_id}/variant", protected(api.SetGroupVariantHandler(database, variantResolver)))
 
 	mux.Handle("GET /plugin-assets/{mod_id}/plugin.js", protected(api.PluginAssetHandler(database)))
@@ -217,7 +217,7 @@ func run() error {
 	mux.Handle("POST /api/factories/{factory_id}/production-line/confirm", protected(api.ConfirmProductionLineHandler(database, plSvc)))
 	mux.Handle("GET /api/factories/{factory_id}/production-lines", protected(api.ListProductionLinesHandler(database, variantResolver)))
 
-	mux.Handle("GET /api/production-lines/{line_id}", protected(api.GetProductionLineHandler(database)))
+	mux.Handle("GET /api/production-lines/{line_id}", protected(api.GetProductionLineHandler(database, variantResolver)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/status", protected(api.UpdateProductionLineStatusHandler(database)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/mark-built", protected(api.MarkProductionLineBuiltHandler(database)))
 	mux.Handle("POST /api/production-lines/{line_id}/resolve", protected(api.ResolveProductionLineHandler(database, plSvc)))

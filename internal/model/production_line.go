@@ -60,6 +60,27 @@ type MachineGroup struct {
 	// Costs is the chosen variant's operating cost per tick. Computed on
 	// demand from the plugin, never stored.
 	Costs []plugins.Cost `json:"costs,omitempty"`
+	// Variant and CurrentVariant describe the target and the built operating
+	// variant; VariantOptions lists every runnable one. All three are resolved
+	// from the plugin on read, never stored.
+	Variant        *VariantView  `json:"variant,omitempty"`
+	CurrentVariant *VariantView  `json:"current_variant,omitempty"`
+	VariantOptions []VariantView `json:"variant_options,omitempty"`
+}
+
+// VariantView is an operating variant as a client renders it: the plugin's
+// label and the items one machine needs installed.
+type VariantView struct {
+	ID    string        `json:"id"`
+	Label string        `json:"label"`
+	Items []VariantItem `json:"items"`
+}
+
+// VariantItem is one installed item kind of a variant, count per machine.
+type VariantItem struct {
+	Ref   string `json:"ref"`
+	Name  string `json:"name"`
+	Count int    `json:"count"`
 }
 
 type PLIO struct {

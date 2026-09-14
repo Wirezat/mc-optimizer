@@ -42,6 +42,9 @@
       font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono);
     }
     .mg-build-field-label {
+      --mg-build-label-width: 8.5em;
+      width: var(--mg-build-label-width); flex-shrink: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       color: var(--text-faint); text-transform: uppercase;
       letter-spacing: 0.04em; font-size: 10px;
     }
@@ -168,7 +171,7 @@
                     <th style="width:32px" data-i18n="solve.col.count"></th>
                     <th data-i18n="solve.col.machine"></th>
                     <th style="width:120px" data-i18n="solve.col.recipe"></th>
-                    <th style="width:80px"></th>
+                    <th style="width:170px"></th>
                     <th style="width:36px"></th>
                   </tr></thead>
                   <tbody id="mg-list">
@@ -284,10 +287,13 @@
       `<span id="pl-status-pill" class="badge ${tone}">${esc(t('status.' + status))}</span>`;
   }
 
-  // A group is complete when all its machines stand. The whole line is
-  // complete when every group is.
+  // A group is complete when all its machines stand and are built to the
+  // target variant. The whole line is complete when every group is.
   function isGroupComplete(g) {
-    return (g.built_count || 0) >= g.count;
+    return (g.built_count || 0) >= g.count && isVariantBuilt(g);
+  }
+  function isVariantBuilt(g) {
+    return !g.variant || !g.current_variant || g.current_variant.id === g.variant.id;
   }
   function isLineComplete() {
     const mgs = _pl.machine_groups || [];
@@ -381,6 +387,9 @@
     container.querySelectorAll('[data-built-input]').forEach(inp => {
       inp.addEventListener('change', () => onBuildFieldChange(inp));
     });
+    container.querySelectorAll('[data-item-input]').forEach(inp => {
+      inp.addEventListener('change', () => onItemFieldChange(inp));
+    });
   }
 
   // Derived group status: planned (nothing built), partial (something but not
@@ -414,16 +423,34 @@
 
   // Build-state fields: hidden once the line isn't active, or once the group
   // is complete — nothing left to adjust, the row falls back to the plain
-  // single-icon display in the toggle cell.
+  // single-icon display in the toggle cell. Below the machine count, one field
+  // per item kind the target variant installs, counted per machine.
   function mgBuildFieldHTML(g) {
     if (_pl.status !== 'active' || groupState(g) === 'built') return '';
+    const items = (g.variant?.items || []).map(it => {
+      const cur = (g.current_variant?.items || []).find(c => c.ref === it.ref)?.count || 0;
+      return `
+      <label class="mg-build-field" title="${esc(it.name)} (${esc(it.ref)})">
+        <span class="mg-build-field-label">${esc(it.name)}</span>
+        <input class="input" type="number" min="0" max="${it.count}" step="1" value="${cur}"
+               data-item-input="${esc(g.id)}" data-ref="${esc(it.ref)}" data-max="${it.count}" />
+        <span class="mg-build-max">/${it.count}</span>
+      </label>`;
+    }).join('');
     return `
       <label class="mg-build-field">
         <span class="mg-build-field-label">${esc(t('production_line.build.built'))}</span>
         <input class="input" type="number" min="0" max="${g.count}" step="1" value="${g.built_count || 0}"
                data-built-input="${esc(g.id)}" data-max="${g.count}" />
         <span class="mg-build-max">/${g.count}</span>
-      </label>`;
+      </label>${items}`;
+  }
+
+  // The target variant's own label under the machine name, only when it
+  // installs something — the base variant has nothing to say.
+  function mgVariantHTML(g) {
+    if (!g.variant?.items?.length) return '';
+    return `<span class="icontext-subtitle">${esc(g.variant.label)}</span>`;
   }
 
   function mgRowHTML(g) {
@@ -437,6 +464,7 @@
                 <span class="icontext-body">
                     <span class="icontext-text">${esc(name)}</span>
                     <span class="icontext-subtitle">${esc(g.machine_mod_id)}</span>
+                    ${mgVariantHTML(g)}
                 </span>
             </span>
         </td>
@@ -499,13 +527,15 @@
   }
 
   // Sends the group's new build state and keeps the coarse status in sync
-  // ('built' when complete, 'planned' otherwise). Always reloads, also on error.
-  async function updateBuildState(g, builtCount) {
+  // ('built' when complete, 'planned' otherwise). currentVariantID, when
+  // given, records which variant the machines are built to. Always reloads,
+  // also on error.
+  async function updateBuildState(g, builtCount, currentVariantID) {
+    const built = builtCount >= g.count && (currentVariantID ? currentVariantID === g.variant_id : isVariantBuilt(g));
+    const body = { status: built ? 'built' : 'planned', built_count: builtCount };
+    if (currentVariantID) body.current_variant_id = currentVariantID;
     await apiFetch('/api/machine-groups/' + g.id + '/status', {
-      method: 'PATCH', body: JSON.stringify({
-        status: builtCount >= g.count ? 'built' : 'planned',
-        built_count: builtCount,
-      }),
+      method: 'PATCH', body: JSON.stringify(body),
     });
     reload();
   }
@@ -514,11 +544,13 @@
     return (_pl.machine_groups || []).find(g => g.id === id);
   }
 
-  // Toggle shortcut: planned/partial fill the build state to target, built resets it.
+  // Toggle shortcut: planned/partial fill the build state to target (machines
+  // and their variant), built resets the machine count.
   function toggleMGStatus(id) {
     const g = findGroup(id);
     if (!g) return;
-    updateBuildState(g, isGroupComplete(g) ? 0 : g.count);
+    if (isGroupComplete(g)) updateBuildState(g, 0);
+    else updateBuildState(g, g.count, g.variant_id);
   }
 
   function onBuildFieldChange(inp) {
@@ -529,6 +561,24 @@
     if (!Number.isFinite(v) || v < 0) v = 0;
     if (v > max) v = max;
     updateBuildState(g, v);
+  }
+
+  // An item field names how many of one item kind each machine has installed.
+  // The built variant is the option installing exactly that; a count no option
+  // offers is refused and the field snaps back.
+  function onItemFieldChange(inp) {
+    const g = findGroup(inp.dataset.itemInput);
+    if (!g) return;
+    const ref = inp.dataset.ref;
+    const max = Number(inp.dataset.max);
+    let n = Math.round(Number(inp.value));
+    if (!Number.isFinite(n) || n < 0) n = 0;
+    if (n > max) n = max;
+    const opt = (g.variant_options || []).find(o => n === 0
+      ? o.items.length === 0
+      : o.items.length === 1 && o.items[0].ref === ref && o.items[0].count === n);
+    if (!opt) { render(); return; }
+    updateBuildState(g, g.built_count || 0, opt.id);
   }
 
   async function reload() {

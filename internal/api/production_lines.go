@@ -479,7 +479,7 @@ func ListProductionLinesHandler(database *db.DB, variants solver.VariantSource) 
 				errInternal(w, err)
 				return
 			}
-			frac := db.EstimateCurrentRateFraction(mgs)
+			frac := db.EstimateCurrentRateFraction(mgs, enrichGroupVariants(r, database, variants, mgs))
 			if pl.RateDen > 0 {
 				pl.CurrentRate = frac * float64(pl.RateNum) / float64(pl.RateDen)
 			}
@@ -509,8 +509,9 @@ func groupOperatingCosts(r *http.Request, database *db.DB, variants solver.Varia
 	return out
 }
 
-// GetProductionLineHandler fetches a single production line with its IO and machine groups.
-func GetProductionLineHandler(database *db.DB) http.HandlerFunc {
+// GetProductionLineHandler fetches a single production line with its IO and
+// machine groups, each group carrying its target and built variant.
+func GetProductionLineHandler(database *db.DB, variants solver.VariantSource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())
 		plID, ok := parseUUIDParam(w, r, "line_id")
@@ -545,7 +546,7 @@ func GetProductionLineHandler(database *db.DB) http.HandlerFunc {
 		if ios == nil {
 			ios = []*model.PLIO{}
 		}
-		frac := db.EstimateCurrentRateFraction(mgs)
+		frac := db.EstimateCurrentRateFraction(mgs, enrichGroupVariants(r, database, variants, mgs))
 		if pl.RateDen > 0 {
 			pl.CurrentRate = frac * float64(pl.RateNum) / float64(pl.RateDen)
 		}

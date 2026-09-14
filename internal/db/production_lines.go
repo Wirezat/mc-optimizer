@@ -388,16 +388,33 @@ func (d *DB) UpdateMachineGroupStatus(ctx context.Context, id uuid.UUID, status 
 }
 
 // UpdateMachineGroupBuildState sets how many of a group's target machine count
-// are actually standing in-game, and stamps current_variant_id to the group's
-// target variant_id (Spec §5.3).
+// are actually standing in-game. The built variant is tracked separately, see
+// UpdateMachineGroupCurrentVariant.
 func (d *DB) UpdateMachineGroupBuildState(ctx context.Context, id uuid.UUID, builtCount int) error {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE machine_groups
-		SET built_count = $2, current_variant_id = variant_id
+		SET built_count = $2
 		WHERE id = $1
 	`, id, builtCount)
 	if err != nil {
 		return fmt.Errorf("db: update machine group build state: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpdateMachineGroupCurrentVariant records which operating variant the group's
+// machines are actually built to in-game.
+func (d *DB) UpdateMachineGroupCurrentVariant(ctx context.Context, id uuid.UUID, variantID string) error {
+	tag, err := d.Pool.Exec(ctx, `
+		UPDATE machine_groups
+		SET current_variant_id = $2
+		WHERE id = $1
+	`, id, variantID)
+	if err != nil {
+		return fmt.Errorf("db: update machine group current variant: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
@@ -458,7 +475,8 @@ func (d *DB) MarkAllPlannedAsBuilt(ctx context.Context, plID uuid.UUID) (int64, 
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE machine_groups
 		SET status = 'built',
-		    built_count = count
+		    built_count = count,
+		    current_variant_id = variant_id
 		WHERE pl_id = $1 AND status = 'planned'
 	`, plID)
 	if err != nil {
@@ -649,8 +667,10 @@ func (d *DB) ReplaceProductionLineContents(
 
 // EstimateCurrentRateFraction returns the fraction (0..1) of a production line's target
 // output achievable with the groups' current build state — the minimum over machine
-// groups of builtCount/exactCount, since a chain's output is limited by its slowest link.
-func EstimateCurrentRateFraction(groups []*model.MachineGroup) float64 {
+// groups of builtCount×speed/exactCount, since a chain's output is limited by its
+// slowest link. speed is the built variant's rate relative to the target variant's,
+// keyed by group id; a missing entry counts as 1.
+func EstimateCurrentRateFraction(groups []*model.MachineGroup, speed map[uuid.UUID]float64) float64 {
 	frac := 1.0
 	for _, mg := range groups {
 		// The lossless fractional machine count is the true requirement; fall back to
@@ -663,6 +683,9 @@ func EstimateCurrentRateFraction(groups []*model.MachineGroup) float64 {
 			continue
 		}
 		g := float64(mg.BuiltCount) / exact
+		if sp, ok := speed[mg.ID]; ok && sp > 0 {
+			g *= sp
+		}
 		if g > 1 {
 			g = 1 // rounding the count up can overshoot the exact requirement
 		}

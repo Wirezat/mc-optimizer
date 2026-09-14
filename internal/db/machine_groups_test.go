@@ -160,11 +160,10 @@ func TestUpdateMachineGroupVariantClampsBuiltCount(t *testing.T) {
 	}
 }
 
-// Recording a build state stamps current_variant_id to the group's current
-// target: whatever gets physically built is built to that target. A later
-// variant switch must not touch it — the machines standing in-game don't
-// change just because the target did (Spec §5.3).
-func TestUpdateMachineGroupBuildStateStampsCurrentVariant(t *testing.T) {
+// The built variant is recorded on its own: a build-state update leaves it
+// alone, and a later target switch must not touch it either — the machines
+// standing in-game don't change just because the target did.
+func TestUpdateMachineGroupCurrentVariantIsIndependent(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
 	factoryID, recipeID := groupFixture(t, d)
@@ -187,8 +186,18 @@ func TestUpdateMachineGroupBuildStateStampsCurrentVariant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get machine group: %v", err)
 	}
+	if mg.CurrentVariantID != "default" {
+		t.Errorf("current_variant_id = %q, want the untouched default", mg.CurrentVariantID)
+	}
+	if err := d.UpdateMachineGroupCurrentVariant(ctx, groupID, "adv-x3"); err != nil {
+		t.Fatalf("update current variant: %v", err)
+	}
+	mg, err = d.GetMachineGroup(ctx, groupID)
+	if err != nil {
+		t.Fatalf("get machine group: %v", err)
+	}
 	if mg.CurrentVariantID != "adv-x3" {
-		t.Errorf("current_variant_id = %q, want %q (stamped from variant_id)", mg.CurrentVariantID, "adv-x3")
+		t.Errorf("current_variant_id = %q, want %q", mg.CurrentVariantID, "adv-x3")
 	}
 
 	if err := d.UpdateMachineGroupVariant(ctx, groupID, "eco", 1, 3, 4); err != nil {

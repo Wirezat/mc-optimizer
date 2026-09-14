@@ -1074,14 +1074,17 @@
     }
     // One entry per recipe. The machines that reach a recipe through
     // machine_interfaces are tiers of one choice, not separate choices — which
-    // of them runs it is the plugin's call, from its configured tier.
+    // of them runs it is the plugin's call, from its configured tier, so the
+    // entry is labelled with that machine rather than the first candidate.
     const seen = new Set();
     for (const opt of item.Options || []) {
       if (seen.has(opt.RecipeID)) continue;
       seen.add(opt.RecipeID);
       const ins = (opt.Inputs || []).join(', ');
+      const key = machineKeyFor(item, opt.RecipeID);
+      const chosen = (item.Options || []).find(o => o.Key === key) || opt;
       items.push({
-        label: _machineNames[opt.MachineMod + ':' + opt.MachineID] || opt.MachineID,
+        label: _machineNames[chosen.MachineMod + ':' + chosen.MachineID] || chosen.MachineID,
         subtitle: ins ? '← ' + ins : '',
         action: opt.RecipeID,
         active: opt.RecipeID === item.ChosenRecipeID,

@@ -20,6 +20,7 @@
   "admin.import.verify.body": "Bitte prüfe, ob alle Maschinen und Rezepte im Katalog vorhanden sind.",
   "admin.import.verify.confirm": "Katalog öffnen",
   "admin.import.verify.title": "Import abgeschlossen",
+  "admin.import.verify.title_warn": "Import mit Warnungen abgeschlossen",
   "admin.settings.owner_frozen": "Owner kann nicht geändert werden",
   "admin.settings.reg_allow": "Registrierung erlauben",
   "admin.settings.reg_allow_desc": "Wenn deaktiviert, können sich keine neuen Benutzer registrieren.",

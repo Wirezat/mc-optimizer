@@ -20,6 +20,7 @@
   "admin.import.verify.body": "Please verify that all machines and recipes are present in the catalog.",
   "admin.import.verify.confirm": "Open Catalog",
   "admin.import.verify.title": "Import complete",
+  "admin.import.verify.title_warn": "Import completed with warnings",
   "admin.settings.owner_frozen": "Owner cannot be changed",
   "admin.settings.reg_allow": "Allow registration",
   "admin.settings.reg_allow_desc": "When disabled, no new users can register.",

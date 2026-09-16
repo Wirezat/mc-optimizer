@@ -263,7 +263,7 @@
       loadStatus();
 
       openModal({
-        title:        t('admin.import.verify.title'),
+        title:        t(warnings.length ? 'admin.import.verify.title_warn' : 'admin.import.verify.title'),
         bodyHTML:     `<p>${esc(t('admin.import.verify.body'))}</p>`,
         confirmLabel: t('admin.import.verify.confirm'),
         onConfirm:    () => { window.location.href = '/catalog/machines'; },

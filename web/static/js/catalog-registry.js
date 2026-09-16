@@ -13,7 +13,7 @@
 */
 
 import { apiFetch } from '/static/ui/js/auth.js';
-import { esc }      from '/static/js/i18n.js';
+import { esc, t }   from '/static/js/i18n.js';
 
 const _entries = new Map();   // key → { modID, id, isFluid, name, textureUrl, animation }
 const _tags    = new Map();   // tag name → { total, icons: [entry] }
@@ -253,4 +253,41 @@ export function iconTextHTML(modID, id, {
 
     return `<span class="${rootCls}">${icon}<span class="icontext-body">` +
            `<span class="${textCls}">${textBody}</span>${sub}</span></span>`;
+}
+
+/**
+ * tagIconTextHTML(tagRef, opts) → HTML string
+ * The icontext component for a tag rather than a single item: any of its
+ * members satisfies it, so showing one would claim the slot needs that
+ * specific item. The icon cycles through every member that has a texture
+ * (JEI-style, via wirezat-ui's icon-cycle.js — call initIconCycle() on the
+ * container after inserting this), and the subtitle gives the count. Falls
+ * back to the bare tag name when no member has a known texture.
+ */
+export function tagIconTextHTML(tagRef, { size = null, extraClass = '' } = {}) {
+    const resolved = lookupTag(tagRef);
+    const icons = resolved?.icons ?? [];
+    const total = resolved?.total ?? 0;
+    const first = icons[0] ?? null;
+
+    const rootCls = esc(['icontext', size ? `icontext-${size}` : '', extraClass]
+        .filter(Boolean).join(' '));
+    const hidpiPx = size === 'sm' ? 16 : size === 'lg' ? 28 : 20;
+    const icon = iconImageHTML(first, {
+        cls: 'icontext-icon',
+        hidpiPx,
+        dataset: icons.length > 1
+            ? { 'wui-cycle': JSON.stringify(icons.map(i => ({ src: i.textureUrl }))) }
+            : null,
+    });
+
+    const label = first?.name ?? '#' + tagRef;
+    const sub = total > 1
+        ? t('catalog.recipes.card.tag_members').replace('{n}', total)
+        : '';
+
+    return `<span class="${rootCls}">${icon}<span class="icontext-body">` +
+           `<span class="icontext-text">${esc(label)}</span>` +
+           (sub ? `<span class="icontext-subtitle">${esc(sub)}</span>` : '') +
+           `</span></span>`;
 }

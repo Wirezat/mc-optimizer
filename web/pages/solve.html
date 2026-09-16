@@ -408,8 +408,9 @@
   import { createContainer } from '/static/ui/js/components/container.js';
   import { openPopover, closePopover } from '/static/ui/js/components/popover.js';
   import { renderGraph } from '/static/ui/js/components/graph.js';
-  import { loadCatalog, lookupCatalog, iconTextHTML, catalogEntries } from '/static/js/catalog-registry.js';
+  import { loadCatalog, lookupCatalog, iconTextHTML, tagIconTextHTML, catalogEntries } from '/static/js/catalog-registry.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
+  import { initIconCycle } from '/static/ui/js/icon-cycle.js';
   import { openPluginWizard } from '/static/js/plugin-wizard.js';
   import { loadMachineHooks, columnsOf, cellText } from '/static/js/plugin-machines.js';
 
@@ -916,11 +917,10 @@
     const target = _chainItems.find(ci => ci.Level === 0);
     if (target) {
       const key   = itemKey(target.Item);
-      const name  = nameOf(target.Item);
       const sub   = target.Item.TagRef ? '' : modName(target.Item.ModID);
       const title = target.Item.TagRef ? '' : ` title="${esc(target.Item.ModID + ':' + target.Item.ItemID)}"`;
       rows.push(`<tr>
-        <td><span${title}>${iconTextHTML(target.Item.ModID, target.Item.ItemID, { isFluid: target.Item.IsFluid, name, subtitle: sub, size: 'sm', extraClass: 'chain-target-icontext' })}</span></td>
+        <td><span${title}>${itemIconTextHTML(target.Item, { subtitle: sub, size: 'sm', extraClass: 'chain-target-icontext' })}</span></td>
         <td><div class="chain-cell-recipe">${_chainRecipeCell(target, key, false)}</div></td>
         ${_chainPluginCells(target)}
       </tr>`);
@@ -936,11 +936,10 @@
       rows.push(`<tr class="table-group-hd"><td colspan="${2 + _machineColumns.length}">${t('solve.chain.level').toUpperCase()} ${level}</td></tr>`);
       for (const item of items) {
         const key    = itemKey(item.Item);
-        const name   = nameOf(item.Item);
         const sub    = item.Item.TagRef ? '' : modName(item.Item.ModID);
         const isStop = item.IsStop && !item.IsRawMaterial;
         rows.push(`<tr${isStop ? ' class="tc-stopped"' : ''}>
-          <td>${iconTextHTML(item.Item.ModID, item.Item.ItemID, { isFluid: item.Item.IsFluid, name, subtitle: sub, size: 'sm' })}</td>
+          <td>${itemIconTextHTML(item.Item, { subtitle: sub, size: 'sm' })}</td>
           <td><div class="chain-cell-recipe">${_chainRecipeCell(item, key, true)}</div></td>
           ${_chainPluginCells(item)}
         </tr>`);
@@ -955,6 +954,7 @@
       <tbody>${rows.join('')}</tbody>
     </table>`);
     initHiDPIRender(chainContainer.body);
+    initIconCycle(chainContainer.body);
   }
 
   // ── Graph view of the chain ───────────────────────────────────────────────
@@ -1366,10 +1366,9 @@
     const outputs = r.IOProfile?.Outputs || [];
     let io = '';
     const ioItemHTML = (e) => {
-      const name = nameOf(e.Item);
       const sub  = e.Item.TagRef ? '' : modName(e.Item.ModID);
       return `<span title="${esc(e.Item.ModID + ':' + (e.Item.ItemID || e.Item.TagRef))}">` +
-        iconTextHTML(e.Item.ModID, e.Item.ItemID, { isFluid: e.Item.IsFluid, name, subtitle: sub, size: 'sm' }) +
+        itemIconTextHTML(e.Item, { subtitle: sub, size: 'sm' }) +
         `</span>`;
     };
     if (inputs.length) {
@@ -1394,6 +1393,7 @@
     }
     ioEl.innerHTML = io || `<span style="color:var(--text-faint);font-size:var(--text-sm);">—</span>`;
     initHiDPIRender(ioEl);
+    initIconCycle(ioEl);
   }
 
   let _openChainPickerKey = null;
@@ -1422,6 +1422,14 @@
     if (item.TagRef) return '#' + item.TagRef;
     return lookupCatalog(item.ModID, item.ItemID, item.IsFluid)?.name
       || _names[itemKey(item)] || item.ItemID || '';
+  }
+
+  // A tag stands for any of its members — cycling through their icons (via
+  // tagIconTextHTML/initIconCycle) says that, where naming one item would not.
+  function itemIconTextHTML(item, opts) {
+    return item.TagRef
+      ? tagIconTextHTML(item.TagRef, opts)
+      : iconTextHTML(item.ModID, item.ItemID, { ...opts, isFluid: item.IsFluid, name: nameOf(item) });
   }
 
   function closeAllPickers() {

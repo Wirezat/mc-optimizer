@@ -39,6 +39,12 @@
 }
 
 html.dark {
+    /* base.css fixes color-scheme to light; the browser renders every native
+       control it owns outright (select popups, scrollbars, date pickers) by
+       that, not by our custom properties — override it here or a plugin
+       wizard's <select> opens as a plain light list over a dark form. */
+    color-scheme: dark;
+
     /* Accent — copper (lighter for dark backgrounds) */
     --accent:           #d97706;
     --accent-text:      #fffbeb;

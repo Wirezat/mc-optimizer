@@ -1087,10 +1087,15 @@
       byIO.get(group).push(opt);
     }
     for (const opts of byIO.values()) {
+      // The longest duration is the recipe the others speed up (blasting/smoking
+      // halve a furnace's) — sorting it first makes it the one name shown for
+      // the whole group, deterministically, instead of whichever recipe's UUID
+      // happened to sort first.
+      opts.sort((a, b) => (b.DurationTicks || 0) - (a.DurationTicks || 0) || a.Key.localeCompare(b.Key));
       const ins = (opts[0].Inputs || []).join(', ');
       const hint = opts.length > 1 ? t('solve.chain.solver_picks') : '';
       items.push({
-        label: opts.map(machineLabel).join(' · '),
+        label: machineLabel(opts[0]),
         subtitle: [ins ? '← ' + ins : '', hint].filter(Boolean).join(' · '),
         action: opts[0].RecipeID,
         active: opts.some(o => o.RecipeID === item.ChosenRecipeID),

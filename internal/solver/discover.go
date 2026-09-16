@@ -15,6 +15,10 @@ type RecipeOption struct {
 	IOKey   string   // options with identical I/O; the solver picks between them
 	Inputs  []string // "item_id", "#tag_name", or "~fluid_id" — complete list;
 	Outputs []string // the graph view derives its edges from these, so no cap.
+	// DurationTicks orders an IOKey group's siblings for display: the longest
+	// duration is the recipe the others speed up (e.g. blasting/smoking halve
+	// a furnace's), so it is the one name shown for the whole group.
+	DurationTicks int
 }
 
 // ChainItem is one node in the discovered production chain.
@@ -137,11 +141,12 @@ func (s *Solver) Discover(
 
 		for _, r := range recipes {
 			opt := RecipeOption{
-				RecipeID:   r.ID,
-				MachineMod: r.MachineMod,
-				MachineID:  r.MachineID,
-				Key:        RecipeOptionKey(r.ID, r.MachineMod, r.MachineID),
-				IOKey:      ioSignature(r),
+				RecipeID:      r.ID,
+				MachineMod:    r.MachineMod,
+				MachineID:     r.MachineID,
+				Key:           RecipeOptionKey(r.ID, r.MachineMod, r.MachineID),
+				IOKey:         ioSignature(r),
+				DurationTicks: r.DurationTicks,
 			}
 			for _, in := range r.ItemInputs {
 				if in.TagName != nil {

@@ -27,14 +27,27 @@ function upgradeByRef(ref) {
   return null
 }
 
-// Machine-tier prefix convention of MI's addon machines. steam_blast_furnace
-// carries no prefix but is the only steam-tier blast furnace.
+// Prefix convention of the whole MI universe: MI, EI and Overdrive follow it.
 function tierOf(machineID) {
   if (machineID.indexOf("bronze_") === 0) return "bronze"
   if (machineID.indexOf("steel_") === 0) return "steel"
-  if (machineID === "steam_blast_furnace") return "steam"
+  if (machineID.indexOf("steam_") === 0) return "steam"
   return "electric"
 }
+
+function familyOf(machineID) {
+  return machineID.replace(/^(bronze|steel|steam|electric)_/, "")
+}
+
+// The families that exist on steam too; everything else is electric-only.
+var STEAM_FAMILIES = [
+  "alloy_smelter", "bending_machine", "blast_furnace", "canning_machine",
+  "composter", "compressor", "cutting_machine", "furnace", "macerator",
+  "mixer", "packer", "quarry", "unpacker", "wiremill"
+]
+
+// Steam multiblocks stand in for both bronze and steel.
+var STEAM_RANK = { bronze: 1, steam: 1, steel: 2 }
 
 // Text for the tier column. The blast-furnace family is the one place where
 // two machines of the same tier differ, by coil material; the catalog names
@@ -51,11 +64,14 @@ function rankOf(machineID) {
   return machineID === "electric_blast_furnace_cupronickel" ? 0 : 1
 }
 
-// The tier is a pin, not a ceiling: bronze and steel run on steam, electric on
-// EU, and nobody wants both supplies in one line.
+// A pin across supplies, a ceiling within steam. An electric machine with no
+// steam variant stays allowed: vetoing it only makes the recipe impossible.
 function tierAllowed(machineID, want) {
-  var t = tierOf(machineID)
-  return t === want || (t === "steam" && (want === "bronze" || want === "steel"))
+  var wantRank = STEAM_RANK[want] || 0
+  var mine = STEAM_RANK[tierOf(machineID)] || 0
+  if (wantRank === 0) return mine === 0
+  if (mine > 0) return mine <= wantRank
+  return STEAM_FAMILIES.indexOf(familyOf(machineID)) < 0
 }
 
 // Modern Industrialization reference plugin. Formulas are a direct port of

@@ -241,10 +241,18 @@ func TestMITierPinVetoesOtherTiers(t *testing.T) {
 		{"bronze_macerator", "electric", false},
 		{"macerator", "electric", true},
 		{"macerator", "bronze", false},
-		// No prefixed blast furnace exists below electric, so steam stands in.
+		{"bronze_macerator", "steel", true},
+		{"steel_macerator", "bronze", false},
 		{"steam_blast_furnace", "bronze", true},
 		{"steam_blast_furnace", "steel", true},
 		{"steam_blast_furnace", "electric", false},
+		// No steam variant exists for these two.
+		{"pyrolyse_oven", "bronze", true},
+		{"multi_processing_array", "bronze", true},
+		{"electric_quarry", "bronze", false},
+		{"bronze_bending_machine", "bronze", true},
+		{"steel_alloy_smelter", "steel", true},
+		{"alloy_smelter", "bronze", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.machineID+"/"+tc.tier, func(t *testing.T) {

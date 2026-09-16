@@ -21,7 +21,13 @@ type VariantSource interface {
 // VanillaEcosystem marks the machines the host evaluates itself.
 const VanillaEcosystem = "vanilla"
 
-// One coal per eight operations, however fast the machine runs.
+// coalBurnTicks is how long one coal or charcoal keeps a vanilla machine lit.
+// Vanilla fuel burns by time, not by operation: the same coal is eight items in
+// a furnace and sixteen in a blast furnace, which runs the recipe twice as fast.
+// Iron Furnaces differs - it scales burn time with cook time, so its furnaces
+// hold at eight - and says so in its own plugin.
+const coalBurnTicks = 1600
+
 var vanillaFuelBurners = map[string]bool{"furnace": true, "blast_furnace": true, "smoker": true}
 
 // vanillaVariant is the host's own evaluator: rate from the recipe duration and
@@ -36,7 +42,7 @@ func vanillaVariant(machine *MachineSpec, recipe *RecipeRow, configs map[string]
 	if !vanillaFuelBurners[machine.MachineID] {
 		return v
 	}
-	v.Costs = []plugins.Cost{{Resource: "coals", Amount: plugins.Rational{Num: 1, Den: 8 * ticks}}}
+	v.Costs = []plugins.Cost{{Resource: "coals", Amount: plugins.Rational{Num: 1, Den: coalBurnTicks}}}
 	v.Valid = !displacesFuel(configs)
 	return v
 }

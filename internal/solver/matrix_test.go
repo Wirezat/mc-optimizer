@@ -314,15 +314,28 @@ func vanillaMachine(id string) *MachineSpec {
 	return &MachineSpec{ModID: "minecraft", MachineID: id, Ecosystem: VanillaEcosystem}
 }
 
+// Fuel burns by time, so the rate changes with the recipe and the coal per tick
+// does not: the blast furnace gets sixteen items out of the coal the furnace
+// turns into eight.
 func TestVanillaVariantChargesFuelPerTick(t *testing.T) {
-	recipe := ironIngotRecipe(200)
-	v := vanillaVariant(vanillaMachine("furnace"), recipe, nil)
-	if !v.Valid || v.Rate.Num != 1 || v.Rate.Den != 200 {
-		t.Fatalf("variant = %+v, want a valid 1/200 rate", v)
-	}
-	if len(v.Costs) != 1 || v.Costs[0].Resource != "coals" ||
-		v.Costs[0].Amount.Num != 1 || v.Costs[0].Amount.Den != 1600 {
-		t.Errorf("costs = %+v, want 1/1600 coals", v.Costs)
+	for _, tc := range []struct {
+		machine string
+		ticks   int
+	}{
+		{"furnace", 200},
+		{"blast_furnace", 100},
+		{"smoker", 100},
+	} {
+		t.Run(tc.machine, func(t *testing.T) {
+			v := vanillaVariant(vanillaMachine(tc.machine), ironIngotRecipe(tc.ticks), nil)
+			if !v.Valid || v.Rate.Num != 1 || v.Rate.Den != int64(tc.ticks) {
+				t.Fatalf("variant = %+v, want a valid 1/%d rate", v, tc.ticks)
+			}
+			if len(v.Costs) != 1 || v.Costs[0].Resource != "coals" ||
+				v.Costs[0].Amount.Num != 1 || v.Costs[0].Amount.Den != 1600 {
+				t.Errorf("costs = %+v, want 1/1600 coals whatever the duration", v.Costs)
+			}
+		})
 	}
 }
 

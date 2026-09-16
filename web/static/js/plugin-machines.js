@@ -1,6 +1,6 @@
 // Host-side adapter for a mod's optional `machines` binding: extra chain-table
-// columns, and which machine runs a recipe under the mod's own config. Every
-// hook call is wrapped per mod; a mod without a binding is simply absent.
+// columns and their per-machine text. Every hook call is wrapped per mod; a mod
+// without a binding is simply absent.
 import { apiFetch } from '/static/ui/js/auth.js'
 
 // /plugin-assets sits behind the same auth as the rest of the app, so a demo
@@ -65,19 +65,5 @@ export function cellText(hooks, pluginModID, machine, columnID) {
     } catch (e) {
         console.error(`plugin machines ${pluginModID}.cell:`, e)
         return ''
-    }
-}
-
-// resolveIndex asks the plugin which candidate runs a recipe under its own
-// config. -1 means no opinion, and is also what a bad answer degrades to.
-export function resolveIndex(hooks, pluginModID, candidates, config) {
-    const m = hooks.get(pluginModID)
-    if (!m?.resolve) return -1
-    try {
-        const i = m.resolve(candidates, config || {})
-        return Number.isInteger(i) && i >= 0 && i < candidates.length ? i : -1
-    } catch (e) {
-        console.error(`plugin machines ${pluginModID}.resolve:`, e)
-        return -1
     }
 }

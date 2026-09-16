@@ -366,6 +366,8 @@
   "solve.chain.change_recipe": "Ändern ↻",
   "solve.chain.col.item": "Item",
   "solve.chain.level": "Ebene",
+  "solve.chain.machine_auto": "automatisch",
+  "solve.chain.machine_pick_title": "Maschine wählen, die dieses Rezept fährt",
   "solve.chain.mod_restricted": "Mod nicht aktiv",
   "solve.chain.not_enough_in_factory": "Nicht genug in Fabrik",
   "solve.chain.pick_recipe": "+ Rezept wählen",

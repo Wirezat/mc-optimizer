@@ -100,6 +100,35 @@
     .chain-override-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
     .chain-override-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
 
+    /* ── Machine picker in the chain row ───────────────────────────────────── */
+    .chain-machine {
+      --pad-machine-btn-y: 1px;
+      --text-machine-chev: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--gap-icon);
+      min-width: 0;
+      max-width: 100%;
+      flex-shrink: 1;
+      padding: var(--pad-machine-btn-y) var(--gap-icon);
+      font-family: inherit;
+      font-size: var(--text-sm);
+      color: var(--text);
+      background: none;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .chain-machine:hover { border-color: var(--border); background: var(--bg-hover); }
+    .chain-machine.active { border-color: var(--accent); background: var(--accent-muted); }
+    .chain-machine-pinned { border-color: var(--accent); color: var(--accent); }
+    .chain-machine-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chain-machine-chev { flex-shrink: 0; color: var(--text-faint); font-size: var(--text-machine-chev); }
+
     /* .badge-success/.badge-warn/.badge-danger/.badge-accent alone (0-1-0)
        can't beat graph.css's .graph-node-label.clickable color rule (0-2-0);
        this compound selector (0-3-0) wins outright so the already/not-enough
@@ -381,7 +410,7 @@
   import { loadCatalog, lookupCatalog, iconTextHTML, catalogEntries } from '/static/js/catalog-registry.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { openPluginWizard } from '/static/js/plugin-wizard.js';
-  import { loadMachineHooks, columnsOf, cellText, resolveIndex } from '/static/js/plugin-machines.js';
+  import { loadMachineHooks, columnsOf, cellText } from '/static/js/plugin-machines.js';
 
   await load(getLang());
   applyI18n();
@@ -462,9 +491,7 @@
           body: JSON.stringify(cfg),
         });
         if (!res?.ok) throw new Error(`mod config default: ${res?.status}`);
-        // A changed tier re-points the rows, which discovers and solves on its
-        // own; otherwise only a solve that already ran can show the change.
-        if (applyMachineChoice()) return;
+        // The config reaches the solver through evaluate, so only a solve shows it.
         if (_targetItem && document.getElementById('result-card').style.display !== 'none') doSolve();
       },
     });
@@ -487,37 +514,13 @@
     return addMachineHooks(Object.values(_pluginMods));
   }
 
-  // Re-points every already-chosen chain row at the machine its plugin picks
-  // under that mod's own config, then re-discovers if anything moved. Returns
-  // whether it moved anything; a caller mid-doDiscover bails out on true.
-  function applyMachineChoice() {
-    let changed = false;
-    for (const item of _chainItems) {
-      if (!item.ChosenRecipeID) continue;
-      const key = itemKey(item.Item);
-      const newKey = machineKeyFor(item, item.ChosenRecipeID);
-      if (newKey && _overrides[key] !== newKey) {
-        _overrides[key] = newKey;
-        changed = true;
-      }
-    }
-    if (changed && _chainItems.length) doDiscover();
-    return changed;
+  // The candidates for recipeID, base machine first - what the row runs unpinned.
+  function machineCandidates(item, recipeID) {
+    return (item.Options || []).filter(o => o.RecipeID === recipeID);
   }
 
-  // The option key of the machine that should run recipeID for this row: the
-  // plugin's pick under its config, or the recipe's own machine when no plugin
-  // has an opinion.
-  function machineKeyFor(item, recipeID) {
-    const candidates = (item.Options || []).filter(o => o.RecipeID === recipeID);
-    if (!candidates.length) return null;
-    const pluginMod = _pluginMods[`${candidates[0].MachineMod}:${candidates[0].MachineID}`];
-    const idx = pluginMod
-      ? resolveIndex(_machineHooks, pluginMod,
-          candidates.map(o => ({ mod_id: o.MachineMod, machine_id: o.MachineID })),
-          _modConfigs[pluginMod])
-      : -1;
-    return (idx >= 0 ? candidates[idx] : candidates[0]).Key;
+  function machineLabel(opt) {
+    return _machineNames[opt.MachineMod + ':' + opt.MachineID] || opt.MachineID;
   }
 
   async function init() {
@@ -590,8 +593,8 @@
       if (!_isDemo) {
         renderPluginBar(mods);
         // Load the hooks from the active mod list rather than waiting for a
-        // chain: the tier selector has to be settable before the first
-        // discover, and a discover reaching a further mod tops them up later.
+        // chain: their columns render with the first discover's table, and a
+        // discover reaching a further mod tops them up later.
         await addMachineHooks(mods
           .filter(m => _activeModIds.includes(m.mod_id) && m.plugin)
           .map(m => m.mod_id));
@@ -674,17 +677,18 @@
   // picker button is active" bookkeeping (_openChainPickerKey / .active
   // class) in sync when the panel closes via an outside click.
   document.addEventListener('click', e => {
-    if (!e.target.closest('[data-action="openChainPicker"]')) {
+    if (!e.target.closest(PICKER_TRIGGERS)) {
       closeAllPickers();
     }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAllPickers(); });
 
   document.getElementById('chain-card').addEventListener('click', e => {
-    const pickerBtn = e.target.closest('[data-action="openChainPicker"]');
-    if (pickerBtn && !e.target.closest('.recipe-picker')) {
-      openChainPicker(pickerBtn, pickerBtn.dataset.key);
-    }
+    if (e.target.closest('.recipe-picker')) return;
+    const recipeBtn = e.target.closest('[data-action="openChainPicker"]');
+    if (recipeBtn) { openChainPicker(recipeBtn, recipeBtn.dataset.key); return; }
+    const machineBtn = e.target.closest('[data-action="openMachinePicker"]');
+    if (machineBtn) openMachinePicker(machineBtn, machineBtn.dataset.key);
   });
 
   // Target input: resolve item from preloaded nameMap on change
@@ -783,9 +787,6 @@
     _pluginMods = data.MachinePluginMods || {};
     await ensureMachineHooks();
     if (seq !== _reqSeq) return; // a newer discover/solve request has since started
-    // Re-point rows picked since the axis was last set at the axis's machine.
-    // On a move it has already started its own doDiscover; bail out here.
-    if (applyMachineChoice()) return;
     showStatus('solve-status', '', '');
     renderChainConfig();
     showChain();
@@ -852,8 +853,13 @@
     const inputs = resolvedInputs.length ? resolvedInputs.join(', ') : '';
     const changeLabel = esc(t('solve.chain.change_recipe'));
     if (chosen) {
+      // Pinned means a machine other than the base one.
+      const base = machineCandidates(item, chosen.RecipeID)[0];
+      const pinned = !!base && chosen.Key !== base.Key;
       return warnIcon +
-        `<span>${esc(_machineNames[chosen.MachineMod + ':' + chosen.MachineID] || chosen.MachineID)}</span>` +
+        `<button class="chain-machine${pinned ? ' chain-machine-pinned' : ''}" data-action="openMachinePicker"
+            data-key="${esc(key)}" title="${esc(t('solve.chain.machine_pick_title'))}"
+          ><span class="chain-machine-name">${esc(machineLabel(chosen))}</span><span class="chain-machine-chev">▾</span></button>` +
         (inputs ? `<span class="chain-recipe-inputs">← ${esc(inputs)}</span>` : '') +
         `<button class="chain-override-btn" data-action="openChainPicker"
             data-key="${esc(key)}" data-with-stop="${withStop}">${changeLabel}</button>`;
@@ -1054,22 +1060,41 @@
     if (withStop && item.ChosenRecipeID) {
       items.push({ label: t('solve.chain.stop_action'), action: 'STOP', danger: true });
     }
-    // One entry per recipe. The machines that reach a recipe through
-    // machine_interfaces are tiers of one choice, not separate choices — which
-    // of them runs it is the plugin's call, from its configured tier, so the
-    // entry is labelled with that machine rather than the first candidate.
+    // One entry per recipe, labelled with the machine that owns it. The
+    // machine_interfaces implementers are the row's own menu.
     const seen = new Set();
     for (const opt of item.Options || []) {
       if (seen.has(opt.RecipeID)) continue;
       seen.add(opt.RecipeID);
       const ins = (opt.Inputs || []).join(', ');
-      const key = machineKeyFor(item, opt.RecipeID);
-      const chosen = (item.Options || []).find(o => o.Key === key) || opt;
       items.push({
-        label: _machineNames[chosen.MachineMod + ':' + chosen.MachineID] || chosen.MachineID,
+        label: machineLabel(opt),
         subtitle: ins ? '← ' + ins : '',
         action: opt.RecipeID,
         active: opt.RecipeID === item.ChosenRecipeID,
+      });
+    }
+    return items;
+  }
+
+  // The machines for this row's recipe, "automatic" (no pin) first; action is
+  // the RecipeOption key to override with.
+  function buildMachineMenu(item) {
+    const cands = machineCandidates(item, item.ChosenRecipeID);
+    const base = cands[0];
+    if (!base) return [];
+    const items = [{
+      label: t('solve.chain.machine_auto'),
+      subtitle: machineLabel(base),
+      action: base.Key,
+      active: item.ChosenMachineID === base.MachineID && item.ChosenMachineMod === base.MachineMod,
+    }];
+    for (const opt of cands.slice(1)) {
+      items.push({
+        label: machineLabel(opt),
+        subtitle: modName(opt.MachineMod),
+        action: opt.Key,
+        active: item.ChosenMachineID === opt.MachineID && item.ChosenMachineMod === opt.MachineMod,
       });
     }
     return items;
@@ -1091,17 +1116,40 @@
     btn.classList.add('active');
   }
 
-  // action is a RecipeID; which machine runs it comes from the plugin's tier,
-  // not from the picker.
+  function openMachinePicker(btn, key) {
+    const item = _chainItems.find(ci => itemKey(ci.Item) === key);
+    if (!item || !item.ChosenRecipeID) return;
+
+    const wasOpen = _openChainPickerKey === key;
+    closeAllPickers();
+    if (wasOpen) return;
+
+    openPopover(btn, buildMachineMenu(item), {
+      onSelect: optionKey => selectMachineOverride(key, optionKey),
+    });
+    _openChainPickerKey = key;
+    btn.classList.add('active');
+  }
+
+  // Picking a recipe resets the row to its base machine.
   function selectChainOverride(key, recipeID) {
     if (recipeID === 'STOP') {
       delete _overrides[key];
       _stopPoints.add(key);
     } else {
       const item = _chainItems.find(ci => itemKey(ci.Item) === key);
-      _overrides[key] = (item && machineKeyFor(item, recipeID)) || recipeID;
+      const base = item && machineCandidates(item, recipeID)[0];
+      _overrides[key] = base ? base.Key : recipeID;
       _stopPoints.delete(key);
     }
+    closeAllPickers();
+    doDiscover();
+  }
+
+  // action is a RecipeOption key; "automatic" sends the base machine's.
+  function selectMachineOverride(key, optionKey) {
+    _overrides[key] = optionKey;
+    _stopPoints.delete(key);
     closeAllPickers();
     doDiscover();
   }
@@ -1315,6 +1363,7 @@
   }
 
   let _openChainPickerKey = null;
+  const PICKER_TRIGGERS = '[data-action="openChainPicker"],[data-action="openMachinePicker"]';
 
   // ── Chain view container (table ↔ graph) ─────────────────────────────────
   const chainContainer = createContainer({
@@ -1343,7 +1392,7 @@
 
   function closeAllPickers() {
     closePopover();
-    document.querySelectorAll('[data-action="openChainPicker"]').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll(PICKER_TRIGGERS).forEach(el => el.classList.remove('active'));
     _openChainPickerKey = null;
   }
 

@@ -37,7 +37,7 @@ func (s *Solver) CalculateMachineGroups(ctx context.Context, g *RecipeGraph, rv 
 	if err != nil {
 		return nil, nil, err
 	}
-	lc := &ladderCtx{affinity: modAffinity(first)}
+	lc := &ladderCtx{affinity: modAffinity(first), yields: indexYields(g, first)}
 	groups, pickWarnings, err := pickGroups(matrices, req, lc)
 	if err != nil {
 		return nil, nil, err

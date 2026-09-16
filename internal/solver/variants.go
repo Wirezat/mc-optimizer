@@ -41,17 +41,79 @@ type cell struct {
 	count       int64
 	exact       Rational
 	utilization Rational
+	byproduct   Rational
 }
 
-// ladderCtx carries the chain-wide counts stage 6 reads; nil skips that stage.
+// ladderCtx carries the chain-wide figures stages 4 and 6 read; nil skips both.
 type ladderCtx struct {
 	affinity map[string]int // machine mod → groups won in pass 1
+	yields   yieldIndex
+}
+
+// yieldIndex is an item per tick per machine at the node producing it.
+type yieldIndex map[string]Rational
+
+func indexYields(g *RecipeGraph, groups []MachineGroupDraft) yieldIndex {
+	out := yieldIndex{}
+	for _, gr := range groups {
+		node := g.Nodes[gr.RecipeOutput.Key()]
+		if node == nil || node.RecipeID == "" {
+			continue
+		}
+		perMachine := node.OutputAmount.Mul(NewRational(gr.Variant.Rate.Num, gr.Variant.Rate.Den))
+		if !perMachine.IsZero() {
+			out[node.Item.Key()] = perMachine
+		}
+	}
+	return out
+}
+
+// byproductValue is the machines a cell saves elsewhere by raising an output the
+// chain also produces. One step only and never rounded up, so it under-counts.
+func byproductValue(c cell, demand Rational, yi yieldIndex) Rational {
+	saved := NewRational(0, 1)
+	if len(yi) == 0 || c.recipe == nil {
+		return saved
+	}
+	base := catalogOutputs(c.recipe)
+	for ref, amount := range EffectiveOutputs(c.variant) {
+		b, ok := base[ref]
+		if !ok {
+			continue
+		}
+		per, ok := yi[ref]
+		if !ok || per.IsZero() {
+			continue
+		}
+		delta := NewRational(amount.Num, amount.Den).Sub(b)
+		if !delta.IsPositive() {
+			continue
+		}
+		saved = saved.Add(delta.Mul(demand).Div(per))
+	}
+	return saved
+}
+
+func catalogOutputs(r *RecipeRow) map[string]Rational {
+	out := make(map[string]Rational, len(r.ItemOutputs)+len(r.FluidOutputs))
+	for _, o := range r.ItemOutputs {
+		if o.ItemModID == nil || o.ItemID == nil {
+			continue
+		}
+		ref := ItemRef{ModID: *o.ItemModID, ItemID: *o.ItemID}
+		out[ref.Key()] = NewRational(o.AmountNum, o.AmountDen).Mul(NewRational(o.ProbabilityNum, o.ProbabilityDen))
+	}
+	for _, f := range r.FluidOutputs {
+		ref := ItemRef{ModID: f.FluidModID, ItemID: f.FluidID, IsFluid: true}
+		out[ref.Key()] = NewRational(f.AmountMB, 1).Mul(NewRational(f.ProbabilityNum, f.ProbabilityDen))
+	}
+	return out
 }
 
 // pickCell picks one cell of a node; false when none can run the recipe.
 //
 //	1 valid                        2 min ceil(demand/rate)
-//	3 max utilization              4 max byproduct value (phase 4, open)
+//	3 max utilization              4 max byproduct value
 //	5 min consumption per resource 6 max mod affinity
 //	7 min rank                     8 (mod, machine, variant id)
 func pickCell(cells []cell, demand Rational, lc *ladderCtx) (cell, bool) {
@@ -67,6 +129,16 @@ func pickCell(cells []cell, demand Rational, lc *ladderCtx) (cell, bool) {
 	}
 	rem = keepBest(rem, func(a, b cell) int { return cmpInt64(a.count, b.count) })
 	rem = keepBest(rem, func(a, b cell) int { return -a.utilization.Cmp(b.utilization) })
+	if lc != nil && len(lc.yields) > 0 {
+		for i := range rem {
+			rem[i].byproduct = byproductValue(rem[i], demand, lc.yields)
+		}
+		// Whole machines only: a tenth of one must not outweigh the energy the
+		// cell draws for it, which is stage 5's call.
+		rem = keepBest(rem, func(a, b cell) int {
+			return -cmpInt64(a.byproduct.FloorInt(), b.byproduct.FloorInt())
+		})
+	}
 	rem = keepCheapestPerResource(rem)
 	if lc != nil {
 		rem = keepBest(rem, func(a, b cell) int {

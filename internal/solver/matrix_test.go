@@ -234,3 +234,78 @@ func TestIOSignatureIsStrict(t *testing.T) {
 		t.Error("an input that survives the craft must not match one that is consumed")
 	}
 }
+
+// pulverizerCells is Thermal's case: an output augment raises the nickel
+// byproduct from 1/10 to 19/100 for 3.8x the energy, at the same rate.
+func pulverizerCells() []cell {
+	mc := "minecraft"
+	recipe := &RecipeRow{
+		ID: "r:pulverize", MachineMod: "thermal", MachineID: "pulverizer", DurationTicks: 100,
+		ItemOutputs: []RecipeRowItemIO{
+			{ItemModID: &mc, ItemID: sp("iron_dust"), AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
+			{ItemModID: &mc, ItemID: sp("nickel"), AmountNum: 1, AmountDen: 10, ProbabilityNum: 1, ProbabilityDen: 1},
+		},
+	}
+	outs := func(nickelNum, nickelDen int64) []plugins.Output {
+		return []plugins.Output{
+			{Ref: "minecraft:iron_dust", Amount: rate(1, 1), Probability: rate(1, 1)},
+			{Ref: "minecraft:nickel", Amount: rate(nickelNum, nickelDen), Probability: rate(1, 1)},
+		}
+	}
+	machine := &MachineSpec{ModID: "thermal", MachineID: "pulverizer"}
+	return []cell{
+		{machine: machine, recipe: recipe, variant: plugins.Variant{
+			ID: "plain", Rate: rate(1, 100), Valid: true, Outputs: outs(1, 10),
+			Costs: []plugins.Cost{{Resource: "rf", Amount: rate(20, 1)}}}},
+		{machine: machine, recipe: recipe, variant: plugins.Variant{
+			ID: "boosted", Rate: rate(1, 100), Valid: true, Outputs: outs(19, 100),
+			Costs: []plugins.Cost{{Resource: "rf", Amount: rate(76, 1)}}}},
+	}
+}
+
+// One machine at the nickel node makes 1/100 nickel per tick.
+func nickelYields() yieldIndex {
+	return yieldIndex{"minecraft:nickel": NewRational(1, 100)}
+}
+
+func TestByproductValueOnlyWinsByAWholeMachine(t *testing.T) {
+	tests := []struct {
+		name   string
+		demand Rational
+		yields yieldIndex
+		want   string
+	}{
+		// 0.09 machines saved, so stage 5 decides instead.
+		{"one machine", NewRational(1, 100), nickelYields(), "plain"},
+		{"a hundred machines", NewRational(1, 1), nickelYields(), "boosted"},
+		{"nickel unused", NewRational(1, 1), yieldIndex{}, "plain"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := pickCell(pulverizerCells(), tc.demand, &ladderCtx{yields: tc.yields})
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+			if got.variant.ID != tc.want {
+				t.Errorf("ID = %q, want %q (saved %v machines)", got.variant.ID, tc.want, got.byproduct)
+			}
+		})
+	}
+}
+
+func TestIndexYields(t *testing.T) {
+	nickel := ItemRef{ModID: "minecraft", ItemID: "nickel"}
+	g := &RecipeGraph{Nodes: map[string]*RecipeNode{
+		"minecraft:nickel": {Item: nickel, RecipeID: "r:nickel", OutputAmount: NewRational(2, 1)},
+		"minecraft:stone":  {Item: ItemRef{ModID: "minecraft", ItemID: "stone"}},
+	}}
+	groups := []MachineGroupDraft{
+		{RecipeOutput: nickel, Variant: plugins.Variant{Rate: rate(1, 50)}},
+		{RecipeOutput: ItemRef{ModID: "minecraft", ItemID: "stone"}, Variant: plugins.Variant{Rate: rate(1, 10)}},
+	}
+	yi := indexYields(g, groups)
+	wantRational(t, "nickel per machine", yi["minecraft:nickel"], 1, 25)
+	if _, ok := yi["minecraft:stone"]; ok {
+		t.Error("a node without a recipe must not contribute a yield")
+	}
+}

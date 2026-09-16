@@ -291,3 +291,18 @@ export function tagIconTextHTML(tagRef, { size = null, extraClass = '' } = {}) {
            (sub ? `<span class="icontext-subtitle">${esc(sub)}</span>` : '') +
            `</span></span>`;
 }
+
+/**
+ * refIconTextHTML(ref, opts) → HTML string
+ * The single entry point for an ItemRef-shaped value ({ ModID, ItemID,
+ * TagRef, IsFluid }) — the shape the solver hands back everywhere (chain
+ * items, IO profiles, tag resolutions). Branches to tagIconTextHTML or
+ * iconTextHTML so a page holding ItemRefs never has to special-case TagRef
+ * itself; a page holding a bare (modID, itemID) pair still calls iconTextHTML
+ * directly, same as always.
+ */
+export function refIconTextHTML(ref, opts = {}) {
+    return ref?.TagRef
+        ? tagIconTextHTML(ref.TagRef, opts)
+        : iconTextHTML(ref?.ModID, ref?.ItemID, { ...opts, isFluid: ref?.IsFluid });
+}

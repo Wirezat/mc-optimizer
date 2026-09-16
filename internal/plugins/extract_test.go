@@ -371,3 +371,30 @@ func TestExtractRejectsZeroDenominator(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractReadsRank(t *testing.T) {
+	cases := []struct {
+		name   string
+		fields string
+		want   int
+	}{
+		{"absent", minimalVariantFields + `rate: { num: 1, den: 20 }`, 0},
+		{"set", minimalVariantFields + `rate: { num: 1, den: 20 }, rank: 3`, 3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			vm := goja.New()
+			res, err := vm.RunString(`[{ ` + tc.fields + ` }]`)
+			if err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			got, err := extractVariants("testmod", res)
+			if err != nil {
+				t.Fatalf("extractVariants: %v", err)
+			}
+			if len(got) != 1 || got[0].Rank != tc.want {
+				t.Fatalf("got %+v, want one variant with rank %d", got, tc.want)
+			}
+		})
+	}
+}

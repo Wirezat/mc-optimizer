@@ -66,7 +66,7 @@ func extractVariants(modID string, res goja.Value) ([]Variant, error) {
 	return out, nil
 }
 
-// extractVariant reads the seven Variant fields off a single array element.
+// extractVariant reads the Variant fields off a single array element.
 // A field that is absent (undefined) becomes its zero value; a field that
 // is present but the wrong JS type is an error, never a silent default.
 func (ex *extractor) extractVariant(what string, v goja.Value) (Variant, error) {
@@ -103,10 +103,14 @@ func (ex *extractor) extractVariant(what string, v goja.Value) (Variant, error) 
 	if err != nil {
 		return Variant{}, err
 	}
+	rank, err := ex.readInt(what, obj, "rank")
+	if err != nil {
+		return Variant{}, err
+	}
 
 	return Variant{
 		ID: id, Label: label, Rate: rate, Valid: valid,
-		Costs: costs, Outputs: outputs, Items: items,
+		Costs: costs, Outputs: outputs, Items: items, Rank: int(rank),
 	}, nil
 }
 

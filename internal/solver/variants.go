@@ -18,6 +18,40 @@ type VariantSource interface {
 	Variants(ctx context.Context, machine *MachineSpec, recipe *RecipeRow, config json.RawMessage) ([]plugins.Variant, error)
 }
 
+// VanillaEcosystem marks the machines the host evaluates itself.
+const VanillaEcosystem = "vanilla"
+
+// One coal per eight operations, however fast the machine runs.
+var vanillaFuelBurners = map[string]bool{"furnace": true, "blast_furnace": true, "smoker": true}
+
+// vanillaVariant is the host's own evaluator: rate from the recipe duration and
+// coal per tick, so vanilla is not the free cell that beats every modded furnace.
+func vanillaVariant(machine *MachineSpec, recipe *RecipeRow, configs map[string]json.RawMessage) plugins.Variant {
+	ticks := max(int64(recipe.DurationTicks), 1)
+	v := plugins.Variant{
+		ID:    "vanilla",
+		Rate:  plugins.Rational{Num: 1, Den: ticks},
+		Valid: true,
+	}
+	if !vanillaFuelBurners[machine.MachineID] {
+		return v
+	}
+	v.Costs = []plugins.Cost{{Resource: "coals", Amount: plugins.Rational{Num: 1, Den: 8 * ticks}}}
+	v.Valid = !displacesFuel(configs)
+	return v
+}
+
+// displacesFuel reports whether a config pins the line to another supply.
+func displacesFuel(configs map[string]json.RawMessage) bool {
+	var cfg struct {
+		Mode string `json:"mode"`
+	}
+	if err := json.Unmarshal(configs["ironfurnaces"], &cfg); err != nil {
+		return false
+	}
+	return cfg.Mode == "factory"
+}
+
 // DefaultVariant is the behavior for machines whose mod ships no plugin:
 // nominal recipe duration, no operating costs, catalog outputs.
 func DefaultVariant(recipe *RecipeRow) plugins.Variant {
@@ -276,6 +310,9 @@ func cmpInt64(a, b int64) int {
 // variantsFor returns the variants for one machine group. Without a configured
 // source the host default applies.
 func (s *Solver) variantsFor(ctx context.Context, machine *MachineSpec, recipe *RecipeRow, req SolveRequest) ([]plugins.Variant, error) {
+	if machine.Ecosystem == VanillaEcosystem {
+		return []plugins.Variant{vanillaVariant(machine, recipe, req.ModConfigs)}, nil
+	}
 	if s.VariantSource == nil {
 		return []plugins.Variant{DefaultVariant(recipe)}, nil
 	}

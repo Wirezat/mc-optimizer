@@ -130,7 +130,8 @@ func (d *DB) LookupMachineNames(ctx context.Context, machines []solver.MachineRe
 // LookupMachinePluginMods resolves, for a set of (modID, machineID) pairs, the
 // mod whose plugin evaluates that machine: its ecosystem, or its own mod when
 // no ecosystem is set. The SQL mirrors solver.PluginMod, so the browser and
-// the solver agree on which plugin owns a machine.
+// the solver agree on which plugin owns a machine. Vanilla machines are left
+// out: the host evaluates those itself and no plugin exists to load.
 // Returns a map[modID+":"+machineID → pluginModID].
 func (d *DB) LookupMachinePluginMods(ctx context.Context, machines []solver.MachineRef) (map[string]string, error) {
 	if len(machines) == 0 {
@@ -146,7 +147,8 @@ func (d *DB) LookupMachinePluginMods(ctx context.Context, machines []solver.Mach
 		SELECT mt.mod_id, mt.machine_id, COALESCE(NULLIF(mt.ecosystem, ''), mt.mod_id)
 		FROM machine_types mt
 		WHERE (mt.mod_id, mt.machine_id) IN (SELECT unnest($1::text[]), unnest($2::text[]))
-	`, modIDs, machineIDs)
+		  AND COALESCE(mt.ecosystem, '') <> $3
+	`, modIDs, machineIDs, solver.VanillaEcosystem)
 	if err != nil {
 		return nil, fmt.Errorf("db: lookup machine plugin mods: %w", err)
 	}

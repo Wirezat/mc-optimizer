@@ -309,3 +309,50 @@ func TestIndexYields(t *testing.T) {
 		t.Error("a node without a recipe must not contribute a yield")
 	}
 }
+
+func vanillaMachine(id string) *MachineSpec {
+	return &MachineSpec{ModID: "minecraft", MachineID: id, Ecosystem: VanillaEcosystem}
+}
+
+func TestVanillaVariantChargesFuelPerTick(t *testing.T) {
+	recipe := ironIngotRecipe(200)
+	v := vanillaVariant(vanillaMachine("furnace"), recipe, nil)
+	if !v.Valid || v.Rate.Num != 1 || v.Rate.Den != 200 {
+		t.Fatalf("variant = %+v, want a valid 1/200 rate", v)
+	}
+	if len(v.Costs) != 1 || v.Costs[0].Resource != "coals" ||
+		v.Costs[0].Amount.Num != 1 || v.Costs[0].Amount.Den != 1600 {
+		t.Errorf("costs = %+v, want 1/1600 coals", v.Costs)
+	}
+}
+
+func TestVanillaVariantLeavesFuellessMachinesFree(t *testing.T) {
+	v := vanillaVariant(vanillaMachine("stonecutter"), ironIngotRecipe(1), nil)
+	if len(v.Costs) != 0 || !v.Valid {
+		t.Errorf("variant = %+v, want a valid free one: a stonecutter burns nothing", v)
+	}
+}
+
+func TestVanillaVariantStandsDownForAPinnedSupply(t *testing.T) {
+	cfg := map[string]json.RawMessage{"ironfurnaces": json.RawMessage(`{"mode":"factory"}`)}
+	if v := vanillaVariant(vanillaMachine("furnace"), ironIngotRecipe(200), cfg); v.Valid {
+		t.Error("valid = true, want false while Iron Furnaces runs on RF")
+	}
+	cfg["ironfurnaces"] = json.RawMessage(`{"mode":"none"}`)
+	if v := vanillaVariant(vanillaMachine("furnace"), ironIngotRecipe(200), cfg); !v.Valid {
+		t.Error("valid = false, want true without a factory pin")
+	}
+}
+
+func TestVanillaSkipsTheVariantSource(t *testing.T) {
+	src := &stubSource{vs: []plugins.Variant{{ID: "fromPlugin", Rate: rate(1, 1), Valid: true}}}
+	st := newStub(200)
+	st.machines["minecraft:furnace"].Ecosystem = VanillaEcosystem
+	g := matrixGroup(t, st, src, MachineRef{"minecraft", "furnace"}, NewRational(1, 200))
+	if g.VariantID != "vanilla" {
+		t.Errorf("variant = %q, want the host's own", g.VariantID)
+	}
+	if src.calls != 0 {
+		t.Errorf("VariantSource called %d times, want 0", src.calls)
+	}
+}

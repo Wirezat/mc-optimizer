@@ -64,32 +64,21 @@ func TestShippedTemplateTeachesTheCurrentContract(t *testing.T) {
 		t.Error("template declares machines.axes, which the host no longer reads")
 	}
 
-	// resolve must read the tier out of the config it is handed, not out of a
-	// host-supplied selection.
-	fn, ok := goja.AssertFunction(machines.Get("resolve"))
-	if !ok {
-		t.Fatal("machines.resolve is not a function")
+	if _, ok := goja.AssertFunction(machines.Get("resolve")); ok {
+		t.Error("template still teaches machines.resolve; the solver picks the machine")
 	}
-	cands := vm.ToValue([]any{
-		map[string]any{"mod_id": "example", "machine_id": "basic_press"},
-		map[string]any{"mod_id": "example", "machine_id": "advanced_press"},
-	})
-	for name, tc := range map[string]struct {
-		config map[string]any
-		want   int64
-	}{
-		"advanced from the config": {map[string]any{"tier": "advanced"}, 1},
-		"basic from the config":    {map[string]any{"tier": "basic"}, 0},
-		"empty config falls back":  {map[string]any{}, 0},
-	} {
-		t.Run(name, func(t *testing.T) {
-			res, err := fn(goja.Undefined(), cands, vm.ToValue(tc.config))
-			if err != nil {
-				t.Fatalf("resolve: %v", err)
-			}
-			if got := res.ToInteger(); got != tc.want {
-				t.Errorf("resolve = %d, want %d", got, tc.want)
-			}
-		})
+
+	// The cells compete on the ladder, so an author has to see what their
+	// numbers compete on and which lever is theirs alone.
+	for _, want := range []string{"fewest machines", "highest utilisation", "rank"} {
+		if !strings.Contains(src, want) {
+			t.Errorf("template does not mention %q", want)
+		}
+	}
+	if !strings.Contains(src, "machine_id") {
+		t.Error("template never shows ctx.recipe.machine_id, so an author cannot tell blasting from smoking")
+	}
+	if !strings.Contains(src, "at most one variant with no items") {
+		t.Error("template still promises exactly one base variant")
 	}
 }

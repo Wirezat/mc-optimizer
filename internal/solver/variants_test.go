@@ -31,70 +31,184 @@ func TestDefaultVariantClampsZeroDuration(t *testing.T) {
 	}
 }
 
-func TestPickVariantMinimisesMachineCount(t *testing.T) {
-	vs := []plugins.Variant{
-		{ID: "base", Rate: plugins.Rational{Num: 1, Den: 20}, Valid: true},
-		{ID: "fast", Rate: plugins.Rational{Num: 1, Den: 10}, Valid: true,
+// cellsOn pairs every variant with one machine.
+func cellsOn(mod, id string, vs ...plugins.Variant) []cell {
+	m := &MachineSpec{ModID: mod, MachineID: id}
+	out := make([]cell, 0, len(vs))
+	for _, v := range vs {
+		out = append(out, cell{machine: m, variant: v})
+	}
+	return out
+}
+
+func rate(num, den int64) plugins.Rational { return plugins.Rational{Num: num, Den: den} }
+
+// matrixOn is one node whose recipe only its own machine runs.
+func matrixOn(vs ...plugins.Variant) nodeMatrix {
+	recipe := &RecipeRow{ID: "r1", MachineMod: "mod", MachineID: "machine", DurationTicks: 20}
+	return nodeMatrix{
+		rateKey:  RecipeOptionKey(recipe.ID, recipe.MachineMod, recipe.MachineID),
+		recipeID: recipe.ID,
+		recipe:   recipe,
+		machine:  &MachineSpec{ModID: recipe.MachineMod, MachineID: recipe.MachineID},
+		variants: vs,
+		cells:    cellsOn(recipe.MachineMod, recipe.MachineID, vs...),
+	}
+}
+
+func coal(num, den int64) []plugins.Cost {
+	return []plugins.Cost{{Resource: "coals", Amount: rate(num, den)}}
+}
+
+// Speed burns more coal and still wins, as the only one-machine cell.
+func TestLadderMinimisesMachineCount(t *testing.T) {
+	cells := cellsOn("minecraft", "furnace",
+		plugins.Variant{ID: "base", Rate: rate(1, 20), Valid: true},
+		plugins.Variant{ID: "fast", Rate: rate(1, 10), Valid: true,
 			Items: []plugins.Item{{Ref: "m:upg", Count: 2}}},
-	}
-	// Demand: 1 recipe every 10 ticks. base achieves 1/20 -> 2 machines,
-	// fast achieves 1/10 -> 1 machine.
-	got, count, ok := PickVariant(vs, NewRational(1, 10))
+	)
+	got, ok := pickCell(cells, NewRational(1, 10), nil)
 	if !ok {
 		t.Fatal("ok = false, want true")
 	}
-	if got.ID != "fast" {
-		t.Errorf("ID = %q, want %q", got.ID, "fast")
+	if got.variant.ID != "fast" {
+		t.Errorf("ID = %q, want %q", got.variant.ID, "fast")
 	}
-	if count != 1 {
-		t.Errorf("count = %d, want 1", count)
+	if got.count != 1 {
+		t.Errorf("count = %d, want 1", got.count)
 	}
 }
 
-func TestPickVariantBreaksTieOnFewerItems(t *testing.T) {
-	vs := []plugins.Variant{
-		// "wasteful" is listed first on purpose: a tie-break that fell back to
-		// loop order (first-found-wins) would return it, so only a genuine
-		// fewer-items comparison can make "cheap" win here.
-		{ID: "wasteful", Rate: plugins.Rational{Num: 1, Den: 10}, Valid: true,
-			Items: []plugins.Item{{Ref: "m:upg", Count: 8}}},
-		{ID: "cheap", Rate: plugins.Rational{Num: 1, Den: 10}, Valid: true,
-			Items: []plugins.Item{{Ref: "m:upg", Count: 1}}},
+// The same matrix answers "speed" or "fuel efficiency" by the demand alone.
+func TestLadderStagesTwoAndThree(t *testing.T) {
+	gold := func() []cell {
+		return cellsOn("ironfurnaces", "gold_furnace",
+			plugins.Variant{ID: "plain", Rate: rate(1, 120), Valid: true, Costs: coal(1, 8)},
+			plugins.Variant{ID: "fuel", Rate: rate(1, 150), Valid: true, Costs: coal(1, 16),
+				Items: []plugins.Item{{Ref: "if:fuel_augment", Count: 1}}},
+			plugins.Variant{ID: "speed", Rate: rate(1, 60), Valid: true, Costs: coal(1, 4),
+				Items: []plugins.Item{{Ref: "if:speed_augment", Count: 1}}},
+		)
 	}
-	got, _, ok := PickVariant(vs, NewRational(1, 10))
+	tests := []struct {
+		name   string
+		demand Rational
+		want   string
+		count  int64
+	}{
+		// Every cell fits one machine, so stage 2 ties and stage 3 decides.
+		{"reserve picks fuel efficiency", NewRational(1, 200), "fuel", 1},
+		{"bottleneck picks speed", NewRational(1, 50), "speed", 2},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := pickCell(gold(), tc.demand, nil)
+			if !ok {
+				t.Fatal("ok = false, want true")
+			}
+			if got.variant.ID != tc.want {
+				t.Errorf("ID = %q, want %q", got.variant.ID, tc.want)
+			}
+			if got.count != tc.count {
+				t.Errorf("count = %d, want %d", got.count, tc.count)
+			}
+		})
+	}
+}
+
+// Stage 5 must not fall silent over a cell of another resource.
+func TestStage5ComparesPerResource(t *testing.T) {
+	dear := plugins.Variant{ID: "dear", Rate: rate(1, 100), Valid: true, Costs: coal(1, 4)}
+	cheap := plugins.Variant{ID: "cheap", Rate: rate(1, 100), Valid: true, Costs: coal(1, 8)}
+	joule := plugins.Variant{ID: "joule", Rate: rate(1, 100), Valid: true,
+		Costs: []plugins.Cost{{Resource: "j", Amount: rate(400, 1)}}}
+
+	cells := append(cellsOn("a_mod", "burner", dear, cheap), cellsOn("z_mod", "smelter", joule)...)
+	got, ok := pickCell(cells, NewRational(1, 100), nil)
 	if !ok {
 		t.Fatal("ok = false, want true")
 	}
-	if got.ID != "cheap" {
-		t.Errorf("ID = %q, want %q", got.ID, "cheap")
+	if got.variant.ID != "cheap" {
+		t.Errorf("ID = %q, want %q: the joule cell must not switch the coal comparison off", got.variant.ID, "cheap")
+	}
+	if _, ok := pickCell(cellsOn("z_mod", "smelter", joule), NewRational(1, 100), nil); !ok {
+		t.Error("a lone joule cell must still be selectable")
 	}
 }
 
-func TestPickVariantSkipsInvalid(t *testing.T) {
-	vs := []plugins.Variant{
+// Without the counts the same matrix falls through to stage 8.
+func TestLadderPrefersTheModTheChainAlreadyUses(t *testing.T) {
+	v := plugins.Variant{ID: "plain", Rate: rate(1, 100), Valid: true}
+	cells := append(cellsOn("a_mod", "one", v), cellsOn("z_mod", "two", v)...)
+
+	got, _ := pickCell(cells, NewRational(1, 100), &ladderCtx{affinity: map[string]int{"z_mod": 3}})
+	if got.machine.ModID != "z_mod" {
+		t.Errorf("mod = %q, want %q", got.machine.ModID, "z_mod")
+	}
+	got, _ = pickCell(cells, NewRational(1, 100), nil)
+	if got.machine.ModID != "a_mod" {
+		t.Errorf("without affinity: mod = %q, want the lexicographic winner %q", got.machine.ModID, "a_mod")
+	}
+}
+
+// Across mods a rank is a number two authors chose independently.
+func TestLadderRankDecidesOnlyWithinOnePlugin(t *testing.T) {
+	kanthal := plugins.Variant{ID: "kanthal", Rate: rate(1, 100), Valid: true, Rank: 1}
+	cupro := plugins.Variant{ID: "zcupronickel", Rate: rate(1, 100), Valid: true, Rank: 0}
+
+	got, _ := pickCell(cellsOn("mi", "ebf", kanthal, cupro), NewRational(1, 100), nil)
+	if got.variant.ID != "zcupronickel" {
+		t.Errorf("ID = %q, want %q: the lower rank wins inside one plugin", got.variant.ID, "zcupronickel")
+	}
+
+	mixed := append(cellsOn("a_mod", "one", kanthal), cellsOn("z_mod", "two", cupro)...)
+	got, _ = pickCell(mixed, NewRational(1, 100), nil)
+	if got.machine.ModID != "a_mod" {
+		t.Errorf("mod = %q, want %q: rank must not be compared across plugins", got.machine.ModID, "a_mod")
+	}
+}
+
+// The same matrix in any order must give the same winner.
+func TestLadderIsOrderIndependent(t *testing.T) {
+	v := func(id string) plugins.Variant {
+		return plugins.Variant{ID: id, Rate: rate(1, 100), Valid: true}
+	}
+	cells := append(cellsOn("a_mod", "one", v("x"), v("y")), cellsOn("z_mod", "two", v("x"))...)
+	want, _ := pickCell(cells, NewRational(1, 100), nil)
+	for i := range cells {
+		rotated := append(append([]cell{}, cells[i:]...), cells[:i]...)
+		got, _ := pickCell(rotated, NewRational(1, 100), nil)
+		if got.machine.ModID != want.machine.ModID || got.variant.ID != want.variant.ID {
+			t.Fatalf("rotation %d picked %s/%s, want %s/%s",
+				i, got.machine.ModID, got.variant.ID, want.machine.ModID, want.variant.ID)
+		}
+	}
+}
+
+func TestLadderSkipsInvalid(t *testing.T) {
+	cells := cellsOn("minecraft", "furnace",
 		// "impossible" is far faster than "base": if the skip guard let it
 		// through, it would need strictly fewer machines (1 vs 2), not just
 		// tie with "base". That makes the result independent of list order,
 		// unlike a tie where a disabled guard could still "accidentally"
 		// produce the expected winner depending on which entry comes first.
-		{ID: "impossible", Rate: plugins.Rational{Num: 1, Den: 1}, Valid: false},
-		{ID: "base", Rate: plugins.Rational{Num: 1, Den: 20}, Valid: true},
-	}
-	// Demand: 1 recipe every 10 ticks. base needs 2 machines at 1/20;
-	// impossible, if not skipped, would need only 1 at 1/1.
-	got, _, ok := PickVariant(vs, NewRational(1, 10))
+		plugins.Variant{ID: "impossible", Rate: rate(1, 1), Valid: false},
+		plugins.Variant{ID: "base", Rate: rate(1, 20), Valid: true},
+	)
+	got, ok := pickCell(cells, NewRational(1, 10), nil)
 	if !ok {
 		t.Fatal("ok = false, want true")
 	}
-	if got.ID != "base" {
-		t.Errorf("ID = %q, want %q", got.ID, "base")
+	if got.variant.ID != "base" {
+		t.Errorf("ID = %q, want %q", got.variant.ID, "base")
 	}
 }
 
-func TestPickVariantReportsNoValidOption(t *testing.T) {
-	vs := []plugins.Variant{{ID: "impossible", Rate: plugins.Rational{Num: 1, Den: 1}, Valid: false}}
-	if _, _, ok := PickVariant(vs, NewRational(1, 20)); ok {
-		t.Error("ok = true, want false when no variant is valid")
+func TestLadderReportsNoValidOption(t *testing.T) {
+	cells := cellsOn("minecraft", "furnace",
+		plugins.Variant{ID: "impossible", Rate: rate(1, 1), Valid: false})
+	if _, ok := pickCell(cells, NewRational(1, 20), nil); ok {
+		t.Error("ok = true, want false when no cell is valid")
 	}
 }
 
@@ -337,14 +451,16 @@ func TestSolveWarnsWhenVariantOutputsOscillate(t *testing.T) {
 	}
 }
 
-// TestSyncVariantOutputsKeysByMachine covers the keying: both nodes run the same
+// TestSyncVariantOutputsKeysByNode covers the keying: both nodes run the same
 // recipe row, reached through machine_interfaces, but on different machines, and
-// only the bronze machine's variant overrides outputs. Keying by RecipeID alone
+// only the bronze node's variant overrides outputs. Keying by RecipeID alone
 // would leak that override into the electric node — its own primary amount and,
 // worse, its shared iron byproduct edge. The assertions hold in either group
 // order: with RecipeID keying, one order leaves the map without overrides and
 // nothing changes at all, the other bleeds into the electric node.
-func TestSyncVariantOutputsKeysByMachine(t *testing.T) {
+//
+// The key is the node's: the ladder may swap the group's machine.
+func TestSyncVariantOutputsKeysByNode(t *testing.T) {
 	iron := ItemRef{ModID: "mod", ItemID: "iron"}
 	copper := ItemRef{ModID: "mod", ItemID: "copper"}
 	one := NewRational(1, 1)
@@ -362,12 +478,14 @@ func TestSyncVariantOutputsKeysByMachine(t *testing.T) {
 	base := captureOutputBaseline(g)
 
 	groups := []MachineGroupDraft{
-		{RecipeID: "r:sep", MachineMod: "mod", MachineID: "bronze", Variant: plugins.Variant{
-			ID: "boosted", Outputs: []plugins.Output{
-				{Ref: "mod:iron", Amount: plugins.Rational{Num: 4, Den: 1}, Probability: plugins.Rational{Num: 1, Den: 1}},
-				{Ref: "mod:copper", Amount: plugins.Rational{Num: 1, Den: 1}, Probability: plugins.Rational{Num: 1, Den: 1}},
-			}}},
-		{RecipeID: "r:sep", MachineMod: "mod", MachineID: "electric", Variant: plugins.Variant{ID: "plain"}},
+		{RecipeID: "r:sep", MachineMod: "mod", MachineID: "bronze",
+			rateKey: RecipeOptionKey("r:sep", "mod", "bronze"), Variant: plugins.Variant{
+				ID: "boosted", Outputs: []plugins.Output{
+					{Ref: "mod:iron", Amount: plugins.Rational{Num: 4, Den: 1}, Probability: plugins.Rational{Num: 1, Den: 1}},
+					{Ref: "mod:copper", Amount: plugins.Rational{Num: 1, Den: 1}, Probability: plugins.Rational{Num: 1, Den: 1}},
+				}}},
+		{RecipeID: "r:sep", MachineMod: "mod", MachineID: "electric",
+			rateKey: RecipeOptionKey("r:sep", "mod", "electric"), Variant: plugins.Variant{ID: "plain"}},
 	}
 
 	if !syncVariantOutputs(g, base, groups, true) {
@@ -836,20 +954,20 @@ func TestSolveDoesNotLaunderForeignPanics(t *testing.T) {
 // A pinned variant overrides the automatic pick even when it needs more
 // machines - that is the entire point of pinning. Handoff section 3: the
 // dominated upgrade step the solver would never choose has to be reachable.
-func TestChooseVariantHonoursPin(t *testing.T) {
+func TestChooseCellHonoursPin(t *testing.T) {
 	vs := []plugins.Variant{
 		{ID: "base", Rate: plugins.Rational{Num: 1, Den: 2}, Valid: true},
 		{ID: "slow", Rate: plugins.Rational{Num: 1, Den: 4}, Valid: true,
 			Items: []plugins.Item{{Ref: "mod:upgrade", Count: 3}}},
 	}
-	c, err := chooseVariant(vs, NewRational(1, 4), nil, "slow")
+	c, runnable, err := chooseCell(matrixOn(vs...), NewRational(1, 4), nil, "slow")
 	if err != nil {
-		t.Fatalf("chooseVariant: %v", err)
+		t.Fatalf("chooseCell: %v", err)
 	}
 	if c.variant.ID != "slow" {
 		t.Errorf("variant = %q, want \"slow\"", c.variant.ID)
 	}
-	if !c.runnable {
+	if !runnable {
 		t.Error("runnable = false, want true for a valid pinned variant")
 	}
 	if c.count != 1 {
@@ -863,14 +981,14 @@ func TestChooseVariantHonoursPin(t *testing.T) {
 // pick (it needs 2 machines against base's 1): an implementation that
 // mishandles an unmatched pin by defaulting to the first entry, rather than
 // running the real automatic-pick logic, lands on "worse" and fails here.
-func TestChooseVariantIgnoresUnknownPin(t *testing.T) {
+func TestChooseCellIgnoresUnknownPin(t *testing.T) {
 	vs := []plugins.Variant{
 		{ID: "worse", Rate: plugins.Rational{Num: 1, Den: 4}, Valid: true},
 		{ID: "base", Rate: plugins.Rational{Num: 1, Den: 2}, Valid: true},
 	}
-	c, err := chooseVariant(vs, NewRational(1, 2), nil, "no_such_variant")
+	c, _, err := chooseCell(matrixOn(vs...), NewRational(1, 2), nil, "no_such_variant")
 	if err != nil {
-		t.Fatalf("chooseVariant: %v", err)
+		t.Fatalf("chooseCell: %v", err)
 	}
 	if c.variant.ID != "base" {
 		t.Errorf("variant = %q, want the automatic pick %q", c.variant.ID, "base")
@@ -886,15 +1004,15 @@ func TestChooseVariantIgnoresUnknownPin(t *testing.T) {
 // against base's 2) and also against "banned" if "banned" were honoured
 // despite being invalid (2 machines, same rate as base) - so both the variant
 // ID and the count distinguish "correctly fell back" from "pinned it anyway".
-func TestChooseVariantIgnoresInvalidPin(t *testing.T) {
+func TestChooseCellIgnoresInvalidPin(t *testing.T) {
 	vs := []plugins.Variant{
 		{ID: "base", Rate: plugins.Rational{Num: 1, Den: 4}, Valid: true},
 		{ID: "banned", Rate: plugins.Rational{Num: 1, Den: 4}, Valid: false},
 		{ID: "fast", Rate: plugins.Rational{Num: 1, Den: 2}, Valid: true},
 	}
-	c, err := chooseVariant(vs, NewRational(1, 2), nil, "banned")
+	c, _, err := chooseCell(matrixOn(vs...), NewRational(1, 2), nil, "banned")
 	if err != nil {
-		t.Fatalf("chooseVariant: %v", err)
+		t.Fatalf("chooseCell: %v", err)
 	}
 	if c.variant.ID != "fast" {
 		t.Errorf("variant = %q, want the automatic pick %q", c.variant.ID, "fast")

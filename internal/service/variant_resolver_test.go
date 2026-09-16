@@ -345,6 +345,10 @@ func (s *solveStore) GetRecipe(_ context.Context, id string) (*solver.RecipeRow,
 	return nil, nil
 }
 
+func (s *solveStore) GetMachinesForRecipe(_ context.Context, _ string) ([]solver.MachineRef, error) {
+	return []solver.MachineRef{{ModID: s.recipe.MachineMod, MachineID: s.recipe.MachineID}}, nil
+}
+
 func (s *solveStore) GetMachineType(_ context.Context, modID, machineID string) (*solver.MachineSpec, error) {
 	if modID == "testmod" && machineID == "boiler" {
 		return testMachine(), nil

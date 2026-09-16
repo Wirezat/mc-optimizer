@@ -127,6 +127,44 @@ func (d *DB) GetRecipe(ctx context.Context, recipeID string) (*solver.RecipeRow,
 	return r, nil
 }
 
+// GetMachinesForRecipe returns every machine that can run this recipe, the one
+// that owns it first, then each machine implementing it via machine_interfaces.
+func (d *DB) GetMachinesForRecipe(ctx context.Context, recipeID string) ([]solver.MachineRef, error) {
+	rows, err := d.Pool.Query(ctx, `
+		SELECT machine_mod_id, machine_id FROM (
+			SELECT r.machine_mod_id, r.machine_id, 0 AS is_direct
+			FROM recipes r
+			WHERE r.id = $1
+
+			UNION
+
+			SELECT mi.machine_mod_id, mi.machine_id, 1 AS is_direct
+			FROM recipes r
+			JOIN machine_interfaces mi
+			     ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
+			WHERE r.id = $1
+			  AND (mi.machine_mod_id, mi.machine_id) IS DISTINCT FROM (r.machine_mod_id, r.machine_id)
+		) sub
+		ORDER BY is_direct, machine_mod_id, machine_id
+	`, recipeID)
+	if err != nil {
+		return nil, fmt.Errorf("db: get machines for recipe: %w", err)
+	}
+	defer rows.Close()
+	var out []solver.MachineRef
+	for rows.Next() {
+		var m solver.MachineRef
+		if err := rows.Scan(&m.ModID, &m.MachineID); err != nil {
+			return nil, fmt.Errorf("db: get machines for recipe: %w", err)
+		}
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("db: get machines for recipe: %w", err)
+	}
+	return out, nil
+}
+
 // GetMachineType returns the machine spec fields needed by the solver.
 func (d *DB) GetMachineType(ctx context.Context, modID, machineID string) (*solver.MachineSpec, error) {
 	m := &solver.MachineSpec{}

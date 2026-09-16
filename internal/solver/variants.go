@@ -32,35 +32,170 @@ func DefaultVariant(recipe *RecipeRow) plugins.Variant {
 	}
 }
 
-// PickVariant selects the variant from vs that reaches recipeRate with the
-// fewest machines; ties are broken by the fewer installed items. Returns the
-// variant, the machine count, and whether any valid variant was present at all.
-func PickVariant(vs []plugins.Variant, recipeRate Rational) (plugins.Variant, int64, bool) {
-	var best plugins.Variant
-	var bestCount int64
-	bestItems := 0
-	found := false
+// cell is one candidate for a node: a machine paired with one of its operating
+// variants. count, exact and utilization follow from the demand.
+type cell struct {
+	machine *MachineSpec
+	variant plugins.Variant
 
-	for _, v := range vs {
-		if !v.Valid || v.Rate.Num <= 0 || v.Rate.Den <= 0 {
-			continue
-		}
-		// Machines = ceil(required rate / rate of a single machine).
-		count := max(recipeRate.Div(NewRational(v.Rate.Num, v.Rate.Den)).CeilInt(), 1)
-		items := totalItems(v)
-		if !found || count < bestCount || (count == bestCount && items < bestItems) {
-			best, bestCount, bestItems, found = v, count, items, true
-		}
-	}
-	return best, bestCount, found
+	count       int64
+	exact       Rational
+	utilization Rational
 }
 
-func totalItems(v plugins.Variant) int {
-	n := 0
-	for _, it := range v.Items {
-		n += it.Count
+// ladderCtx carries the chain-wide counts stage 6 reads; nil skips that stage.
+type ladderCtx struct {
+	affinity map[string]int // machine mod → groups won in pass 1
+}
+
+// pickCell picks one cell of a node; false when none can run the recipe.
+//
+//	1 valid                        2 min ceil(demand/rate)
+//	3 max utilization              4 max byproduct value (phase 4, open)
+//	5 min consumption per resource 6 max mod affinity
+//	7 min rank                     8 (mod, machine, variant id)
+func pickCell(cells []cell, demand Rational, lc *ladderCtx) (cell, bool) {
+	rem := make([]cell, 0, len(cells))
+	for _, c := range cells {
+		if !c.variant.Valid || c.variant.Rate.Num <= 0 || c.variant.Rate.Den <= 0 {
+			continue
+		}
+		rem = append(rem, measure(c, demand))
 	}
-	return n
+	if len(rem) == 0 {
+		return cell{}, false
+	}
+	rem = keepBest(rem, func(a, b cell) int { return cmpInt64(a.count, b.count) })
+	rem = keepBest(rem, func(a, b cell) int { return -a.utilization.Cmp(b.utilization) })
+	rem = keepCheapestPerResource(rem)
+	if lc != nil {
+		rem = keepBest(rem, func(a, b cell) int {
+			return -cmpInt64(int64(lc.affinity[a.machine.ModID]), int64(lc.affinity[b.machine.ModID]))
+		})
+	}
+	rem = keepMinRank(rem)
+	return leastCell(rem), true
+}
+
+func measure(c cell, demand Rational) cell {
+	c.exact = demand.Div(NewRational(c.variant.Rate.Num, c.variant.Rate.Den))
+	c.count = max(c.exact.CeilInt(), 1)
+	c.utilization = c.exact.Div(NewRational(c.count, 1))
+	return c
+}
+
+func keepBest(cells []cell, cmp func(a, b cell) int) []cell {
+	out := make([]cell, 0, len(cells))
+	out = append(out, cells[0])
+	for _, c := range cells[1:] {
+		switch cmp(c, out[0]) {
+		case -1:
+			out = append(out[:0], c)
+		case 0:
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// keepCheapestPerResource drops a cell when another with the same resource set
+// is nowhere dearer. rf, eu and coal have no exchange rate.
+func keepCheapestPerResource(cells []cell) []cell {
+	costs := make([]map[string]Rational, len(cells))
+	for i, c := range cells {
+		costs[i] = costOf(c.variant)
+	}
+	out := make([]cell, 0, len(cells))
+	for i := range cells {
+		dominated := false
+		for j := range cells {
+			if i != j && cheaper(costs[j], costs[i]) {
+				dominated = true
+				break
+			}
+		}
+		if !dominated {
+			out = append(out, cells[i])
+		}
+	}
+	if len(out) == 0 {
+		return cells
+	}
+	return out
+}
+
+func costOf(v plugins.Variant) map[string]Rational {
+	out := make(map[string]Rational, len(v.Costs))
+	for _, c := range v.Costs {
+		if c.Amount.Den <= 0 {
+			continue
+		}
+		out[c.Resource] = out[c.Resource].Add(NewRational(c.Amount.Num, c.Amount.Den))
+	}
+	return out
+}
+
+func cheaper(a, b map[string]Rational) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	less := false
+	for res, av := range a {
+		bv, ok := b[res]
+		if !ok {
+			return false
+		}
+		switch av.Cmp(bv) {
+		case 1:
+			return false
+		case -1:
+			less = true
+		}
+	}
+	return less
+}
+
+// keepMinRank compares rank only while all cells share one plugin.
+func keepMinRank(cells []cell) []cell {
+	mod := PluginMod(cells[0].machine)
+	for _, c := range cells[1:] {
+		if PluginMod(c.machine) != mod {
+			return cells
+		}
+	}
+	return keepBest(cells, func(a, b cell) int {
+		return cmpInt64(int64(a.variant.Rank), int64(b.variant.Rank))
+	})
+}
+
+func leastCell(cells []cell) cell {
+	best := cells[0]
+	for _, c := range cells[1:] {
+		if cellIdentityLess(c, best) {
+			best = c
+		}
+	}
+	return best
+}
+
+func cellIdentityLess(a, b cell) bool {
+	if a.machine.ModID != b.machine.ModID {
+		return a.machine.ModID < b.machine.ModID
+	}
+	if a.machine.MachineID != b.machine.MachineID {
+		return a.machine.MachineID < b.machine.MachineID
+	}
+	return a.variant.ID < b.variant.ID
+}
+
+func cmpInt64(a, b int64) int {
+	switch {
+	case a < b:
+		return -1
+	case a > b:
+		return 1
+	}
+	return 0
 }
 
 // variantsFor returns the variants for one machine group. Without a configured
@@ -103,35 +238,32 @@ func baseVariant(vs []plugins.Variant, recipe *RecipeRow) plugins.Variant {
 	return DefaultVariant(recipe)
 }
 
-// variantChoice is the outcome of variant selection for a single machine group.
-type variantChoice struct {
-	variant     plugins.Variant
-	count       int64
-	exact       Rational
-	utilization Rational
-	runnable    bool
+// chooseCell runs the ladder over a node's matrix at recipeRate (recipes per
+// tick). A pin narrows the matrix first; !runnable costs the node's own machine.
+func chooseCell(m nodeMatrix, recipeRate Rational, lc *ladderCtx, pinnedID string) (c cell, runnable bool, err error) {
+	defer guardRateArithmetic(&err)
+	cells := m.cells
+	if pinned := pinnedCells(cells, pinnedID); len(pinned) > 0 {
+		cells = pinned
+	}
+	if best, ok := pickCell(cells, recipeRate, lc); ok {
+		return best, true, nil
+	}
+	fallback := cell{machine: m.machine, variant: baseVariant(m.variants, m.recipe)}
+	return measure(fallback, recipeRate), false, nil
 }
 
-// chooseVariant picks the variant for one group and derives its machine counts
-// from recipeRate (recipes per tick), reporting the failure as an error instead
-// of letting the arithmetic panic. pinnedID, when it names a valid variant in
-// vs, wins over the automatic pick; an absent or invalid pin is ignored.
-func chooseVariant(vs []plugins.Variant, recipeRate Rational, recipe *RecipeRow, pinnedID string) (c variantChoice, err error) {
-	defer guardRateArithmetic(&err)
-	if pinned, ok := pinnedVariant(vs, pinnedID); ok {
-		c.variant = pinned
-		c.count = max(recipeRate.Div(NewRational(c.variant.Rate.Num, c.variant.Rate.Den)).CeilInt(), 1)
-		c.runnable = true
-	} else {
-		c.variant, c.count, c.runnable = PickVariant(vs, recipeRate)
-		if !c.runnable {
-			c.variant = baseVariant(vs, recipe)
-			c.count = max(recipeRate.Div(NewRational(c.variant.Rate.Num, c.variant.Rate.Den)).CeilInt(), 1)
+func pinnedCells(cells []cell, id string) []cell {
+	if id == "" {
+		return nil
+	}
+	out := make([]cell, 0, 1)
+	for _, c := range cells {
+		if c.variant.ID == id && c.variant.Valid && c.variant.Rate.Num > 0 && c.variant.Rate.Den > 0 {
+			out = append(out, c)
 		}
 	}
-	c.exact = recipeRate.Div(NewRational(c.variant.Rate.Num, c.variant.Rate.Den))
-	c.utilization = c.exact.Div(NewRational(c.count, 1))
-	return c, nil
+	return out
 }
 
 // pinnedVariant returns the variant with the given id, provided it exists and
@@ -148,14 +280,17 @@ func pinnedVariant(vs []plugins.Variant, id string) (plugins.Variant, bool) {
 	return plugins.Variant{}, false
 }
 
-// variantOptions lists the runnable variants of a group for a client picker.
-func variantOptions(vs []plugins.Variant) []VariantOption {
-	out := make([]VariantOption, 0, len(vs))
-	for _, v := range vs {
-		if !v.Valid || v.Rate.Num <= 0 || v.Rate.Den <= 0 {
+// variantOptionsFor lists the chosen machine's runnable variants.
+func variantOptionsFor(cells []cell, machine *MachineSpec) []VariantOption {
+	out := make([]VariantOption, 0, len(cells))
+	for _, c := range cells {
+		if c.machine.ModID != machine.ModID || c.machine.MachineID != machine.MachineID {
 			continue
 		}
-		out = append(out, VariantOption{ID: v.ID, Label: v.Label})
+		if !c.variant.Valid || c.variant.Rate.Num <= 0 || c.variant.Rate.Den <= 0 {
+			continue
+		}
+		out = append(out, VariantOption{ID: c.variant.ID, Label: c.variant.Label})
 	}
 	return out
 }
@@ -210,12 +345,12 @@ func captureOutputBaseline(g *RecipeGraph) map[string]outputBaseline {
 
 // syncVariantOutputs reconciles the graph's output amounts with the variants
 // the groups chose and reports whether the two differed; with apply set, the
-// difference is written into the graph. Groups are matched to nodes by
-// RecipeOptionKey, never by RecipeID alone.
+// difference is written into the graph. Groups match nodes by their rate key -
+// the ladder may have put another machine or recipe in the group.
 func syncVariantOutputs(g *RecipeGraph, base map[string]outputBaseline, groups []MachineGroupDraft, apply bool) bool {
 	chosen := make(map[string]plugins.Variant, len(groups))
 	for _, gr := range groups {
-		chosen[RecipeOptionKey(gr.RecipeID, gr.MachineMod, gr.MachineID)] = gr.Variant
+		chosen[gr.rateKey] = gr.Variant
 	}
 
 	changed := false
@@ -254,36 +389,33 @@ func syncVariantOutputs(g *RecipeGraph, base map[string]outputBaseline, groups [
 	return changed
 }
 
-// repickVariants repeats the automatic variant choice for every unpinned group
-// after AUTO scaling. The pick in CalculateMachineGroups saw the unscaled
-// request rate, where nearly every group is a fraction of one machine and no
-// upgrade can pay off. Each group keeps its recipe rate, so only its count and
-// utilization move; variants that override outputs are left out because the
-// rates were solved on the catalog amounts.
-func repickVariants(groups []MachineGroupDraft, req SolveRequest) []MachineGroupDraft {
+// repickVariants runs the ladder again at the scaled rate; the first pick saw
+// fractions of a machine. Cells overriding outputs are left out - the rates
+// were solved on catalog amounts.
+func repickVariants(groups []MachineGroupDraft, req SolveRequest, lc *ladderCtx) []MachineGroupDraft {
 	for i := range groups {
 		g := &groups[i]
-		if len(g.variants) < 2 || len(g.Variant.Outputs) > 0 {
+		if len(g.cells) < 2 || len(g.Variant.Outputs) > 0 {
 			continue
 		}
-		if _, pinned := pinnedVariant(g.variants, req.VariantPins[RecipeOptionKey(g.RecipeID, g.MachineMod, g.MachineID)]); pinned {
+		if len(pinnedCells(g.cells, req.VariantPins[g.rateKey])) > 0 {
 			continue
 		}
-		candidates := make([]plugins.Variant, 0, len(g.variants))
-		for _, v := range g.variants {
-			if len(v.Outputs) == 0 {
-				candidates = append(candidates, v)
+		candidates := make([]cell, 0, len(g.cells))
+		for _, c := range g.cells {
+			if len(c.variant.Outputs) == 0 {
+				candidates = append(candidates, c)
 			}
 		}
-		recipeRate := g.ExactCount.Mul(NewRational(g.Variant.Rate.Num, g.Variant.Rate.Den))
-		best, count, ok := PickVariant(candidates, recipeRate)
-		if !ok || best.ID == g.VariantID {
+		if len(candidates) == 0 {
 			continue
 		}
-		g.Variant, g.VariantID, g.Label, g.Costs = best, best.ID, best.Label, best.Costs
-		g.ExactCount = recipeRate.Div(NewRational(best.Rate.Num, best.Rate.Den))
-		g.Count = count
-		g.Utilization = g.ExactCount.Div(NewRational(count, 1))
+		recipeRate := g.ExactCount.Mul(NewRational(g.Variant.Rate.Num, g.Variant.Rate.Den))
+		best, ok := pickCell(candidates, recipeRate, lc)
+		if !ok || (best.variant.ID == g.VariantID && best.machine.ModID == g.MachineMod && best.machine.MachineID == g.MachineID) {
+			continue
+		}
+		g.applyCell(best)
 	}
 	return groups
 }

@@ -74,6 +74,8 @@ func (r *VariantResolver) Variants(ctx context.Context, machine *solver.MachineS
 		Machine: plugins.EvalMachine{ModID: machine.ModID, MachineID: machine.MachineID, Data: machine.ModData},
 		Recipe: plugins.EvalRecipe{
 			ID:            recipe.ID,
+			MachineMod:    recipe.MachineMod,
+			MachineID:     recipe.MachineID,
 			DurationTicks: int64(recipe.DurationTicks),
 			Inputs:        recipeInputs(recipe),
 			Outputs:       recipeOutputs(recipe),

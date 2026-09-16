@@ -9,9 +9,10 @@ func sp(s string) *string { return &s }
 
 // stubStore is a minimal in-memory RecipeStore for unit tests.
 type stubStore struct {
-	recipes  map[string]*RecipeRow
-	byItem   map[string][]*RecipeRow
-	machines map[string]*MachineSpec
+	recipes    map[string]*RecipeRow
+	byItem     map[string][]*RecipeRow
+	machines   map[string]*MachineSpec
+	interfaces map[string][]MachineRef // recipe id → machine_interfaces implementers
 }
 
 func (s *stubStore) GetRecipesForItem(_ context.Context, modID, itemID string) ([]*RecipeRow, error) {
@@ -32,6 +33,15 @@ func (s *stubStore) GetRecipe(_ context.Context, id string) (*RecipeRow, error) 
 
 func (s *stubStore) GetMachineType(_ context.Context, modID, machineID string) (*MachineSpec, error) {
 	return s.machines[modID+":"+machineID], nil
+}
+
+// GetMachinesForRecipe: the recipe's own machine plus the fixture's interfaces.
+func (s *stubStore) GetMachinesForRecipe(_ context.Context, recipeID string) ([]MachineRef, error) {
+	r, ok := s.recipes[recipeID]
+	if !ok {
+		return nil, nil
+	}
+	return append([]MachineRef{{ModID: r.MachineMod, MachineID: r.MachineID}}, s.interfaces[recipeID]...), nil
 }
 
 func (s *stubStore) GetTagMembers(_ context.Context, _ string) ([]ItemRef, error) {

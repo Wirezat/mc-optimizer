@@ -40,6 +40,8 @@ type Variant struct {
 	Outputs []Output `json:"outputs"`
 	Items   []Item   `json:"items"`
 	Valid   bool     `json:"valid"`
+	// Rank breaks a tie within one plugin, smaller first.
+	Rank int `json:"rank"`
 }
 
 // EvalMachine is the plugin-facing view of a machine. Data is the machine's
@@ -53,7 +55,10 @@ type EvalMachine struct {
 // EvalRecipe is the plugin-facing view of a recipe. Data is the recipe's
 // opaque mod_data.
 type EvalRecipe struct {
-	ID            string          `json:"id"`
+	ID string `json:"id"`
+	// The recipe's own machine, not the evaluated one on a machine_interfaces recipe.
+	MachineMod    string          `json:"machine_mod"`
+	MachineID     string          `json:"machine_id"`
 	DurationTicks int64           `json:"duration_ticks"`
 	Inputs        []Output        `json:"inputs"`
 	Outputs       []Output        `json:"outputs"`

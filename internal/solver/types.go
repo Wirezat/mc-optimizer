@@ -147,9 +147,18 @@ type MachineGroupDraft struct {
 	// VariantOptions lists every runnable variant of this group so a client
 	// can offer the alternatives the automatic pick did not take.
 	VariantOptions []VariantOption
-	// variants is the full list the pick was made from, kept off the wire so
-	// AUTO mode can pick again once the chain is scaled to whole machines.
-	variants []plugins.Variant
+	// rateKey names the node this group was computed for, and is the only stable
+	// handle on it: the ladder may swap the group's machine.
+	rateKey string
+	cells   []cell // the matrix the pick was made from, for the AUTO repick
+}
+
+func (g *MachineGroupDraft) applyCell(c cell) {
+	g.MachineMod, g.MachineID = c.machine.ModID, c.machine.MachineID
+	g.PluginMod = PluginMod(c.machine)
+	g.Variant, g.VariantID, g.Label, g.Costs = c.variant, c.variant.ID, c.variant.Label, c.variant.Costs
+	g.ExactCount, g.Count, g.Utilization = c.exact, c.count, c.utilization
+	g.VariantOptions = variantOptionsFor(g.cells, c.machine)
 }
 
 // VariantOption is one selectable operating variant of a machine group, as

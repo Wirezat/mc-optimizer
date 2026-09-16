@@ -9,17 +9,49 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/plugins"
 )
 
-// CalculateMachineGroups converts recipe rates into machine group drafts, one per
-// (recipe, machine) option. Returns the drafts and any warnings collected on the
-// way; caller must authorize ownership if needed.
+// nodeMatrix is one node's flattened candidate matrix.
+type nodeMatrix struct {
+	rateKey    string
+	recipeID   string
+	recipeRate Rational
+	item       ItemRef
+	recipe     *RecipeRow
+	machine    *MachineSpec // the node's own, for the fallback
+	variants   []plugins.Variant
+	cells      []cell
+}
+
+// CalculateMachineGroups converts recipe rates into machine group drafts, one
+// per graph node, plus the warnings collected on the way. Two passes: stage 6
+// weighs how often a mod won elsewhere and Go randomizes map iteration, so one
+// pass would let the node order decide.
 //
 // A plugin that fails degrades its own mod to the host default and adds a
 // warning (spec section 10); only genuine host failures return an error.
 func (s *Solver) CalculateMachineGroups(ctx context.Context, g *RecipeGraph, rv RateVector, req SolveRequest) ([]MachineGroupDraft, []Warning, error) {
-	var groups []MachineGroupDraft
+	matrices, warnings, err := s.collectMatrices(ctx, g, rv, req)
+	if err != nil {
+		return nil, nil, err
+	}
+	first, _, err := pickGroups(matrices, req, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	lc := &ladderCtx{affinity: modAffinity(first)}
+	groups, pickWarnings, err := pickGroups(matrices, req, lc)
+	if err != nil {
+		return nil, nil, err
+	}
+	return groups, append(warnings, pickWarnings...), nil
+}
+
+// collectMatrices is the only part of the pick that touches db or plugin.
+func (s *Solver) collectMatrices(ctx context.Context, g *RecipeGraph, rv RateVector, req SolveRequest) ([]nodeMatrix, []Warning, error) {
 	var warnings []Warning
 	// Warns once per mod, not once per group.
 	failedMods := make(map[string]bool)
+	// Variants do not depend on the rate, so one lookup serves every node.
+	seen := make(map[string][]plugins.Variant)
 
 	// build reverse map: RateKey(recipe, machine) → produced item
 	rateKeyToItem := make(map[string]ItemRef, len(g.Nodes))
@@ -29,6 +61,7 @@ func (s *Solver) CalculateMachineGroups(ctx context.Context, g *RecipeGraph, rv 
 		}
 	}
 
+	matrices := make([]nodeMatrix, 0, len(rv.RecipeRates))
 	for rateKey, recipeRate := range rv.RecipeRates {
 		if recipeRate.IsZero() {
 			continue
@@ -44,68 +77,132 @@ func (s *Solver) CalculateMachineGroups(ctx context.Context, g *RecipeGraph, rv 
 		if recipe == nil {
 			return nil, nil, fmt.Errorf("solver: recipe %s not found", recipeID)
 		}
-		// Use the CHOSEN machine (may be a variant reached via machine_interfaces), not
-		// recipe.MachineMod/MachineID — that always points at the recipe's own canonical
-		// machine, which would silently discard the user's choice.
-		machine, err := s.DB.GetMachineType(ctx, machineMod, machineID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("solver: get machine %s:%s: %w", machineMod, machineID, err)
+
+		// A node on anything but the recipe's own machine is a user pin.
+		pinned := machineMod != recipe.MachineMod || machineID != recipe.MachineID
+		candidates := []MachineRef{{ModID: machineMod, MachineID: machineID}}
+		if !pinned {
+			candidates, err = s.machineCandidates(ctx, recipeID, machineMod, machineID)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
-		if machine == nil {
+
+		m := nodeMatrix{
+			rateKey:    rateKey,
+			recipeID:   recipeID,
+			recipeRate: recipeRate,
+			item:       rateKeyToItem[rateKey],
+			recipe:     recipe,
+		}
+		for _, ref := range candidates {
+			machine, err := s.DB.GetMachineType(ctx, ref.ModID, ref.MachineID)
+			if err != nil {
+				return nil, nil, fmt.Errorf("solver: get machine %s:%s: %w", ref.ModID, ref.MachineID, err)
+			}
+			if machine == nil {
+				// Only the node's own machine must exist.
+				if ref.ModID == machineMod && ref.MachineID == machineID {
+					return nil, nil, fmt.Errorf("solver: machine %s:%s not found", ref.ModID, ref.MachineID)
+				}
+				continue
+			}
+
+			cacheKey := ref.ModID + ":" + ref.MachineID + "@" + recipeID
+			vs, ok := seen[cacheKey]
+			if !ok {
+				vs, err = s.variantsFor(ctx, machine, recipe, req)
+				if err != nil {
+					mod := PluginMod(machine)
+					if !failedMods[mod] {
+						failedMods[mod] = true
+						// The raw error can be a pgx error carrying host, user, and
+						// database name; /api/demo/solve is unauthenticated, so the
+						// client gets only the mod id and the full text goes to the
+						// server log instead.
+						GoLog.Warnf("solver: plugin failed for mod %s: %v", mod, err)
+						warnings = append(warnings, Warning{
+							Code:   "plugin_failed",
+							Params: map[string]string{"mod": mod},
+						})
+					}
+					vs = []plugins.Variant{DefaultVariant(recipe)}
+				}
+				seen[cacheKey] = vs
+			}
+
+			if ref.ModID == machineMod && ref.MachineID == machineID {
+				m.machine, m.variants = machine, vs
+			}
+			for _, v := range vs {
+				m.cells = append(m.cells, cell{machine: machine, variant: v})
+			}
+		}
+		if m.machine == nil {
 			return nil, nil, fmt.Errorf("solver: machine %s:%s not found", machineMod, machineID)
 		}
+		matrices = append(matrices, m)
+	}
+	return matrices, warnings, nil
+}
 
-		vs, err := s.variantsFor(ctx, machine, recipe, req)
-		if err != nil {
-			mod := PluginMod(machine)
-			if !failedMods[mod] {
-				failedMods[mod] = true
-				// The raw error can be a pgx error carrying host, user, and
-				// database name; /api/demo/solve is unauthenticated, so the
-				// client gets only the mod id and the full text goes to the
-				// server log instead.
-				GoLog.Warnf("solver: plugin failed for mod %s: %v", mod, err)
-				warnings = append(warnings, Warning{
-					Code:   "plugin_failed",
-					Params: map[string]string{"mod": mod},
-				})
-			}
-			vs = []plugins.Variant{DefaultVariant(recipe)}
+// machineCandidates lists this recipe's machines, filtered to the active mods.
+func (s *Solver) machineCandidates(ctx context.Context, recipeID, machineMod, machineID string) ([]MachineRef, error) {
+	own := []MachineRef{{ModID: machineMod, MachineID: machineID}}
+	refs, err := s.DB.GetMachinesForRecipe(ctx, recipeID)
+	if err != nil {
+		return nil, fmt.Errorf("solver: get machines for recipe %s: %w", recipeID, err)
+	}
+	out := make([]MachineRef, 0, len(refs))
+	for _, ref := range refs {
+		if s.ActiveMods != nil && !s.ActiveMods[ref.ModID] {
+			continue
 		}
+		out = append(out, ref)
+	}
+	if len(out) == 0 {
+		return own, nil
+	}
+	return out, nil
+}
 
-		choice, err := chooseVariant(vs, recipeRate, recipe, req.VariantPins[rateKey])
+// pickGroups runs the ladder over every matrix; nil lc is pass 1.
+func pickGroups(matrices []nodeMatrix, req SolveRequest, lc *ladderCtx) ([]MachineGroupDraft, []Warning, error) {
+	var groups []MachineGroupDraft
+	var warnings []Warning
+	for _, m := range matrices {
+		chosen, runnable, err := chooseCell(m, m.recipeRate, lc, req.VariantPins[m.rateKey])
 		if err != nil {
-			return nil, nil, fmt.Errorf("solver: recipe %s on %s:%s: %w", recipeID, machineMod, machineID, err)
+			return nil, nil, fmt.Errorf("solver: recipe %s on %s:%s: %w",
+				m.recipeID, m.machine.ModID, m.machine.MachineID, err)
 		}
-		if !choice.runnable {
-			// No variant can run this recipe: cost the base case and warn instead
-			// of refusing the whole solution.
+		if !runnable {
+			// Cost the base case and warn instead of refusing the solution.
 			warnings = append(warnings, Warning{
 				Code:   "recipe_not_runnable",
-				Params: map[string]string{"recipe": recipeID, "machine": machineMod + ":" + machineID},
+				Params: map[string]string{"recipe": m.recipeID, "machine": m.machine.ModID + ":" + m.machine.MachineID},
 			})
 		}
-
-		groups = append(groups, MachineGroupDraft{
-			MachineMod:     machine.ModID,
-			MachineID:      machine.MachineID,
-			RecipeID:       recipeID,
-			RecipeOutput:   rateKeyToItem[rateKey],
-			Status:         StatusDraft,
-			VariantID:      choice.variant.ID,
-			Label:          choice.variant.Label,
-			PluginMod:      PluginMod(machine),
-			Costs:          choice.variant.Costs,
-			Variant:        choice.variant,
-			VariantOptions: variantOptions(vs),
-			variants:       vs,
-			ExactCount:     choice.exact,
-			Count:          choice.count,
-			Utilization:    choice.utilization,
-		})
+		draft := MachineGroupDraft{
+			RecipeID:     m.recipeID,
+			RecipeOutput: m.item,
+			Status:       StatusDraft,
+			rateKey:      m.rateKey,
+			cells:        m.cells,
+		}
+		draft.applyCell(chosen)
+		groups = append(groups, draft)
 	}
-
 	return groups, warnings, nil
+}
+
+// modAffinity counts the groups each machine mod won, for stage 6.
+func modAffinity(groups []MachineGroupDraft) map[string]int {
+	out := make(map[string]int, len(groups))
+	for _, g := range groups {
+		out[g.MachineMod]++
+	}
+	return out
 }
 
 // ScaleToInteger scales machine counts so that non-partial machines run at exactly 100% utilisation.

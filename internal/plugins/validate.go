@@ -108,8 +108,10 @@ func Validate(ec EvalContext, vs []Variant) error {
 		}
 	}
 
-	if bases != 1 {
-		return fmt.Errorf("plugins: expected exactly one base variant with no items, got %d", bases)
+	// At most one: on a blasting recipe every cell carries the red augment, and
+	// both baseVariant implementations fall back on their own.
+	if bases > 1 {
+		return fmt.Errorf("plugins: expected at most one base variant with no items, got %d", bases)
 	}
 	return nil
 }

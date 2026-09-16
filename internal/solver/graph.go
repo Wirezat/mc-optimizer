@@ -3,6 +3,7 @@ package solver
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -29,6 +30,9 @@ type RecipeNode struct {
 	IsStopPoint       bool
 	IsRawMaterial     bool
 	IsFactoryProvided bool
+	// Siblings are the recipe ids with I/O identical to RecipeID's, itself
+	// included; the solver picks between them.
+	Siblings []string
 }
 
 // RateKey identifies this node's (recipe, machine) pair for rate-tracking purposes.
@@ -211,6 +215,7 @@ func (s *Solver) BuildRecipeGraph(
 		node.MachineMod = selected.MachineMod
 		node.MachineID = selected.MachineID
 		node.OutputAmount = outputAmount
+		node.Siblings = siblingIDs(selected, recipes)
 
 		appendRecipeEdges(node, selected, &queue)
 
@@ -232,6 +237,76 @@ func (s *Solver) BuildRecipeGraph(
 	}
 
 	return g, nil
+}
+
+// siblingIDs returns the ids of the rows whose I/O matches selected's, itself
+// included. They build the same graph, so the solver may pick any of them;
+// different I/O stays a separate node and a manual choice.
+func siblingIDs(selected *RecipeRow, rows []*RecipeRow) []string {
+	want := ioSignature(selected)
+	out := []string{selected.ID}
+	seen := map[string]bool{selected.ID: true}
+	for _, r := range rows {
+		if seen[r.ID] || ioSignature(r) != want {
+			continue
+		}
+		seen[r.ID] = true
+		out = append(out, r.ID)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// ioSignature is a recipe's I/O in canonical form, inputs and outputs apart.
+// Strict on purpose - a 10% side yield makes a different recipe, not a sibling.
+func ioSignature(r *RecipeRow) string {
+	var b strings.Builder
+	b.WriteString("in:")
+	writeIOSignature(&b, itemSignatures(r.ItemInputs), fluidSignatures(r.FluidInputs))
+	b.WriteString("|out:")
+	writeIOSignature(&b, itemSignatures(r.ItemOutputs), fluidSignatures(r.FluidOutputs))
+	return b.String()
+}
+
+func writeIOSignature(b *strings.Builder, parts ...[]string) {
+	all := make([]string, 0, 8)
+	for _, p := range parts {
+		all = append(all, p...)
+	}
+	sort.Strings(all)
+	for _, p := range all {
+		b.WriteString(p)
+		b.WriteByte(';')
+	}
+}
+
+func itemSignatures(ios []RecipeRowItemIO) []string {
+	out := make([]string, 0, len(ios))
+	for _, io := range ios {
+		var ref ItemRef
+		switch {
+		case io.TagName != nil:
+			ref = ItemRef{TagRef: *io.TagName}
+		case io.ItemModID != nil && io.ItemID != nil:
+			ref = ItemRef{ModID: *io.ItemModID, ItemID: *io.ItemID}
+		default:
+			continue
+		}
+		out = append(out, fmt.Sprintf("%s=%s*%s/%t", ref.Key(),
+			NewRational(io.AmountNum, io.AmountDen), NewRational(io.ProbabilityNum, io.ProbabilityDen),
+			io.NonConsuming))
+	}
+	return out
+}
+
+func fluidSignatures(ios []RecipeRowFluidIO) []string {
+	out := make([]string, 0, len(ios))
+	for _, io := range ios {
+		ref := ItemRef{ModID: io.FluidModID, ItemID: io.FluidID, IsFluid: true}
+		out = append(out, fmt.Sprintf("%s=%s*%s", ref.Key(),
+			NewRational(io.AmountMB, 1), NewRational(io.ProbabilityNum, io.ProbabilityDen)))
+	}
+	return out
 }
 
 // appendRecipeEdges populates node.Inputs and node.Outputs from a recipe and extends the BFS queue.

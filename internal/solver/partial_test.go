@@ -14,11 +14,18 @@ func TestPartialMachineReduction(t *testing.T) {
 	bendingID := "bending-recipe"
 	compressorID := "compressor-recipe"
 
+	// Named by RateKey: the ladder may swap the group's recipe for a sibling.
+	key := func(recipeID, machineID string) string {
+		return RecipeOptionKey(recipeID, "mi", machineID)
+	}
 	baseGroups := func() []MachineGroupDraft {
 		return []MachineGroupDraft{
-			{RecipeID: assemblerID, MachineID: "assembler", Count: 1, ExactCount: NewRational(10, 1)},
-			{RecipeID: bendingID, MachineID: "bending_machine", Count: 1, ExactCount: NewRational(10, 1)},
-			{RecipeID: compressorID, MachineID: "compressor", Count: 1, ExactCount: NewRational(25, 2)},
+			{RecipeID: assemblerID, MachineID: "assembler", RateKey: key(assemblerID, "assembler"),
+				Count: 1, ExactCount: NewRational(10, 1)},
+			{RecipeID: bendingID, MachineID: "bending_machine", RateKey: key(bendingID, "bending_machine"),
+				Count: 1, ExactCount: NewRational(10, 1)},
+			{RecipeID: compressorID, MachineID: "compressor", RateKey: key(compressorID, "compressor"),
+				Count: 1, ExactCount: NewRational(25, 2)},
 		}
 	}
 
@@ -48,7 +55,7 @@ func TestPartialMachineReduction(t *testing.T) {
 	})
 
 	t.Run("partial_on_compressor", func(t *testing.T) {
-		ap := map[string]bool{compressorID: true}
+		ap := map[string]bool{key(compressorID, "compressor"): true}
 		groups, rate, _, _ := s.ScaleToInteger(baseGroups(), rv, root, 500, ap)
 		rateS := rate.Mul(NewRational(20, 1))
 		t.Logf("=== PARTIAL on compressor === Rate: %v/%v/s  %dx assembler util=%v, %dx bending util=%v, %dx compressor util=%v",

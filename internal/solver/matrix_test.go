@@ -29,21 +29,30 @@ func interfaceStub(durationTicks int) *stubStore {
 	return st
 }
 
-// matrixGroup solves the iron-ingot node at recipeRate for the given node
-// machine and returns the one group it produces.
+// matrixGroup solves the iron-ingot node on nodeMachine and returns its group.
 func matrixGroup(t *testing.T, st *stubStore, src VariantSource, nodeMachine MachineRef, recipeRate Rational) MachineGroupDraft {
+	t.Helper()
+	return matrixGroupFor(t, st, src, "recipe:iron_ingot", nodeMachine, recipeRate)
+}
+
+func matrixGroupFor(t *testing.T, st *stubStore, src VariantSource, recipeID string, nodeMachine MachineRef, recipeRate Rational) MachineGroupDraft {
 	t.Helper()
 	s := NewSolver(st, 1000)
 	s.VariantSource = src
 	ctx := context.Background()
+	nodeKey := RecipeOptionKey(recipeID, nodeMachine.ModID, nodeMachine.MachineID)
 	g, err := s.BuildRecipeGraph(ctx, ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{},
-		map[string]string{}, map[string]string{})
+		map[string]string{"minecraft:iron_ingot": nodeKey}, map[string]string{})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
 	}
+	node := g.Nodes["minecraft:iron_ingot"]
+	if node == nil || node.RateKey() != nodeKey {
+		t.Fatalf("node = %+v, want one on %s", node, nodeKey)
+	}
 	rv := newRateVector()
-	rv.RecipeRates[RecipeOptionKey("recipe:iron_ingot", nodeMachine.ModID, nodeMachine.MachineID)] = recipeRate
+	rv.RecipeRates[nodeKey] = recipeRate
 	groups, _, err := s.CalculateMachineGroups(ctx, g, rv, SolveRequest{})
 	if err != nil {
 		t.Fatalf("CalculateMachineGroups: %v", err)
@@ -67,8 +76,8 @@ func TestMatrixPicksTheBetterMachineOfAnotherMod(t *testing.T) {
 	if g.Count != 1 {
 		t.Errorf("count = %d, want 1", g.Count)
 	}
-	if g.rateKey != RecipeOptionKey("recipe:iron_ingot", "minecraft", "furnace") {
-		t.Errorf("rateKey = %q, want the node's own key", g.rateKey)
+	if g.RateKey != RecipeOptionKey("recipe:iron_ingot", "minecraft", "furnace") {
+		t.Errorf("rateKey = %q, want the node's own key", g.RateKey)
 	}
 	if len(g.VariantOptions) != 1 || g.VariantOptions[0].ID != "plain" {
 		t.Errorf("VariantOptions = %+v, want the gold furnace's own list", g.VariantOptions)
@@ -132,5 +141,96 @@ func TestMatrixPickIsStableAcrossRuns(t *testing.T) {
 		if got != want {
 			t.Fatalf("run %d picked %q, run 0 picked %q", i, got, want)
 		}
+	}
+}
+
+// smeltingSiblings is the same I/O as a 200-tick furnace and 100-tick blasting recipe.
+func smeltingSiblings() *stubStore {
+	furnace := ironIngotRecipe(200)
+	blasting := ironIngotRecipe(100)
+	blasting.ID = "recipe:iron_ingot_blasting"
+	blasting.MachineID = "blast_furnace"
+	st := stubStoreFor([]*RecipeRow{furnace, blasting},
+		&MachineSpec{ModID: "minecraft", MachineID: "furnace", Name: "Furnace"},
+		&MachineSpec{ModID: "minecraft", MachineID: "blast_furnace", Name: "Blast Furnace"})
+	return st
+}
+
+// Built on the furnace recipe, the blast furnace still wins.
+func TestSiblingRecipesShareOneMatrix(t *testing.T) {
+	g := matrixGroup(t, smeltingSiblings(), nil, MachineRef{"minecraft", "furnace"}, NewRational(1, 100))
+	if g.RecipeID != "recipe:iron_ingot_blasting" {
+		t.Errorf("recipe = %q, want the blasting sibling", g.RecipeID)
+	}
+	if g.MachineID != "blast_furnace" {
+		t.Errorf("machine = %q, want blast_furnace", g.MachineID)
+	}
+	if g.Count != 1 {
+		t.Errorf("count = %d, want 1", g.Count)
+	}
+}
+
+// Same main product, different byproduct: every downstream rate would be wrong.
+func TestRecipesWithDifferentIOAreNotSiblings(t *testing.T) {
+	furnace := ironIngotRecipe(200)
+	withSlag := ironIngotRecipe(100)
+	withSlag.ID = "recipe:iron_ingot_slag"
+	withSlag.MachineID = "blast_furnace"
+	mc := "minecraft"
+	withSlag.ItemOutputs = append(withSlag.ItemOutputs, RecipeRowItemIO{
+		ItemModID: &mc, ItemID: sp("slag"), AmountNum: 1, AmountDen: 10,
+		ProbabilityNum: 1, ProbabilityDen: 1,
+	})
+	st := stubStoreFor([]*RecipeRow{furnace, withSlag},
+		&MachineSpec{ModID: "minecraft", MachineID: "furnace", Name: "Furnace"},
+		&MachineSpec{ModID: "minecraft", MachineID: "blast_furnace", Name: "Blast Furnace"})
+
+	g := matrixGroup(t, st, nil, MachineRef{"minecraft", "furnace"}, NewRational(1, 100))
+	if g.RecipeID != "recipe:iron_ingot" {
+		t.Errorf("recipe = %q, want the node's own: a byproduct makes it a different recipe", g.RecipeID)
+	}
+}
+
+// The copper furnace reaches the smelting recipe but not the blasting one.
+func TestPinnedMachineOnlyGetsSiblingsItCanRun(t *testing.T) {
+	st := smeltingSiblings()
+	st.machines["ironfurnaces:copper_furnace"] = &MachineSpec{
+		ModID: "ironfurnaces", MachineID: "copper_furnace", Name: "Copper Furnace"}
+	st.interfaces = map[string][]MachineRef{
+		"recipe:iron_ingot": {{ModID: "ironfurnaces", MachineID: "copper_furnace"}},
+	}
+
+	g := matrixGroup(t, st, nil, MachineRef{"ironfurnaces", "copper_furnace"}, NewRational(1, 100))
+	if g.MachineMod != "ironfurnaces" || g.MachineID != "copper_furnace" {
+		t.Errorf("machine = %s:%s, want the pinned ironfurnaces:copper_furnace", g.MachineMod, g.MachineID)
+	}
+	if g.RecipeID != "recipe:iron_ingot" {
+		t.Errorf("recipe = %q, want the smelting one: the copper furnace cannot run the blasting sibling", g.RecipeID)
+	}
+}
+
+func TestIOSignatureIsStrict(t *testing.T) {
+	base := ironIngotRecipe(200)
+	same := ironIngotRecipe(100) // only the duration differs
+	if ioSignature(base) != ioSignature(same) {
+		t.Error("recipes differing only in duration must share a signature")
+	}
+
+	probability := ironIngotRecipe(100)
+	probability.ItemOutputs[0].ProbabilityNum, probability.ItemOutputs[0].ProbabilityDen = 9, 10
+	if ioSignature(base) == ioSignature(probability) {
+		t.Error("a 90% output must not match a certain one")
+	}
+
+	amount := ironIngotRecipe(100)
+	amount.ItemInputs[0].AmountNum = 2
+	if ioSignature(base) == ioSignature(amount) {
+		t.Error("a doubled input must not match")
+	}
+
+	tool := ironIngotRecipe(100)
+	tool.ItemInputs[0].NonConsuming = true
+	if ioSignature(base) == ioSignature(tool) {
+		t.Error("an input that survives the craft must not match one that is consumed")
 	}
 }

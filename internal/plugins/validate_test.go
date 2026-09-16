@@ -18,11 +18,29 @@ func TestEvaluateRejectsChangedOutputSet(t *testing.T) {
 	}
 }
 
-func TestEvaluateRejectsMissingBaseVariant(t *testing.T) {
+// On a blasting recipe every cell carries the red augment, so there is none
+// without items; both baseVariant implementations fall back on their own.
+func TestValidateAllowsZeroBaseVariants(t *testing.T) {
 	prog := loadFixture(t, "no_base.js")
-	_, err := prog.Evaluate(context.Background(), sampleContext())
+	got, err := prog.Evaluate(context.Background(), sampleContext())
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if len(got) != 1 || len(got[0].Items) == 0 {
+		t.Fatalf("got %+v, want the one variant that installs an item", got)
+	}
+}
+
+// Two base variants stay an error: the host cannot tell them apart.
+func TestValidateRejectsTwoBaseVariants(t *testing.T) {
+	ec := sampleContext()
+	vs := []Variant{
+		{ID: "base", Rate: Rational{1, 20}, Outputs: ec.Recipe.Outputs, Valid: true},
+		{ID: "also_base", Rate: Rational{1, 30}, Outputs: ec.Recipe.Outputs, Valid: true},
+	}
+	err := Validate(ec, vs)
 	if err == nil {
-		t.Fatal("want error for missing base variant, got nil")
+		t.Fatal("want error for two base variants, got nil")
 	}
 	if !strings.Contains(err.Error(), "base variant") {
 		t.Errorf("error = %q, want it to mention the base variant", err)
@@ -74,10 +92,9 @@ func TestValidateRejectsMissingField(t *testing.T) {
 
 // TestValidateRejectsEmptyResult pins down the len(vs) == 0 check
 // specifically, not just "some error". Without that check, Validate(ec, nil)
-// still returns an error - the empty loop leaves bases at 0, and the
-// bases != 1 check at the end catches that incidentally - so a test that
-// only asserts err != nil cannot tell the two checks apart and would stay
-// green even if the empty-result check itself were deleted.
+// still returns an error - so a test that only asserts err != nil cannot tell
+// the two checks apart and would stay green even if the empty-result check
+// itself were deleted.
 func TestValidateRejectsEmptyResult(t *testing.T) {
 	err := Validate(sampleContext(), nil)
 	if err == nil {

@@ -83,7 +83,7 @@ type SolveRequest struct {
 	RecipeOverrides      map[string]string
 	TagOverrides         map[string]string // tagName → "mod_id:item_id"
 	FactoryState         FactoryState
-	AllowPartialMachines []string
+	AllowPartialMachines []string // groups that may stand idle, by RateKey
 	// ModConfigs holds each mod's opaque plugin config, keyed by the mod that
 	// owns the plugin (a machine's ecosystem, or its own mod id).
 	ModConfigs map[string]json.RawMessage
@@ -147,14 +147,15 @@ type MachineGroupDraft struct {
 	// VariantOptions lists every runnable variant of this group so a client
 	// can offer the alternatives the automatic pick did not take.
 	VariantOptions []VariantOption
-	// rateKey names the node this group was computed for, and is the only stable
-	// handle on it: the ladder may swap the group's machine.
-	rateKey string
+	// RateKey names the node this group was computed for, and is the only stable
+	// handle on it: the ladder may swap the group's machine or recipe.
+	RateKey string
 	cells   []cell // the matrix the pick was made from, for the AUTO repick
 }
 
 func (g *MachineGroupDraft) applyCell(c cell) {
 	g.MachineMod, g.MachineID = c.machine.ModID, c.machine.MachineID
+	g.RecipeID = c.recipe.ID
 	g.PluginMod = PluginMod(c.machine)
 	g.Variant, g.VariantID, g.Label, g.Costs = c.variant, c.variant.ID, c.variant.Label, c.variant.Costs
 	g.ExactCount, g.Count, g.Utilization = c.exact, c.count, c.utilization

@@ -744,14 +744,15 @@
     document.getElementById('rate-field').classList.toggle('rate-disabled', m === 'AUTO');
   }
 
-  function togglePartial(recipeID) {
-    if (_allowPartial.has(recipeID)) _allowPartial.delete(recipeID);
-    else                             _allowPartial.add(recipeID);
+  // Keyed by RateKey: the solver may swap the group's recipe for a sibling.
+  function togglePartial(rateKey) {
+    if (_allowPartial.has(rateKey)) _allowPartial.delete(rateKey);
+    else                            _allowPartial.add(rateKey);
     doSolve();
   }
   document.getElementById('result-machines').addEventListener('click', e => {
     const btn = e.target.closest('[data-action="togglePartial"]');
-    if (btn) togglePartial(btn.dataset.recipeid);
+    if (btn) togglePartial(btn.dataset.ratekey);
   });
 
   async function doDiscover() {
@@ -1074,18 +1075,25 @@
     if (withStop && item.ChosenRecipeID) {
       items.push({ label: t('solve.chain.stop_action'), action: 'STOP', danger: true });
     }
-    // One entry per recipe, labelled with the machine that owns it. The
-    // machine_interfaces implementers are the row's own menu.
+    // One entry per I/O group - the solver picks between those. Machines are the
+    // row's own menu.
+    const byIO = new Map();
     const seen = new Set();
     for (const opt of item.Options || []) {
       if (seen.has(opt.RecipeID)) continue;
       seen.add(opt.RecipeID);
-      const ins = (opt.Inputs || []).join(', ');
+      const group = opt.IOKey || opt.RecipeID;
+      if (!byIO.has(group)) byIO.set(group, []);
+      byIO.get(group).push(opt);
+    }
+    for (const opts of byIO.values()) {
+      const ins = (opts[0].Inputs || []).join(', ');
+      const hint = opts.length > 1 ? t('solve.chain.solver_picks') : '';
       items.push({
-        label: machineLabel(opt),
-        subtitle: ins ? '← ' + ins : '',
-        action: opt.RecipeID,
-        active: opt.RecipeID === item.ChosenRecipeID,
+        label: opts.map(machineLabel).join(' · '),
+        subtitle: [ins ? '← ' + ins : '', hint].filter(Boolean).join(' · '),
+        action: opts[0].RecipeID,
+        active: opts.some(o => o.RecipeID === item.ChosenRecipeID),
       });
     }
     return items;
@@ -1327,7 +1335,7 @@
         const util    = g.Utilization?.Den ? Math.round(g.Utilization.Num/g.Utilization.Den*100) + '%' : '';
         const outName = g.RecipeOutput ? nameOf(g.RecipeOutput) : '';
         const outID   = g.RecipeOutput?.ItemID || '';
-        const partial = _allowPartial.has(g.RecipeID);
+        const partial = _allowPartial.has(g.RateKey);
         const partialLabel = partial ? t('solve.partial.active_label') : t('solve.partial.allow_label');
         const partialTitle = partial ? t('solve.partial.active_title') : t('solve.partial.allow_title');
         // The variant is the solver's pick; the page never offers alternatives.
@@ -1342,7 +1350,7 @@
           </div>
           ${util ? `<div class="mg-util" style="${partial && util!=='100%' ? 'color:var(--text-faint);' : ''}">${util}</div>` : ''}
           <button class="partial-btn${partial ? ' active' : ''}"
-            data-action="togglePartial" data-recipeid="${esc(g.RecipeID)}"
+            data-action="togglePartial" data-ratekey="${esc(g.RateKey)}"
             title="${esc(partialTitle)}">${esc(partialLabel)}</button>
         </div>`;
       }).join('');

@@ -479,13 +479,13 @@ func TestSyncVariantOutputsKeysByNode(t *testing.T) {
 
 	groups := []MachineGroupDraft{
 		{RecipeID: "r:sep", MachineMod: "mod", MachineID: "bronze",
-			rateKey: RecipeOptionKey("r:sep", "mod", "bronze"), Variant: plugins.Variant{
+			RateKey: RecipeOptionKey("r:sep", "mod", "bronze"), Variant: plugins.Variant{
 				ID: "boosted", Outputs: []plugins.Output{
 					{Ref: "mod:iron", Amount: plugins.Rational{Num: 4, Den: 1}, Probability: plugins.Rational{Num: 1, Den: 1}},
 					{Ref: "mod:copper", Amount: plugins.Rational{Num: 1, Den: 1}, Probability: plugins.Rational{Num: 1, Den: 1}},
 				}}},
 		{RecipeID: "r:sep", MachineMod: "mod", MachineID: "electric",
-			rateKey: RecipeOptionKey("r:sep", "mod", "electric"), Variant: plugins.Variant{ID: "plain"}},
+			RateKey: RecipeOptionKey("r:sep", "mod", "electric"), Variant: plugins.Variant{ID: "plain"}},
 	}
 
 	if !syncVariantOutputs(g, base, groups, true) {

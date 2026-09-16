@@ -32,10 +32,10 @@ func DefaultVariant(recipe *RecipeRow) plugins.Variant {
 	}
 }
 
-// cell is one candidate for a node: a machine paired with one of its operating
-// variants. count, exact and utilization follow from the demand.
+// cell is one candidate: a machine, its recipe and one operating variant.
 type cell struct {
 	machine *MachineSpec
+	recipe  *RecipeRow
 	variant plugins.Variant
 
 	count       int64
@@ -185,7 +185,10 @@ func cellIdentityLess(a, b cell) bool {
 	if a.machine.MachineID != b.machine.MachineID {
 		return a.machine.MachineID < b.machine.MachineID
 	}
-	return a.variant.ID < b.variant.ID
+	if a.variant.ID != b.variant.ID {
+		return a.variant.ID < b.variant.ID
+	}
+	return a.recipe.ID < b.recipe.ID
 }
 
 func cmpInt64(a, b int64) int {
@@ -249,7 +252,7 @@ func chooseCell(m nodeMatrix, recipeRate Rational, lc *ladderCtx, pinnedID strin
 	if best, ok := pickCell(cells, recipeRate, lc); ok {
 		return best, true, nil
 	}
-	fallback := cell{machine: m.machine, variant: baseVariant(m.variants, m.recipe)}
+	fallback := cell{machine: m.machine, recipe: m.recipe, variant: baseVariant(m.variants, m.recipe)}
 	return measure(fallback, recipeRate), false, nil
 }
 
@@ -350,7 +353,7 @@ func captureOutputBaseline(g *RecipeGraph) map[string]outputBaseline {
 func syncVariantOutputs(g *RecipeGraph, base map[string]outputBaseline, groups []MachineGroupDraft, apply bool) bool {
 	chosen := make(map[string]plugins.Variant, len(groups))
 	for _, gr := range groups {
-		chosen[gr.rateKey] = gr.Variant
+		chosen[gr.RateKey] = gr.Variant
 	}
 
 	changed := false
@@ -398,7 +401,7 @@ func repickVariants(groups []MachineGroupDraft, req SolveRequest, lc *ladderCtx)
 		if len(g.cells) < 2 || len(g.Variant.Outputs) > 0 {
 			continue
 		}
-		if len(pinnedCells(g.cells, req.VariantPins[g.rateKey])) > 0 {
+		if len(pinnedCells(g.cells, req.VariantPins[g.RateKey])) > 0 {
 			continue
 		}
 		candidates := make([]cell, 0, len(g.cells))

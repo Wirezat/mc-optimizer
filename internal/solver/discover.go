@@ -12,6 +12,7 @@ type RecipeOption struct {
 	// is ambiguous when a recipe is reachable via multiple machine tiers
 	// (bronze/steel/electric all implementing the same base recipe).
 	Key     string
+	IOKey   string   // options with identical I/O; the solver picks between them
 	Inputs  []string // "item_id", "#tag_name", or "~fluid_id" — complete list;
 	Outputs []string // the graph view derives its edges from these, so no cap.
 }
@@ -140,6 +141,7 @@ func (s *Solver) Discover(
 				MachineMod: r.MachineMod,
 				MachineID:  r.MachineID,
 				Key:        RecipeOptionKey(r.ID, r.MachineMod, r.MachineID),
+				IOKey:      ioSignature(r),
 			}
 			for _, in := range r.ItemInputs {
 				if in.TagName != nil {

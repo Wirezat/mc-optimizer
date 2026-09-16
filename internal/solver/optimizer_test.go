@@ -15,8 +15,19 @@ type stubStore struct {
 	interfaces map[string][]MachineRef // recipe id → machine_interfaces implementers
 }
 
+// GetRecipesForItem mirrors the real query: one row per (recipe, machine), the
+// recipe's own machine first, then the machine_interfaces implementers.
 func (s *stubStore) GetRecipesForItem(_ context.Context, modID, itemID string) ([]*RecipeRow, error) {
-	return s.byItem[modID+":"+itemID], nil
+	var out []*RecipeRow
+	for _, r := range s.byItem[modID+":"+itemID] {
+		out = append(out, r)
+		for _, ref := range s.interfaces[r.ID] {
+			clone := *r
+			clone.MachineMod, clone.MachineID = ref.ModID, ref.MachineID
+			out = append(out, &clone)
+		}
+	}
+	return out, nil
 }
 
 func (s *stubStore) GetRecipesForFluid(_ context.Context, _, _ string) ([]*RecipeRow, error) {

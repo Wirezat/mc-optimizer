@@ -44,7 +44,7 @@ func mixerContext(config string) EvalContext {
 }
 
 func TestMIBaseVariantMatchesReference(t *testing.T) {
-	vs, err := miProgram(t).Evaluate(context.Background(), mixerContext(`{}`))
+	vs, err := miProgram(t).Evaluate(context.Background(), mixerContext(`{"tier":"electric"}`))
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestMIBaseVariantMatchesReference(t *testing.T) {
 // names the tier rather than spelling out the item's bonus and cap, so this
 // also proves the hardcoded table carries the right bonus.
 func TestMIUpgradedVariantMatchesReference(t *testing.T) {
-	cfg := `{"max_upgrade":"modern_industrialization:advanced_upgrade"}`
+	cfg := `{"tier":"electric","max_upgrade":"modern_industrialization:advanced_upgrade"}`
 	vs, err := miProgram(t).Evaluate(context.Background(), mixerContext(cfg))
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
@@ -75,10 +75,8 @@ func TestMIUpgradedVariantMatchesReference(t *testing.T) {
 	}
 }
 
-// A count that raises the energy draw without shortening the craft must still
-// be emitted: total_energy 200 on a 128 EU/t machine takes 2 ticks at both 0
-// and 3 upgrades (handoff section 3).
-func TestMIKeepsDominatedUpgradeCounts(t *testing.T) {
+// total_energy 200 on a 128 EU/t machine takes 2 ticks at 0 and at 3 upgrades.
+func TestMIThinsDominatedUpgradeCounts(t *testing.T) {
 	ec := EvalContext{
 		Machine: EvalMachine{
 			ModID: "modern_industrialization", MachineID: "mixer",
@@ -88,22 +86,21 @@ func TestMIKeepsDominatedUpgradeCounts(t *testing.T) {
 			ID: "dominated-steps", DurationTicks: 2,
 			Data: json.RawMessage(`{"energy_per_tick":100}`),
 		},
-		Config: json.RawMessage(`{"max_upgrade":"modern_industrialization:advanced_upgrade"}`),
+		Config: json.RawMessage(`{"tier":"electric","max_upgrade":"modern_industrialization:advanced_upgrade"}`),
 	}
 	vs, err := miProgram(t).Evaluate(context.Background(), ec)
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
 	}
 	base := findVariant(t, vs, func(v Variant) bool { return len(v.Items) == 0 })
-	three := findVariant(t, vs, func(v Variant) bool {
-		return len(v.Items) == 1 && v.Items[0].Count == 3
-	})
-	if three.Rate != base.Rate {
-		t.Errorf("advanced x3 rate = %d/%d, base rate = %d/%d; this case is only interesting while they are equal",
-			three.Rate.Num, three.Rate.Den, base.Rate.Num, base.Rate.Den)
-	}
-	if eu := costOf(t, three, "eu"); eu.Num != 176 || eu.Den != 1 {
-		t.Errorf("advanced x3 eu = %d/%d, want 176/1", eu.Num, eu.Den)
+	for _, v := range vs {
+		if len(v.Items) == 0 {
+			continue
+		}
+		if v.Rate == base.Rate {
+			t.Errorf("variant %q runs at the base rate %d/%d and still draws %v",
+				v.ID, base.Rate.Num, base.Rate.Den, v.Costs)
+		}
 	}
 }
 
@@ -112,9 +109,9 @@ func TestMIKeepsDominatedUpgradeCounts(t *testing.T) {
 // and the plugin has no other source for that.
 func TestMIUnknownMaxUpgradeYieldsBaseOnly(t *testing.T) {
 	for name, cfg := range map[string]string{
-		"absent":  `{}`,
-		"unknown": `{"max_upgrade":"modern_industrialization:not_an_upgrade"}`,
-		"empty":   `{"max_upgrade":""}`,
+		"absent":  `{"tier":"electric"}`,
+		"unknown": `{"tier":"electric","max_upgrade":"modern_industrialization:not_an_upgrade"}`,
+		"empty":   `{"tier":"electric","max_upgrade":""}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			vs, err := miProgram(t).Evaluate(context.Background(), mixerContext(cfg))
@@ -143,7 +140,7 @@ func TestMISingleTierSweepStaysBounded(t *testing.T) {
 			ID: "long-recipe", DurationTicks: 1000,
 			Data: json.RawMessage(`{"energy_per_tick":100}`),
 		},
-		Config: json.RawMessage(`{"max_upgrade":"modern_industrialization:basic_upgrade"}`),
+		Config: json.RawMessage(`{"tier":"electric","max_upgrade":"modern_industrialization:basic_upgrade"}`),
 	}
 	vs, err := miProgram(t).Evaluate(context.Background(), ec)
 	if err != nil {
@@ -180,7 +177,7 @@ func TestMIFixedRecipeEUCapBansOverDemand(t *testing.T) {
 			ID: "over-cap-recipe", DurationTicks: 10,
 			Data: json.RawMessage(`{"energy_per_tick":100}`),
 		},
-		Config: json.RawMessage(`{}`),
+		Config: json.RawMessage(`{"tier":"electric"}`),
 	}
 	vs, err := miProgram(t).Evaluate(context.Background(), ec)
 	if err != nil {
@@ -221,5 +218,69 @@ func costOf(t *testing.T, v Variant, resource string) Rational {
 func TestMIPluginBindsWizard(t *testing.T) {
 	if !miProgram(t).HasWizard() {
 		t.Error("HasWizard() = false; MI's wizard.mount binding is gone or malformed")
+	}
+}
+
+// A machine of another tier is vetoed, not merely ranked lower.
+func TestMITierPinVetoesOtherTiers(t *testing.T) {
+	macerator := func(machineID, tier string) EvalContext {
+		return EvalContext{
+			Machine: EvalMachine{
+				ModID: "modern_industrialization", MachineID: machineID,
+				Data: json.RawMessage(`{"base_energy_per_tick":32,"max_energy_per_tick":32,"upgradable":true}`),
+			},
+			Recipe: EvalRecipe{ID: "r", DurationTicks: 100, Data: json.RawMessage(`{"energy_per_tick":2}`)},
+			Config: json.RawMessage(`{"tier":"` + tier + `"}`),
+		}
+	}
+	tests := []struct {
+		machineID, tier string
+		want            bool
+	}{
+		{"bronze_macerator", "bronze", true},
+		{"bronze_macerator", "electric", false},
+		{"macerator", "electric", true},
+		{"macerator", "bronze", false},
+		// No prefixed blast furnace exists below electric, so steam stands in.
+		{"steam_blast_furnace", "bronze", true},
+		{"steam_blast_furnace", "steel", true},
+		{"steam_blast_furnace", "electric", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.machineID+"/"+tc.tier, func(t *testing.T) {
+			vs, err := miProgram(t).Evaluate(context.Background(), macerator(tc.machineID, tc.tier))
+			if err != nil {
+				t.Fatalf("evaluate: %v", err)
+			}
+			if vs[0].Valid != tc.want {
+				t.Errorf("valid = %v, want %v", vs[0].Valid, tc.want)
+			}
+		})
+	}
+}
+
+// Same rate and same EU, so only rank can say which coil MI would rather see.
+func TestMIRanksCupronickelFirst(t *testing.T) {
+	ebf := func(machineID string) EvalContext {
+		return EvalContext{
+			Machine: EvalMachine{
+				ModID: "modern_industrialization", MachineID: machineID,
+				Data: json.RawMessage(`{"base_energy_per_tick":128,"max_energy_per_tick":128}`),
+			},
+			Recipe: EvalRecipe{ID: "r", DurationTicks: 100, Data: json.RawMessage(`{"energy_per_tick":32}`)},
+			Config: json.RawMessage(`{"tier":"electric"}`),
+		}
+	}
+	prog := miProgram(t)
+	cupro, err := prog.Evaluate(context.Background(), ebf("electric_blast_furnace_cupronickel"))
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	kanthal, err := prog.Evaluate(context.Background(), ebf("electric_blast_furnace"))
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if cupro[0].Rank >= kanthal[0].Rank {
+		t.Errorf("cupronickel rank %d, kanthal rank %d; want cupronickel lower", cupro[0].Rank, kanthal[0].Rank)
 	}
 }

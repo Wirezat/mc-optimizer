@@ -33,23 +33,6 @@ func miMachinesVM(t *testing.T) (*goja.Runtime, *goja.Object) {
 	return vm, machines
 }
 
-func callResolve(t *testing.T, vm *goja.Runtime, machines *goja.Object, machineIDs []string, config map[string]string) int {
-	t.Helper()
-	fn, ok := goja.AssertFunction(machines.Get("resolve"))
-	if !ok {
-		t.Fatal("machines.resolve is not a function")
-	}
-	cands := make([]any, len(machineIDs))
-	for i, id := range machineIDs {
-		cands[i] = map[string]any{"mod_id": "modern_industrialization", "machine_id": id}
-	}
-	res, err := fn(goja.Undefined(), vm.ToValue(cands), vm.ToValue(config))
-	if err != nil {
-		t.Fatalf("resolve: %v", err)
-	}
-	return int(res.ToInteger())
-}
-
 func callCell(t *testing.T, vm *goja.Runtime, machines *goja.Object, machineID, columnID string) string {
 	t.Helper()
 	fn, ok := goja.AssertFunction(machines.Get("cell"))
@@ -102,54 +85,10 @@ func TestMIMachinesCellLabelsTier(t *testing.T) {
 	}
 }
 
-// Both fallbacks: steam stands in for bronze and steel when no prefixed
-// machine exists, and Cupronickel is preferred within electric.
-func TestMIMachinesResolvePicksTier(t *testing.T) {
-	vm, machines := miMachinesVM(t)
-
-	for name, tc := range map[string]struct {
-		candidates []string
-		selected   string
-		want       int
-	}{
-		"bronze wins when present": {
-			[]string{"macerator", "bronze_macerator", "steel_macerator"}, "bronze", 1,
-		},
-		"steel wins when present": {
-			[]string{"macerator", "bronze_macerator", "steel_macerator"}, "steel", 2,
-		},
-		"electric when asked": {
-			[]string{"bronze_macerator", "macerator"}, "electric", 1,
-		},
-		"steam stands in for bronze": {
-			[]string{"electric_blast_furnace", "steam_blast_furnace"}, "bronze", 1,
-		},
-		"steam stands in for steel": {
-			[]string{"electric_blast_furnace", "steam_blast_furnace"}, "steel", 1,
-		},
-		"cupronickel preferred within electric": {
-			[]string{"electric_blast_furnace", "electric_blast_furnace_cupronickel"}, "electric", 1,
-		},
-		"falls back to electric when the tier has no machine": {
-			[]string{"macerator"}, "bronze", 0,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			got := callResolve(t, vm, machines, tc.candidates, map[string]string{"tier": tc.selected})
-			if got != tc.want {
-				t.Errorf("resolve(%v, %q) = %d, want %d", tc.candidates, tc.selected, got, tc.want)
-			}
-		})
-	}
-}
-
-// An empty config is not "no opinion": the plugin falls back to its own default
-// tier, so a fresh chain lands on bronze without the host knowing bronze exists.
-func TestMIMachinesResolveWithoutConfigUsesDefaultTier(t *testing.T) {
-	vm, machines := miMachinesVM(t)
-	got := callResolve(t, vm, machines,
-		[]string{"macerator", "bronze_macerator", "steel_macerator"}, map[string]string{})
-	if got != 1 {
-		t.Errorf("resolve with an empty config = %d, want 1 (bronze_macerator)", got)
+// A plugin cannot rank machines it never sees; the solver compares across mods.
+func TestMIHasNoResolve(t *testing.T) {
+	_, machines := miMachinesVM(t)
+	if _, ok := goja.AssertFunction(machines.Get("resolve")); ok {
+		t.Error("machines.resolve is still defined")
 	}
 }

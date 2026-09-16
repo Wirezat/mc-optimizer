@@ -46,28 +46,16 @@ function tierLabel(machineID) {
   return tier.charAt(0).toUpperCase() + tier.slice(1)
 }
 
-function indexOfTier(candidates, tier) {
-  for (var i = 0; i < candidates.length; i++) {
-    if (tierOf(candidates[i].machine_id) === tier) return i
-  }
-  return -1
+// Smaller is better, and only comparable inside this plugin.
+function rankOf(machineID) {
+  return machineID === "electric_blast_furnace_cupronickel" ? 0 : 1
 }
 
-// Cupronickel is preferred within the electric bucket; the host has already
-// dropped whichever variant cannot run this recipe.
-var ELECTRIC_PREFERENCE = [
-  "electric_blast_furnace_cupronickel",
-  "electric_blast_furnace"
-]
-
-function electricIndex(candidates) {
-  for (var p = 0; p < ELECTRIC_PREFERENCE.length; p++) {
-    for (var i = 0; i < candidates.length; i++) {
-      if (candidates[i].machine_id === ELECTRIC_PREFERENCE[p]) return i
-    }
-  }
-  var any = indexOfTier(candidates, "electric")
-  return any >= 0 ? any : 0
+// The tier is a pin, not a ceiling: bronze and steel run on steam, electric on
+// EU, and nobody wants both supplies in one line.
+function tierAllowed(machineID, want) {
+  var t = tierOf(machineID)
+  return t === want || (t === "steam" && (want === "bronze" || want === "steel"))
 }
 
 // Modern Industrialization reference plugin. Formulas are a direct port of
@@ -93,7 +81,17 @@ var plugin = {
       return [{
         id: "base", label: "",
         rate: { num: 1, den: duration },
-        costs: [], items: [], valid: true
+        costs: [], items: [], valid: true, rank: 0
+      }]
+    }
+
+    var rank = rankOf(ctx.machine.machine_id)
+    var want = cfg.tier || DEFAULT_TIER
+    if (!tierAllowed(ctx.machine.machine_id, want)) {
+      return [{
+        id: "base", label: "",
+        rate: { num: 1, den: duration },
+        costs: [], items: [], valid: false, rank: rank
       }]
     }
 
@@ -119,6 +117,7 @@ var plugin = {
         costs: [{ resource: "eu", amount: { num: perTick, den: 1 } }],
         items: item ? [{ ref: item.ref, count: n }] : [],
         valid: !banned,
+        rank: rank,
         _ticks: ticks
       }
     }
@@ -126,15 +125,15 @@ var plugin = {
     var out = [build(null, 0)]
     var top = m.upgradable ? upgradeByRef(cfg.max_upgrade) : null
     if (top) {
-      // Only the highest unlocked tier is swept, and every count of it is emitted -
-      // including counts that raise the energy draw without shortening the craft.
-      // PickVariant never selects one of those on its own.
+      // Only the highest unlocked tier, and only counts that shorten the craft.
       var cap = Math.min(top.max, MAX_STACK)
+      var prevTicks = out[0]._ticks
       for (var n = 1; n <= cap; n++) {
         var v = build(top, n)
-        out.push(v)
-        // One tick per craft is the floor; every further count is strictly
-        // worse and there is no reason to cache it.
+        if (v._ticks < prevTicks) {
+          out.push(v)
+          prevTicks = v._ticks
+        }
         if (v._ticks <= 1) break
       }
     }
@@ -142,10 +141,7 @@ var plugin = {
     return out
   },
 
-  // Machine-selection hooks, run by the host in the browser. They only decide
-  // which recipe option a chain row uses, expressed as a recipe override.
   machines: {
-    // Extra columns in the chain table, filled by cell() per row.
     columns: [{ id: "tier", label: "Tier" }],
 
     // machine is { mod_id, machine_id }. An unknown column is "", never an
@@ -154,22 +150,6 @@ var plugin = {
     cell: function (machine, columnID) {
       if (columnID !== "tier") return ""
       return tierLabel(machine.machine_id)
-    },
-
-    // candidates is [{ mod_id, machine_id }] for one recipe, config is this
-    // mod's own config. Returns the index of the machine that runs the recipe
-    // at the configured tier, or -1 to leave the row alone. The tier lives in
-    // the config so the host never has to know MI has tiers at all.
-    resolve: function (candidates, config) {
-      if (!candidates.length) return -1
-      var want = (config && config.tier) || DEFAULT_TIER
-      if (want === "bronze" || want === "steel") {
-        var own = indexOfTier(candidates, want)
-        if (own >= 0) return own
-        var steam = indexOfTier(candidates, "steam")
-        if (steam >= 0) return steam
-      }
-      return electricIndex(candidates)
     }
   },
 

@@ -247,12 +247,16 @@
         stat(result.villager_trades,  t('admin.import.stat.villager_trades')),
       ].filter(Boolean).join('');
 
-      document.getElementById('import-warnings').innerHTML = (result.warnings || [])
+      const warnings = result.warnings || [];
+      document.getElementById('import-warnings').innerHTML = warnings
         .map(w => `<div class="import-warn-line">${esc(w)}</div>`)
         .join('');
 
       document.getElementById('import-result').style.display = '';
-      setStatus(t('msg.saved'), 'ok');
+      // Warnings mean part of the import silently failed (e.g. every texture,
+      // if the assets mount can't be written to) — "saved" alone would hide that.
+      setStatus(warnings.length ? t('admin.import.saved_with_warnings') : t('msg.saved'),
+                warnings.length ? 'warn' : 'ok');
       document.getElementById('drop-file').textContent = '';
       _file = null;
       btn.disabled = true;

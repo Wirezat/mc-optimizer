@@ -31,12 +31,13 @@ Claude
 CLAUDE.md
 /.playwright-mcp/
 
-# Import Data
-/assets/
-
 # Offline-Werkbank: jars, kuratierte modfiles, Python-Pipeline, gebaute ZIPs.
 # Nichts davon liest der Server.
 /mod-sources/
 
 # SDD workspace (git-ignored scratch)
 /.superpowers/
+
+# Live deployment: a symlink to ../mc_optimizer-live (assets mount + env),
+# outside the repo on purpose. Host-local, not part of the source tree.
+/live

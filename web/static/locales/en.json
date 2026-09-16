@@ -2,6 +2,7 @@
   "admin.import.btn": "Import",
   "admin.import.drop_main": "Drop mod ZIP here or click to browse",
   "admin.import.drop_sub": "Machines, recipes, items, fluids, textures, translations, tags and more will be imported",
+  "admin.import.saved_with_warnings": "Saved with warnings — see below",
   "admin.import.stat.block_drops": "Block drops",
   "admin.import.stat.fluids": "Fluids",
   "admin.import.stat.items": "Items",

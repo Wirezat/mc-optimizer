@@ -171,7 +171,10 @@ func (d *DB) ListMods(ctx context.Context) ([]*model.Mod, error) {
 		       m.description, m.author, m.license,
 		       m.url_source, m.url_modrinth, m.url_wiki, m.url_issues, m.url_discord,
 		       m.modrinth_slug,
-		       (SELECT COUNT(*) FROM recipes r WHERE r.source_mod_id = m.mod_id) AS recipe_count
+		       (SELECT COUNT(*) FROM recipes r WHERE r.source_mod_id = m.mod_id) AS recipe_count,
+		       (SELECT COUNT(*) FROM items i WHERE i.mod_id = m.mod_id) AS item_count,
+		       COALESCE((SELECT array_agg(DISTINCT COALESCE(NULLIF(mt.ecosystem, ''), mt.mod_id))
+		                 FROM machine_types mt WHERE mt.mod_id = m.mod_id), '{}') AS ecosystems
 		FROM mods m
 		ORDER BY m.name
 	`)
@@ -187,7 +190,7 @@ func (d *DB) ListMods(ctx context.Context) ([]*model.Mod, error) {
 			&m.ModID, &m.Name,
 			&m.Description, &m.Author, &m.License,
 			&m.URLSource, &m.URLModrinth, &m.URLWiki, &m.URLIssues, &m.URLDiscord,
-			&m.ModrinthSlug, &m.RecipeCount,
+			&m.ModrinthSlug, &m.RecipeCount, &m.ItemCount, &m.Ecosystems,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan mod: %w", err)
 		}

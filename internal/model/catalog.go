@@ -15,6 +15,11 @@ type Mod struct {
 	URLDiscord   *string `json:"url_discord,omitempty"`
 	ModrinthSlug *string `json:"modrinth_slug,omitempty"`
 	RecipeCount  int     `json:"recipe_count"`
+	ItemCount    int     `json:"item_count"`
+	// Ecosystems is every distinct ecosystem this mod's machines declare —
+	// the mod's own id where a machine names none, empty when it has no
+	// machines. A mod can serve several, and is listed under each.
+	Ecosystems []string `json:"ecosystems"`
 	// Plugin is nil for a mod that ships no plugin.
 	Plugin *ModPluginInfo `json:"plugin,omitempty"`
 }

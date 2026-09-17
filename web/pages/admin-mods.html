@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MC Optimizer — Data Import</title>
+  <title>MC Optimizer — Mods</title>
   <link rel="stylesheet" href="/static/ui/index.css" />
   <link rel="stylesheet" href="/static/css/theme.css" />
   <script>
@@ -73,8 +73,8 @@
 
         <div class="page-header">
           <div>
-            <div class="page-title" data-i18n="admin.import.title"></div>
-            <div class="page-subtitle" data-i18n="admin.import.subtitle"></div>
+            <div class="page-title" data-i18n="admin.mods.title"></div>
+            <div class="page-subtitle" data-i18n="admin.mods.subtitle"></div>
           </div>
         </div>
 
@@ -82,14 +82,14 @@
         <div class="container" style="max-width:600px">
 
           <div class="container-header">
-            <span class="container-title" data-i18n="admin.import.title"></span>
+            <span class="container-title" data-i18n="admin.mods.upload"></span>
             <span class="view-picker-label" id="mod-count"></span>
           </div>
 
           <!-- Template downloads -->
           <div class="container-body" style="padding-bottom:0;display:flex;align-items:center;gap:var(--gap-control);flex-wrap:wrap">
-            <a class="btn btn-ghost btn-sm" href="/static/data/mod-template.zip" download data-i18n="admin.import.template.download"></a>
-            <span class="field-caption" data-i18n="admin.import.template.hint"></span>
+            <a class="btn btn-ghost btn-sm" href="/static/data/mod-template.zip" download data-i18n="admin.mods.template.download"></a>
+            <span class="field-caption" data-i18n="admin.mods.template.hint"></span>
           </div>
 
           <!-- Progress bar (flush) -->
@@ -101,16 +101,16 @@
           <div class="wui-dropzone" id="drop-zone" style="margin:var(--pad-container)">
             <div>
               <div style="font-size:20px;opacity:.5">📦</div>
-              <div data-i18n="admin.import.drop_main"></div>
+              <div data-i18n="admin.mods.drop_main"></div>
               <div id="drop-file" style="font-size:var(--text-sm);font-weight:var(--weight-semibold);color:var(--accent);margin-top:var(--gap-inline)"></div>
-              <div style="font-size:var(--text-xs);color:var(--text-faint)" data-i18n="admin.import.drop_sub"></div>
+              <div style="font-size:var(--text-xs);color:var(--text-faint)" data-i18n="admin.mods.drop_sub"></div>
             </div>
           </div>
           <input type="file" id="zip-input" accept=".zip" style="display:none" />
 
           <!-- Actions -->
           <div class="import-actions">
-            <button class="btn btn-primary btn-sm" id="import-btn" disabled data-i18n="admin.import.btn"></button>
+            <button class="btn btn-primary btn-sm" id="import-btn" disabled data-i18n="admin.mods.btn"></button>
             <span class="status-msg" id="import-status"></span>
           </div>
 
@@ -125,6 +125,15 @@
             <div class="detail-grid cols-2" id="import-stats"></div>
             <div class="import-warn-list" id="import-warnings"></div>
           </div>
+        </div>
+
+        <!-- Installed mods -->
+        <div class="container" style="margin-top:var(--gap-section)">
+          <div class="container-header">
+            <span class="container-title" data-i18n="admin.mods.installed"></span>
+            <span class="view-picker-label" id="mod-list-count"></span>
+          </div>
+          <div id="mod-list"></div>
         </div>
 
       </div>
@@ -151,6 +160,7 @@
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { initModal, openModal } from '/static/ui/js/modal.js';
+  import { renderModList } from '/static/js/mod-list.js';
 
   await load(getLang());
   applyI18n();
@@ -162,6 +172,17 @@
     const user = await getUser();
     if (!user?.is_admin) { window.location.href = '/personal'; return; }
     loadStatus();
+    loadMods();
+  }
+
+  async function loadMods() {
+    const el  = document.getElementById('mod-list');
+    const res = await apiFetch('/api/mods');
+    const mods = res?.ok ? await res.json() : [];
+    renderModList(el, mods, { deletable: true });
+    applyI18n(el);
+    document.getElementById('mod-list-count').textContent =
+      t(mods.length === 1 ? 'catalog.mods.count_one' : 'catalog.mods.count').replace('{n}', mods.length);
   }
 
   async function loadStatus() {
@@ -170,7 +191,7 @@
       if (!res?.ok) return;
       const s = await res.json();
       document.getElementById('mod-count').textContent =
-        t('admin.import.total_mods').replace('{n}', s.total_mods);
+        t('admin.mods.total_mods').replace('{n}', s.total_mods);
     } catch(e) { console.warn('status:', e); }
   }
 
@@ -236,15 +257,15 @@
 
       document.getElementById('import-result-mod').textContent = result.mod_id || '';
       document.getElementById('import-stats').innerHTML = [
-        stat(result.machines,         t('admin.import.stat.machines')),
-        stat(result.recipes_imported, t('admin.import.stat.recipes')),
-        stat(result.items,            t('admin.import.stat.items')),
-        stat(result.fluids,           t('admin.import.stat.fluids')),
-        stat(result.translations,     t('admin.import.stat.translations')),
-        stat(result.tags,             t('admin.import.stat.tags')),
-        stat(result.textures,         t('admin.import.stat.textures')),
-        stat(result.block_drops,      t('admin.import.stat.block_drops')),
-        stat(result.villager_trades,  t('admin.import.stat.villager_trades')),
+        stat(result.machines,         t('admin.mods.stat.machines')),
+        stat(result.recipes_imported, t('admin.mods.stat.recipes')),
+        stat(result.items,            t('admin.mods.stat.items')),
+        stat(result.fluids,           t('admin.mods.stat.fluids')),
+        stat(result.translations,     t('admin.mods.stat.translations')),
+        stat(result.tags,             t('admin.mods.stat.tags')),
+        stat(result.textures,         t('admin.mods.stat.textures')),
+        stat(result.block_drops,      t('admin.mods.stat.block_drops')),
+        stat(result.villager_trades,  t('admin.mods.stat.villager_trades')),
       ].filter(Boolean).join('');
 
       const warnings = result.warnings || [];
@@ -255,17 +276,18 @@
       document.getElementById('import-result').style.display = '';
       // Warnings mean part of the import silently failed (e.g. every texture,
       // if the assets mount can't be written to) — "saved" alone would hide that.
-      setStatus(warnings.length ? t('admin.import.saved_with_warnings') : t('msg.saved'),
+      setStatus(warnings.length ? t('admin.mods.saved_with_warnings') : t('msg.saved'),
                 warnings.length ? 'warn' : 'ok');
       document.getElementById('drop-file').textContent = '';
       _file = null;
       btn.disabled = true;
       loadStatus();
+      loadMods();
 
       openModal({
-        title:        t(warnings.length ? 'admin.import.verify.title_warn' : 'admin.import.verify.title'),
-        bodyHTML:     `<p>${esc(t('admin.import.verify.body'))}</p>`,
-        confirmLabel: t('admin.import.verify.confirm'),
+        title:        t(warnings.length ? 'admin.mods.verify.title_warn' : 'admin.mods.verify.title'),
+        bodyHTML:     `<p>${esc(t('admin.mods.verify.body'))}</p>`,
+        confirmLabel: t('admin.mods.verify.confirm'),
         onConfirm:    () => { window.location.href = '/catalog/machines'; },
       });
     } catch(e) {

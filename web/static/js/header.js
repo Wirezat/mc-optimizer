@@ -13,7 +13,7 @@ const NAV_LINKS = () => [
 ];
 
 const ADMIN_SECTIONS = () => [
-  `<a class="dropdown-item" href="/admin/import"><span class="icon">📥</span> ${t('header.admin_import')}</a>`,
+  `<a class="dropdown-item" href="/admin/mods"><span class="icon">📥</span> ${t('header.admin_mods')}</a>`,
   `<a class="dropdown-item" href="/admin/settings"><span class="icon">⚙️</span> ${t('header.admin_settings')}</a>`,
 ];
 

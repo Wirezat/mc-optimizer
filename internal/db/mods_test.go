@@ -144,3 +144,73 @@ func TestLookupMachinePluginModsEmpty(t *testing.T) {
 		t.Errorf("got %d entries, want 0", len(got))
 	}
 }
+
+// A mod's list row carries what the Mods page groups and counts by: its
+// items, and every ecosystem its machines declare (its own id where a
+// machine names none, the same fallback solver.PluginMod applies).
+func TestListMods_CountsAndEcosystems(t *testing.T) {
+	d := testDB(t)
+	ctx := context.Background()
+
+	seedMod(t, d, "zz_test_host")
+	seedMod(t, d, "zz_test_addon")
+	seedMachineType(t, d, "zz_test_host", "press")
+	seedMachineType(t, d, "zz_test_addon", "big_press")
+	if _, err := d.Pool.Exec(ctx,
+		`UPDATE machine_types SET ecosystem = 'zz_test_host' WHERE mod_id = 'zz_test_addon'`); err != nil {
+		t.Fatalf("set ecosystem: %v", err)
+	}
+	for _, id := range []string{"cog", "gear"} {
+		if _, err := d.Pool.Exec(ctx,
+			`INSERT INTO items (mod_id, item_id) VALUES ('zz_test_host', $1)`, id); err != nil {
+			t.Fatalf("seed item %s: %v", id, err)
+		}
+	}
+
+	mods, err := d.ListMods(ctx)
+	if err != nil {
+		t.Fatalf("ListMods: %v", err)
+	}
+	byID := map[string]*model.Mod{}
+	for _, m := range mods {
+		byID[m.ModID] = m
+	}
+
+	host, addon := byID["zz_test_host"], byID["zz_test_addon"]
+	if host == nil || addon == nil {
+		t.Fatalf("seeded mods missing from ListMods")
+	}
+	if host.ItemCount != 2 {
+		t.Errorf("host ItemCount = %d, want 2", host.ItemCount)
+	}
+	if addon.ItemCount != 0 {
+		t.Errorf("addon ItemCount = %d, want 0", addon.ItemCount)
+	}
+	if len(host.Ecosystems) != 1 || host.Ecosystems[0] != "zz_test_host" {
+		t.Errorf("host Ecosystems = %v, want [zz_test_host] (own id, no ecosystem set)", host.Ecosystems)
+	}
+	if len(addon.Ecosystems) != 1 || addon.Ecosystems[0] != "zz_test_host" {
+		t.Errorf("addon Ecosystems = %v, want [zz_test_host]", addon.Ecosystems)
+	}
+}
+
+// A mod without machines belongs to no ecosystem at all — the page groups
+// those separately rather than inventing one from its id.
+func TestListMods_NoMachinesNoEcosystem(t *testing.T) {
+	d := testDB(t)
+	seedMod(t, d, "zz_test_bare")
+
+	mods, err := d.ListMods(context.Background())
+	if err != nil {
+		t.Fatalf("ListMods: %v", err)
+	}
+	for _, m := range mods {
+		if m.ModID == "zz_test_bare" {
+			if len(m.Ecosystems) != 0 {
+				t.Errorf("Ecosystems = %v, want empty", m.Ecosystems)
+			}
+			return
+		}
+	}
+	t.Fatal("seeded mod missing from ListMods")
+}

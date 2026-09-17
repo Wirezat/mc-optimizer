@@ -249,7 +249,7 @@ func run() error {
 	mux.HandleFunc("GET /catalog/machines", page("catalog-machines.html"))
 	mux.HandleFunc("GET /catalog/trades", page("catalog-trades.html"))
 	mux.HandleFunc("GET /admin/settings", page("admin-settings.html"))
-	mux.HandleFunc("GET /admin/import", page("admin-import.html"))
+	mux.HandleFunc("GET /admin/mods", page("admin-mods.html"))
 
 	// Static assets and fallback.
 	//

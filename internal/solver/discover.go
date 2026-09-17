@@ -32,6 +32,11 @@ type ChainItem struct {
 	IsStop           bool
 	IsRawMaterial    bool
 	ModRestricted    bool
+	// ResolvedTag is the "#tag" key (matching TagResolutions' key format) this
+	// item was chosen to satisfy, when it reached the chain by resolving a
+	// tag input rather than a fixed item reference. Empty for chain items
+	// that a recipe names directly.
+	ResolvedTag string
 }
 
 // DiscoverResult is the output of Discover.
@@ -56,8 +61,9 @@ func (s *Solver) Discover(
 	}
 
 	type entry struct {
-		item  ItemRef
-		level int
+		item        ItemRef
+		level       int
+		resolvedTag string // set when item was queued by resolving this tag key
 	}
 
 	queue := []entry{{item: targetItem, level: 0}}
@@ -96,12 +102,12 @@ func (s *Solver) Discover(
 			res.TagResolutions[key] = TagResolution{Chosen: chosen, Options: members}
 			tagRemap[key] = chosen.Key()
 			if !visited[chosen.Key()] {
-				queue = append(queue, entry{item: chosen, level: e.level})
+				queue = append(queue, entry{item: chosen, level: e.level, resolvedTag: key})
 			}
 			continue
 		}
 
-		ci := ChainItem{Item: item, Level: e.level}
+		ci := ChainItem{Item: item, Level: e.level, ResolvedTag: e.resolvedTag}
 
 		if stopPoints[key] {
 			ci.IsStop = true

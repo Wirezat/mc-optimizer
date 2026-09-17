@@ -13,32 +13,6 @@ import (
 // machines than the world already has standing.
 var ErrBuiltCountExceeded = errors.New("scale would drop a group below its built machine count")
 
-// scaleSolveResult returns result multiplied by k: machine counts follow from
-// the scaled exact counts, every rate scales with it. The input is left alone.
-func scaleSolveResult(result solver.SolveResult, k solver.Rational) solver.SolveResult {
-	out := result
-	out.MachineGroups = make([]solver.MachineGroupDraft, len(result.MachineGroups))
-	copy(out.MachineGroups, result.MachineGroups)
-	for i := range out.MachineGroups {
-		g := &out.MachineGroups[i]
-		exact, count, util := solver.ScaleCount(g.ExactCount, k)
-		g.ExactCount, g.Count, g.Utilization = exact, count, util
-	}
-
-	scaleEntries := func(src []solver.IOEntry) []solver.IOEntry {
-		dst := make([]solver.IOEntry, len(src))
-		copy(dst, src)
-		for i := range dst {
-			dst[i].Rate = dst[i].Rate.Mul(k)
-		}
-		return dst
-	}
-	out.IOProfile.Inputs = scaleEntries(result.IOProfile.Inputs)
-	out.IOProfile.Outputs = scaleEntries(result.IOProfile.Outputs)
-	out.ActualRate = result.ActualRate.Mul(k)
-	return out
-}
-
 // scalePLRows computes what a saved line looks like at k times its size. Rows
 // keep their identity so build state survives; a group that would end up with
 // fewer machines than are already built fails the whole scale.

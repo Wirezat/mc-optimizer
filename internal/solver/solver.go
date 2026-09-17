@@ -136,7 +136,7 @@ func (s *Solver) solve(ctx context.Context, req SolveRequest) (SolveResult, erro
 		}
 	}
 
-	return SolveResult{
+	res := SolveResult{
 		MachineGroups:  groups,
 		IOProfile:      ComputeIOProfile(rv, g, req.FactoryState, req.TimeUnit),
 		ActualRate:     ConvertFromPerTick(actualRatePerTick, req.TimeUnit),
@@ -144,7 +144,11 @@ func (s *Solver) solve(ctx context.Context, req SolveRequest) (SolveResult, erro
 		ModeUsed:       req.Mode,
 		Warnings:       warnings,
 		TagResolutions: g.TagResolutions,
-	}, nil
+	}
+	if k := req.Factor; k.Den != 0 && k.IsPositive() && !k.Eq(RationalFromInt(1)) {
+		res = ScaleResult(res, k)
+	}
+	return res, nil
 }
 
 // solveRates computes the rate vector for the graph as it currently stands,

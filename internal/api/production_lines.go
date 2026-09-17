@@ -425,8 +425,7 @@ func ConfirmProductionLineHandler(database *db.DB, svc *service.PLService) http.
 		}
 
 		var body struct {
-			DraftID string           `json:"draft_id"`
-			Factor  *solver.Rational `json:"factor"`
+			DraftID string `json:"draft_id"`
 		}
 		if !decodeJSON(w, r, &body) {
 			return
@@ -436,16 +435,7 @@ func ConfirmProductionLineHandler(database *db.DB, svc *service.PLService) http.
 			errBadRequest(w, "draft_id must be a valid UUID")
 			return
 		}
-		input := service.ConfirmInput{DraftID: draftID}
-		if body.Factor != nil {
-			if body.Factor.Den == 0 || !body.Factor.IsPositive() {
-				errBadRequest(w, "factor must be positive")
-				return
-			}
-			input.Factor = *body.Factor
-		}
-
-		detail, err := svc.Confirm(r.Context(), factoryID, input)
+		detail, err := svc.Confirm(r.Context(), factoryID, service.ConfirmInput{DraftID: draftID})
 		if err != nil {
 			switch {
 			case errors.Is(err, service.ErrDraftNotFound):

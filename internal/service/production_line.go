@@ -108,9 +108,6 @@ func (s *PLService) Solve(ctx context.Context, factoryID, userID uuid.UUID, req 
 // ConfirmInput carries the parsed body from the confirm endpoint.
 type ConfirmInput struct {
 	DraftID uuid.UUID
-	// Factor multiplies the solved line on the way in; the zero value means
-	// ×1. Same operation Scale applies to a line that already exists.
-	Factor solver.Rational
 }
 
 // Confirm promotes a solver draft to a live production line.
@@ -155,16 +152,7 @@ func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input Conf
 		SolveRequest: reqJSON,
 	}
 
-	result := payload.Result
-	if k := input.Factor; k.Den != 0 && k.IsPositive() && !k.Eq(solver.RationalFromInt(1)) {
-		result = scaleSolveResult(result, k)
-		rate := solver.NewRational(int64(pl.RateNum), int64(pl.RateDen)).Mul(k)
-		if pl.RateNum, pl.RateDen, err = rateInts(rate); err != nil {
-			return nil, fmt.Errorf("service: confirm: %w", err)
-		}
-	}
-
-	ios, groups, err := solveResultToContents(result, payload.Request.ModConfigs)
+	ios, groups, err := solveResultToContents(payload.Result, payload.Request.ModConfigs)
 	if err != nil {
 		return nil, err
 	}

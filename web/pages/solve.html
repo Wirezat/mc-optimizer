@@ -163,6 +163,8 @@
       border-bottom: 1px solid var(--border);
     }
     .stat { display: flex; flex-direction: column; gap: 2px; }
+    /* The manual multiple sits with the numbers it changes, not in a form row. */
+    .stat-factor { width: 5.5rem; height: var(--h-btn-sm); padding: 0 var(--gap-inline); }
     .stat-label { font-size: var(--text-xs); color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; }
     .stat-value { font-size: var(--text-md); font-weight: var(--weight-bold); color: var(--text); }
 
@@ -391,10 +393,6 @@
             </div>
           </div>
           <div class="confirm-bar">
-            <div class="field" style="flex:0 0 auto;max-width:140px">
-              <label class="field-label" for="scale-factor" data-i18n="solve.scale.label"></label>
-              <input class="input" type="number" id="scale-factor" min="0.01" step="0.5" value="1" />
-            </div>
             <button class="btn btn-primary" id="confirm-btn" style="align-self:flex-end;"></button>
             <span class="status-msg" id="confirm-status" style="align-self:center;"></span>
           </div>
@@ -437,6 +435,7 @@
   const _solveURL    = _isDemo ? '/api/demo/solve'    : '/api/factories/' + _factoryID + '/solve';
   let _mode           = 'AUTO';
   let _draftID        = null;
+  let _factor         = 1;      // manual multiple of the solver's own answer
   let _reqSeq         = 0; // bumped on every doDiscover/doSolve call; guards against out-of-order responses
   let _overrides      = {};
   let _tagOverrides   = {};
@@ -1231,6 +1230,7 @@
         FactoryState:         { ExistingOutputs: {} },
         AllowPartialMachines: [..._allowPartial],
         ModConfigs:           _modConfigs,
+        Factor:               factorRational(),
       }),
     });
 
@@ -1308,6 +1308,11 @@
     const actualRate = fmtR(r.ActualRate);
     document.getElementById('result-stats').innerHTML = `
       <div class="stat">
+        <span class="stat-label">${t('solve.scale.label')}</span>
+        <input class="input stat-factor" type="number" id="scale-factor"
+               min="0.01" step="1" value="${esc(String(_factor))}" />
+      </div>
+      <div class="stat">
         <span class="stat-label">${t('solve.stats.actual_rate')}</span>
         <span class="stat-value">${actualRate} /${unit}</span>
       </div>
@@ -1321,6 +1326,13 @@
       </div>
       ${r.HadCycles ? `<div class="stat"><span class="stat-label" style="color:#f59e0b;">${t('solve.cycles_detected')}</span></div>` : ''}
     `;
+
+    document.getElementById('scale-factor').addEventListener('change', e => {
+      const v = parseFloat(e.target.value);
+      if (!Number.isFinite(v) || v <= 0) { e.target.value = String(_factor); return; }
+      _factor = v;
+      doSolve();
+    });
 
     const warnEl = document.getElementById('result-warnings');
     const warns = r.Warnings || [];
@@ -1486,7 +1498,7 @@
 
     const res = await apiFetch('/api/factories/'+_factoryID+'/production-line/confirm', {
       method: 'POST',
-      body: JSON.stringify({ draft_id: _draftID, factor: scaleFactor() }),
+      body: JSON.stringify({ draft_id: _draftID }),
     });
 
     if (!res?.ok) {
@@ -1504,13 +1516,10 @@
     const v = r.Num / r.Den;
     return Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/\.?0+$/,'');
   }
-  // The manual override: the saved line is this multiple of what the solver
-  // produced. Machine counts follow from the scaled exact counts, so a part-
-  // loaded group can come out full.
-  function scaleFactor() {
-    const v = parseFloat(document.getElementById('scale-factor').value);
-    if (!Number.isFinite(v) || v <= 0) return { Num: 1, Den: 1 };
-    const [n, d] = toFraction(v);
+  // The manual override: the line is this multiple of what the solver found.
+  // It rides along with the solve, so what step 3 shows is what gets saved.
+  function factorRational() {
+    const [n, d] = toFraction(_factor);
     return { Num: n, Den: d };
   }
 

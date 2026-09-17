@@ -59,44 +59,6 @@ func TestSolveResultToContentsFreezesTheConfigPerGroup(t *testing.T) {
 	}
 }
 
-// Scaling a draft before it is saved multiplies what the line produces and
-// consumes, and lets a part-loaded group fill up.
-func TestScaleSolveResult(t *testing.T) {
-	item := solver.ItemRef{ModID: "minecraft", ItemID: "copper_ingot"}
-	result := solver.SolveResult{
-		MachineGroups: []solver.MachineGroupDraft{
-			{MachineID: "macerator", Count: 2, ExactCount: solver.NewRational(3, 2)},
-			{MachineID: "furnace", Count: 1, ExactCount: solver.RationalFromInt(1)},
-		},
-		IOProfile: solver.IOProfile{
-			Inputs:  []solver.IOEntry{{Item: item, Rate: solver.NewRational(1, 2)}},
-			Outputs: []solver.IOEntry{{Item: item, Rate: solver.RationalFromInt(4)}},
-		},
-		ActualRate: solver.RationalFromInt(4),
-	}
-
-	scaled := scaleSolveResult(result, solver.RationalFromInt(2))
-
-	if got := scaled.MachineGroups[0]; got.Count != 3 || !got.Utilization.Eq(solver.RationalFromInt(1)) {
-		t.Errorf("partial group scaled to count=%d util=%v, want 3 at 100%%", got.Count, got.Utilization)
-	}
-	if got := scaled.MachineGroups[1].Count; got != 2 {
-		t.Errorf("full group count = %d, want 2", got)
-	}
-	if got := scaled.IOProfile.Inputs[0].Rate; !got.Eq(solver.RationalFromInt(1)) {
-		t.Errorf("input rate = %v, want 1", got)
-	}
-	if got := scaled.IOProfile.Outputs[0].Rate; !got.Eq(solver.RationalFromInt(8)) {
-		t.Errorf("output rate = %v, want 8", got)
-	}
-	if got := scaled.ActualRate; !got.Eq(solver.RationalFromInt(8)) {
-		t.Errorf("actual rate = %v, want 8", got)
-	}
-	if result.MachineGroups[0].Count != 2 {
-		t.Error("input result was mutated")
-	}
-}
-
 // Scaling a saved line keeps every row's identity — the groups are updated in
 // place, so build state survives.
 func TestScalePLRows(t *testing.T) {

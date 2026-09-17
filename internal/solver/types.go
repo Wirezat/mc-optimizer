@@ -87,6 +87,9 @@ type SolveRequest struct {
 	// ModConfigs holds each mod's opaque plugin config, keyed by the mod that
 	// owns the plugin (a machine's ecosystem, or its own mod id).
 	ModConfigs map[string]json.RawMessage
+	// Factor is the manual override on the solver's own answer: the line is
+	// this multiple of it. The zero value means x1.
+	Factor Rational
 	// VariantPins fixes the operating variant of individual machine groups,
 	// keyed by RecipeOptionKey. A pin that names a missing or invalid variant
 	// is ignored, not an error: the config can change under a client that is

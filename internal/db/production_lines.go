@@ -695,3 +695,52 @@ func EstimateCurrentRateFraction(groups []*model.MachineGroup, speed map[uuid.UU
 	}
 	return frac
 }
+
+// ScaledGroup and ScaledIO carry one row's new size for ApplyPLScale.
+type ScaledGroup struct {
+	ID                 uuid.UUID
+	Count              int
+	ExactNum, ExactDen int64
+}
+
+type ScaledIO struct {
+	ID               uuid.UUID
+	RateNum, RateDen int
+}
+
+// ApplyPLScale resizes a line in place: the rows keep their identity, so
+// status and built counts survive, unlike ReplacePLContents.
+func (d *DB) ApplyPLScale(ctx context.Context, plID uuid.UUID, rateNum, rateDen int, groups []ScaledGroup, ios []ScaledIO) error {
+	tx, err := d.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("db: scale pl: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	tag, err := tx.Exec(ctx,
+		`UPDATE production_lines SET rate_num = $2, rate_den = $3 WHERE id = $1`,
+		plID, rateNum, rateDen)
+	if err != nil {
+		return fmt.Errorf("db: scale pl: update line: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	for _, g := range groups {
+		if _, err := tx.Exec(ctx, `
+			UPDATE machine_groups
+			SET count = $2, exact_count_num = $3, exact_count_den = $4
+			WHERE id = $1 AND pl_id = $5
+		`, g.ID, g.Count, g.ExactNum, g.ExactDen, plID); err != nil {
+			return fmt.Errorf("db: scale pl: update group: %w", err)
+		}
+	}
+	for _, io := range ios {
+		if _, err := tx.Exec(ctx,
+			`UPDATE pl_io SET rate_num = $2, rate_den = $3 WHERE id = $1 AND pl_id = $4`,
+			io.ID, io.RateNum, io.RateDen, plID); err != nil {
+			return fmt.Errorf("db: scale pl: update io: %w", err)
+		}
+	}
+	return tx.Commit(ctx)
+}

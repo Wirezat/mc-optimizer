@@ -425,7 +425,8 @@ func ConfirmProductionLineHandler(database *db.DB, svc *service.PLService) http.
 		}
 
 		var body struct {
-			DraftID string `json:"draft_id"`
+			DraftID string           `json:"draft_id"`
+			Factor  *solver.Rational `json:"factor"`
 		}
 		if !decodeJSON(w, r, &body) {
 			return
@@ -435,10 +436,16 @@ func ConfirmProductionLineHandler(database *db.DB, svc *service.PLService) http.
 			errBadRequest(w, "draft_id must be a valid UUID")
 			return
 		}
+		input := service.ConfirmInput{DraftID: draftID}
+		if body.Factor != nil {
+			if body.Factor.Den == 0 || !body.Factor.IsPositive() {
+				errBadRequest(w, "factor must be positive")
+				return
+			}
+			input.Factor = *body.Factor
+		}
 
-		detail, err := svc.Confirm(r.Context(), factoryID, service.ConfirmInput{
-			DraftID: draftID,
-		})
+		detail, err := svc.Confirm(r.Context(), factoryID, input)
 		if err != nil {
 			switch {
 			case errors.Is(err, service.ErrDraftNotFound):
@@ -697,4 +704,44 @@ func requirePLOwner(r *http.Request, w http.ResponseWriter, database *db.DB, plI
 		return errors.New("forbidden")
 	}
 	return nil
+}
+
+// ScaleProductionLineHandler handles POST /api/production-lines/{line_id}/scale:
+// the manual override that resizes a line to a multiple of what the solver
+// produced.
+func ScaleProductionLineHandler(database *db.DB, svc *service.PLService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := userIDFromContext(r.Context())
+		plID, ok := parseUUIDParam(w, r, "line_id")
+		if !ok {
+			return
+		}
+		if err := requirePLOwner(r, w, database, plID, userID); err != nil {
+			return
+		}
+		var body struct {
+			Factor solver.Rational `json:"factor"`
+		}
+		if !decodeJSON(w, r, &body) {
+			return
+		}
+		if body.Factor.Den == 0 || !body.Factor.IsPositive() {
+			errBadRequest(w, "factor must be positive")
+			return
+		}
+
+		detail, err := svc.Scale(r.Context(), plID, body.Factor)
+		if err != nil {
+			switch {
+			case errors.Is(err, service.ErrBuiltCountExceeded):
+				errConflict(w, err.Error())
+			case errors.Is(err, db.ErrNotFound):
+				errNotFound(w)
+			default:
+				errInternal(w, err)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, detail)
+	}
 }

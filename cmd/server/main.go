@@ -221,6 +221,7 @@ func run() error {
 	mux.Handle("PATCH /api/production-lines/{line_id}/status", protected(api.UpdateProductionLineStatusHandler(database)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/mark-built", protected(api.MarkProductionLineBuiltHandler(database)))
 	mux.Handle("POST /api/production-lines/{line_id}/resolve", protected(api.ResolveProductionLineHandler(database, plSvc)))
+	mux.Handle("POST /api/production-lines/{line_id}/scale", protected(api.ScaleProductionLineHandler(database, plSvc)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/position", protected(api.PLReorderHandler(database)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/group", protected(api.SetPLGroupHandler(database)))
 	mux.Handle("DELETE /api/production-lines/{line_id}", protected(api.DeleteProductionLineHandler(database)))

@@ -108,6 +108,9 @@ func (s *PLService) Solve(ctx context.Context, factoryID, userID uuid.UUID, req 
 // ConfirmInput carries the parsed body from the confirm endpoint.
 type ConfirmInput struct {
 	DraftID uuid.UUID
+	// Factor multiplies the solved line on the way in; the zero value means
+	// ×1. Same operation Scale applies to a line that already exists.
+	Factor solver.Rational
 }
 
 // Confirm promotes a solver draft to a live production line.
@@ -152,7 +155,16 @@ func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input Conf
 		SolveRequest: reqJSON,
 	}
 
-	ios, groups, err := solveResultToContents(payload.Result, payload.Request.ModConfigs)
+	result := payload.Result
+	if k := input.Factor; k.Den != 0 && k.IsPositive() && !k.Eq(solver.RationalFromInt(1)) {
+		result = scaleSolveResult(result, k)
+		rate := solver.NewRational(int64(pl.RateNum), int64(pl.RateDen)).Mul(k)
+		if pl.RateNum, pl.RateDen, err = rateInts(rate); err != nil {
+			return nil, fmt.Errorf("service: confirm: %w", err)
+		}
+	}
+
+	ios, groups, err := solveResultToContents(result, payload.Request.ModConfigs)
 	if err != nil {
 		return nil, err
 	}
@@ -275,4 +287,47 @@ func (s *PLService) Resolve(ctx context.Context, plID uuid.UUID, in ResolveInput
 	return s.db.ReplaceProductionLineContents(ctx, plID,
 		int(req.TargetRate.Num), int(req.TargetRate.Den), req.TimeUnit, string(req.Mode),
 		ios, groups)
+}
+
+// Scale resizes a saved line to k times its machines and rates, in place, so
+// status and built counts survive. Returns ErrBuiltCountExceeded when a group
+// would end up smaller than what is already built.
+func (s *PLService) Scale(ctx context.Context, plID uuid.UUID, k solver.Rational) (*model.ProductionLineDetail, error) {
+	if k.Den == 0 || !k.IsPositive() {
+		return nil, fmt.Errorf("service: scale: factor must be positive")
+	}
+	pl, err := s.db.GetProductionLine(ctx, plID)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := s.db.ListMachineGroupsByPL(ctx, plID)
+	if err != nil {
+		return nil, err
+	}
+	ios, err := s.db.ListPLIOByPL(ctx, plID)
+	if err != nil {
+		return nil, err
+	}
+
+	rateNum, rateDen, scaledGroups, scaledIOs, err := scalePLRows(pl.RateNum, pl.RateDen, groups, ios, k)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.db.ApplyPLScale(ctx, plID, rateNum, rateDen, scaledGroups, scaledIOs); err != nil {
+		return nil, err
+	}
+
+	pl, err = s.db.GetProductionLine(ctx, plID)
+	if err != nil {
+		return nil, err
+	}
+	groups, err = s.db.ListMachineGroupsByPL(ctx, plID)
+	if err != nil {
+		return nil, err
+	}
+	ios, err = s.db.ListPLIOByPL(ctx, plID)
+	if err != nil {
+		return nil, err
+	}
+	return &model.ProductionLineDetail{ProductionLine: *pl, MachineGroups: groups, IO: ios}, nil
 }

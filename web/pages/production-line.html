@@ -357,11 +357,13 @@
 
     bar.innerHTML = `
       ${!isLineComplete() ? `<button class="btn btn-primary btn-sm" data-action="markAllBuilt">${esc(t('production_line.mark_all_built'))}</button>` : ''}
+      <button class="btn btn-ghost btn-sm" data-action="scalePL">${esc(t('production_line.scale'))}</button>
       <button class="btn btn-ghost btn-sm" data-action="archivePL">${esc(t('production_line.archive'))}</button>
     `;
     bar.querySelectorAll('[data-action]').forEach(btn => {
       btn.addEventListener('click', () => {
         if (btn.dataset.action === 'markAllBuilt') markAllBuilt();
+        if (btn.dataset.action === 'scalePL')      scalePL();
         if (btn.dataset.action === 'archivePL')    archivePL();
       });
     });
@@ -516,6 +518,26 @@
   async function markAllBuilt() {
     const res = await apiFetch('/api/production-lines/' + _plID + '/mark-built', { method: 'PATCH', body: '{}' });
     if (res?.ok || res?.status === 200) reload();
+  }
+
+  // The manual override on a saved line: everything scales, the rows keep
+  // their build state. Refused when a group would end up below what is built.
+  async function scalePL() {
+    const input = prompt(t('production_line.scale_prompt'), '2');
+    if (input === null) return;
+    const factor = parseFloat(input.replace(',', '.'));
+    if (!Number.isFinite(factor) || factor <= 0) return;
+
+    const d = 10000, n = Math.round(factor * d);
+    const g = (a, b) => b ? g(b, a % b) : a;
+    const k = g(n, d);
+
+    const res = await apiFetch('/api/production-lines/' + _plID + '/scale', {
+      method: 'POST', body: JSON.stringify({ factor: { Num: n / k, Den: d / k } }),
+    });
+    if (res?.ok) { reload(); return; }
+    const body = await res?.json().catch(() => ({}));
+    alert(body.message || t('common.error'));
   }
 
   async function archivePL() {

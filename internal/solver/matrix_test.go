@@ -41,9 +41,17 @@ func matrixGroupFor(t *testing.T, st *stubStore, src VariantSource, recipeID str
 	s.VariantSource = src
 	ctx := context.Background()
 	nodeKey := RecipeOptionKey(recipeID, nodeMachine.ModID, nodeMachine.MachineID)
+	// Naming a machine is what pins it. A node on the recipe's own machine is
+	// the default the ladder may still improve on, so it overrides by recipe.
+	override := recipeID
+	if own := st.recipes[recipeID]; own == nil ||
+		own.MachineMod != nodeMachine.ModID || own.MachineID != nodeMachine.MachineID {
+		override = nodeKey
+	}
+	overrides := map[string]string{"minecraft:iron_ingot": override}
 	g, err := s.BuildRecipeGraph(ctx, ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{},
-		map[string]string{"minecraft:iron_ingot": nodeKey}, map[string]string{})
+		overrides, map[string]string{})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
 	}
@@ -53,7 +61,7 @@ func matrixGroupFor(t *testing.T, st *stubStore, src VariantSource, recipeID str
 	}
 	rv := newRateVector()
 	rv.RecipeRates[nodeKey] = recipeRate
-	groups, _, err := s.CalculateMachineGroups(ctx, g, rv, SolveRequest{})
+	groups, _, err := s.CalculateMachineGroups(ctx, g, rv, SolveRequest{RecipeOverrides: overrides})
 	if err != nil {
 		t.Fatalf("CalculateMachineGroups: %v", err)
 	}

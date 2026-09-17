@@ -187,3 +187,82 @@ func TestRateVector_itemRates(t *testing.T) {
 		t.Errorf("unexpected rate: %v", rv.RecipeRates["recipe:iron_ingot"])
 	}
 }
+
+// A recipe's own machine must be pinnable. Machines reached through
+// machine_interfaces share the recipe row, so picking "run this on the Coke
+// Oven" and picking "run this on the Pyrolyse Oven" have to be equally
+// binding — otherwise an implementer silently takes over every recipe it can
+// also run.
+func TestCalculateMachineGroups_PinsTheRecipesOwnMachine(t *testing.T) {
+	stub := newStub(200)
+	// A second machine runs the same recipe and is the one the ladder favours.
+	stub.interfaces = map[string][]MachineRef{
+		"recipe:iron_ingot": {{ModID: "addon", MachineID: "super_furnace"}},
+	}
+	stub.machines["addon:super_furnace"] = &MachineSpec{ModID: "addon", MachineID: "super_furnace", Name: "Super Furnace"}
+
+	run := func(t *testing.T, override string) MachineGroupDraft {
+		t.Helper()
+		s := NewSolver(stub, 1000)
+		ctx := context.Background()
+		overrides := map[string]string{}
+		if override != "" {
+			overrides["minecraft:iron_ingot"] = override
+		}
+		g, err := s.BuildRecipeGraph(ctx, ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+			map[string]bool{"minecraft:iron_ore": true}, FactoryState{}, overrides, map[string]string{})
+		if err != nil {
+			t.Fatalf("BuildRecipeGraph: %v", err)
+		}
+		rv := newRateVector()
+		for key := range g.Nodes {
+			node := g.Nodes[key]
+			if node.RecipeID == "" {
+				continue
+			}
+			rv.RecipeRates[RecipeOptionKey(node.RecipeID, node.MachineMod, node.MachineID)] = NewRational(1, 100)
+		}
+		groups, _, err := s.CalculateMachineGroups(ctx, g, rv, SolveRequest{RecipeOverrides: overrides})
+		if err != nil {
+			t.Fatalf("CalculateMachineGroups: %v", err)
+		}
+		if len(groups) != 1 {
+			t.Fatalf("expected 1 group, got %d", len(groups))
+		}
+		return groups[0]
+	}
+
+	ownKey := RecipeOptionKey("recipe:iron_ingot", "minecraft", "furnace")
+	if got := run(t, ownKey); got.MachineID != "furnace" {
+		t.Errorf("pinned the recipe's own machine, solver ran %s:%s", got.MachineMod, got.MachineID)
+	}
+
+	addonKey := RecipeOptionKey("recipe:iron_ingot", "addon", "super_furnace")
+	if got := run(t, addonKey); got.MachineID != "super_furnace" {
+		t.Errorf("pinned the implementer, solver ran %s:%s", got.MachineMod, got.MachineID)
+	}
+}
+
+// Choosing a recipe without naming a machine leaves the machine to the
+// solver: the override is the bare recipe id.
+func TestCalculateMachineGroups_BareRecipeOverrideLeavesTheMachineOpen(t *testing.T) {
+	stub := newStub(200)
+	stub.interfaces = map[string][]MachineRef{
+		"recipe:iron_ingot": {{ModID: "addon", MachineID: "super_furnace"}},
+	}
+	stub.machines["addon:super_furnace"] = &MachineSpec{ModID: "addon", MachineID: "super_furnace", Name: "Super Furnace"}
+
+	s := NewSolver(stub, 1000)
+	ctx := context.Background()
+	overrides := map[string]string{"minecraft:iron_ingot": "recipe:iron_ingot"}
+
+	g, err := s.BuildRecipeGraph(ctx, ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+		map[string]bool{"minecraft:iron_ore": true}, FactoryState{}, overrides, map[string]string{})
+	if err != nil {
+		t.Fatalf("BuildRecipeGraph: %v", err)
+	}
+	node := g.Nodes["minecraft:iron_ingot"]
+	if node.RecipeID != "recipe:iron_ingot" {
+		t.Fatalf("bare recipe override did not select the recipe: %+v", node)
+	}
+}

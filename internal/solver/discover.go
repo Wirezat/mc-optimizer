@@ -185,7 +185,7 @@ func (s *Solver) Discover(
 		}
 
 		for _, r := range recipes {
-			if RecipeOptionKey(r.ID, r.MachineMod, r.MachineID) == overrideKey {
+			if selectsRecipe(overrideKey, r) {
 				ci.ChosenRecipeID = r.ID
 				ci.ChosenMachineMod = r.MachineMod
 				ci.ChosenMachineID = r.MachineID

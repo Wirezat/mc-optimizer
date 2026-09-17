@@ -1114,20 +1114,21 @@
   // the RecipeOption key to override with.
   function buildMachineMenu(item) {
     const cands = machineCandidates(item, item.ChosenRecipeID);
-    const base = cands[0];
-    if (!base) return [];
+    if (!cands.length) return [];
+    // The stored override tells the two apart: a bare recipe id leaves the
+    // machine to the solver, a full option key pins the one it names.
+    const pinned = _overrides[itemKey(item.Item)];
     const items = [{
       label: t('solve.chain.machine_auto'),
-      subtitle: machineLabel(base),
-      action: base.Key,
-      active: item.ChosenMachineID === base.MachineID && item.ChosenMachineMod === base.MachineMod,
+      action: item.ChosenRecipeID,
+      active: pinned === item.ChosenRecipeID,
     }];
-    for (const opt of cands.slice(1)) {
+    for (const opt of cands) {
       items.push({
         label: machineLabel(opt),
         subtitle: modName(opt.MachineMod),
         action: opt.Key,
-        active: item.ChosenMachineID === opt.MachineID && item.ChosenMachineMod === opt.MachineMod,
+        active: pinned === opt.Key,
       });
     }
     return items;
@@ -1164,15 +1165,13 @@
     btn.classList.add('active');
   }
 
-  // Picking a recipe resets the row to its base machine.
+  // Picking a recipe names no machine, so the solver keeps choosing one.
   function selectChainOverride(key, recipeID) {
     if (recipeID === 'STOP') {
       delete _overrides[key];
       _stopPoints.add(key);
     } else {
-      const item = _chainItems.find(ci => itemKey(ci.Item) === key);
-      const base = item && machineCandidates(item, recipeID)[0];
-      _overrides[key] = base ? base.Key : recipeID;
+      _overrides[key] = recipeID;
       _stopPoints.delete(key);
     }
     closeAllPickers();

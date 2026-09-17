@@ -77,18 +77,22 @@ func (s *Solver) collectMatrices(ctx context.Context, g *RecipeGraph, rv RateVec
 			return nil, nil, fmt.Errorf("solver: recipe %s not found", recipeID)
 		}
 
-		// A node on anything but the recipe's own machine is a user pin.
-		pinnedMachine := machineMod != recipe.MachineMod || machineID != recipe.MachineID
-
 		m := nodeMatrix{
 			rateKey:    rateKey,
 			recipeID:   recipeID,
 			recipeRate: recipeRate,
 			recipe:     recipe,
 		}
+		// Only an override that names a machine pins one. Inferring the pin
+		// from "differs from the recipe's own machine" cannot express picking
+		// that own machine, which let an implementer take the row over.
+		pinnedMachine := false
 		recipes := []*RecipeRow{recipe}
 		if node := byRateKey[rateKey]; node != nil {
 			m.item = node.Item
+			if ov, ok := req.RecipeOverrides[node.Item.Key()]; ok {
+				_, _, _, pinnedMachine = SplitRecipeOverride(ov)
+			}
 			for _, id := range node.Siblings {
 				if id == recipeID {
 					continue

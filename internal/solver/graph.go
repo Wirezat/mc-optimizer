@@ -51,6 +51,27 @@ func RecipeOptionKey(recipeID, machineMod, machineID string) string {
 	return recipeID + "@" + machineMod + ":" + machineID
 }
 
+// SplitRecipeOverride reads an override value: a full RecipeOptionKey names
+// the machine to run the recipe on, a bare recipe id leaves that to the
+// solver. Both select the same recipe.
+func SplitRecipeOverride(value string) (recipeID, machineMod, machineID string, hasMachine bool) {
+	if id, mod, machine, ok := ParseRecipeOptionKey(value); ok {
+		return id, mod, machine, true
+	}
+	return value, "", "", false
+}
+
+// selectsRecipe reports whether an override value picks this recipe row. A
+// value naming no machine matches the row's recipe alone, so the first row
+// wins — the recipe's own machine.
+func selectsRecipe(override string, r *RecipeRow) bool {
+	id, mod, machine, hasMachine := SplitRecipeOverride(override)
+	if r.ID != id {
+		return false
+	}
+	return !hasMachine || (r.MachineMod == mod && r.MachineID == machine)
+}
+
 // ParseRecipeOptionKey splits a RecipeOptionKey back into its parts.
 func ParseRecipeOptionKey(key string) (recipeID, machineMod, machineID string, ok bool) {
 	recipeID, rest, ok := strings.Cut(key, "@")
@@ -155,7 +176,7 @@ func (s *Solver) BuildRecipeGraph(
 			recipes = filterByActiveMods(recipes, s.ActiveMods)
 			selected := (*RecipeRow)(nil)
 			for _, r := range recipes {
-				if RecipeOptionKey(r.ID, r.MachineMod, r.MachineID) == overrideID {
+				if selectsRecipe(overrideID, r) {
 					selected = r
 					break
 				}
@@ -193,7 +214,7 @@ func (s *Solver) BuildRecipeGraph(
 		if overrideID, ok := overrides[key]; ok {
 			found := false
 			for _, r := range recipes {
-				if RecipeOptionKey(r.ID, r.MachineMod, r.MachineID) == overrideID {
+				if selectsRecipe(overrideID, r) {
 					selected = r
 					found = true
 					break

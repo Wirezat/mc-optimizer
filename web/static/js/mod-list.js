@@ -18,16 +18,13 @@ const LINKS = [
     { field: 'url_discord',  key: 'catalog.mods.detail.discord' },
 ];
 
-// Mods without machines belong to no ecosystem; they group under this
-// sentinel, which sorts last.
-const NO_ECOSYSTEM = '￿';
-
-/** groupByEcosystem(mods) → [[ecosystem, mods], …], a mod repeated per ecosystem it serves. */
+/** groupByEcosystem(mods) → [[ecosystem, mods], …], a mod repeated per ecosystem it serves.
+    Mods without machines are left out: they are in the catalog only because
+    something else references them. */
 function groupByEcosystem(mods) {
     const groups = new Map();
     for (const m of mods) {
-        const keys = m.ecosystems?.length ? m.ecosystems : [NO_ECOSYSTEM];
-        for (const key of keys) {
+        for (const key of m.ecosystems ?? []) {
             if (!groups.has(key)) groups.set(key, []);
             groups.get(key).push(m);
         }
@@ -68,7 +65,7 @@ function bodyHTML(m) {
 function rowsHTML(m, rowID, deletable) {
     const del = deletable
         ? `<td><button class="btn btn-icon btn-sm btn-icon-color" style="--_icon-color:var(--danger)"
-             data-mod-delete="${esc(m.mod_id)}" title="${esc(t('common.delete'))}">🗑</button></td>`
+             data-mod-delete="${esc(m.mod_id)}" title="${esc(t('common.delete'))}">✕</button></td>`
         : '';
     const recipes = m.recipe_count
         ? `<a class="recipe-count-link" href="/catalog/items?producedByMod=${encodeURIComponent(m.mod_id)}">${m.recipe_count}</a>`
@@ -96,9 +93,7 @@ export function renderModList(container, mods, { deletable = false, onDelete = n
     const groups = groupByEcosystem(mods);
     const cols = deletable ? 6 : 5;
     const body = groups.map(([ecosystem, groupMods]) => {
-        const label = ecosystem === NO_ECOSYSTEM
-            ? `<span class="td-muted">${esc(t('catalog.mods.group.no_ecosystem'))}</span>`
-            : `<span class="td-mono">${esc(ecosystem)}</span>`;
+        const label = `<span class="td-mono">${esc(ecosystem)}</span>`;
         const head = `<tr class="table-group-hd collapsible">
             <td colspan="${cols}"><span class="group-hd-inner"><span class="group-hd-arrow"></span>
               ${label}<span class="td-muted">${groupMods.length}</span></span></td>

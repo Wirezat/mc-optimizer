@@ -23,8 +23,24 @@
       border-top: 1px solid var(--border);
     }
 
+    /* Upload and output each keep their own height instead of the taller one
+       stretching the other. */
+    .split-layout { align-items: flex-start; }
+
     /* ── Drop zone (page-specific: wui has no disabled modifier) ───────────── */
     #drop-zone.disabled { opacity: 0.4; pointer-events: none; }
+
+    /* ── One imported ZIP's result block ──────────────────────────────────── */
+    .import-result-block + .import-result-block {
+      margin-top: var(--gap-section);
+      padding-top: var(--gap-section);
+      border-top: 1px solid var(--border);
+    }
+    .import-result-mod {
+      font-family: var(--font-mono);
+      font-weight: var(--weight-semibold);
+      margin-bottom: var(--gap-inline);
+    }
 
     /* ── Warnings ──────────────────────────────────────────────────────────── */
     .import-warn-list { margin-top: var(--gap-control); max-height: 160px; overflow-y: auto; }
@@ -78,52 +94,47 @@
           </div>
         </div>
 
-        <!-- Import card -->
-        <div class="container" style="max-width:600px">
+        <div class="split-layout">
+          <div class="main-panel">
 
-          <div class="container-header">
-            <span class="container-title" data-i18n="admin.mods.upload"></span>
-            <span class="view-picker-label" id="mod-count"></span>
-          </div>
+            <!-- Upload -->
+            <div class="container">
+              <div class="container-header">
+                <span class="container-title" data-i18n="admin.mods.upload"></span>
+              </div>
 
-          <!-- Template downloads -->
-          <div class="container-body" style="padding-bottom:0;display:flex;align-items:center;gap:var(--gap-control);flex-wrap:wrap">
-            <a class="btn btn-ghost btn-sm" href="/static/data/mod-template.zip" download data-i18n="admin.mods.template.download"></a>
-            <span class="field-caption" data-i18n="admin.mods.template.hint"></span>
-          </div>
+              <div class="wui-progress-track" id="progress-bar" style="display:none;margin:0 var(--pad-container)">
+                <div class="wui-progress-fill" id="progress-fill" style="width:0%;transition:width 0.3s"></div>
+              </div>
 
-          <!-- Progress bar (flush) -->
-          <div class="wui-progress-track" id="progress-bar" style="display:none;margin:0 var(--pad-container)">
-            <div class="wui-progress-fill" id="progress-fill" style="width:0%;transition:width 0.3s"></div>
-          </div>
+              <div class="wui-dropzone" id="drop-zone" style="margin:var(--pad-container)">
+                <div>
+                  <div data-i18n="admin.mods.drop_main"></div>
+                  <div id="drop-file" style="font-size:var(--text-sm);font-weight:var(--weight-semibold);color:var(--accent);margin-top:var(--gap-inline)"></div>
+                  <div style="font-size:var(--text-xs);color:var(--text-faint)" data-i18n="admin.mods.drop_sub"></div>
+                </div>
+              </div>
+              <input type="file" id="zip-input" accept=".zip" multiple style="display:none" />
 
-          <!-- Drop zone -->
-          <div class="wui-dropzone" id="drop-zone" style="margin:var(--pad-container)">
-            <div>
-              <div style="font-size:20px;opacity:.5">📦</div>
-              <div data-i18n="admin.mods.drop_main"></div>
-              <div id="drop-file" style="font-size:var(--text-sm);font-weight:var(--weight-semibold);color:var(--accent);margin-top:var(--gap-inline)"></div>
-              <div style="font-size:var(--text-xs);color:var(--text-faint)" data-i18n="admin.mods.drop_sub"></div>
+              <div class="import-actions">
+                <button class="btn btn-primary btn-sm" id="import-btn" disabled data-i18n="admin.mods.btn"></button>
+                <a class="btn btn-ghost btn-sm" href="/static/data/mod-template.zip" download data-i18n="admin.mods.template.download"></a>
+                <span class="status-msg" id="import-status"></span>
+              </div>
             </div>
-          </div>
-          <input type="file" id="zip-input" accept=".zip" style="display:none" />
 
-          <!-- Actions -->
-          <div class="import-actions">
-            <button class="btn btn-primary btn-sm" id="import-btn" disabled data-i18n="admin.mods.btn"></button>
-            <span class="status-msg" id="import-status"></span>
           </div>
 
-        </div>
-
-        <!-- Result (shown after successful import) -->
-        <div class="container" id="import-result" style="max-width:600px;margin-top:var(--gap-section);display:none">
-          <div class="container-header">
-            <span class="container-title" id="import-result-mod"></span>
-          </div>
-          <div class="container-body">
-            <div class="detail-grid cols-2" id="import-stats"></div>
-            <div class="import-warn-list" id="import-warnings"></div>
+          <!-- Import output — always on screen, empty until something is imported -->
+          <div class="side-panel">
+            <div class="container">
+              <div class="container-header">
+                <span class="container-title" data-i18n="admin.mods.output"></span>
+              </div>
+              <div class="container-body" id="import-output">
+                <div class="empty-state" data-i18n="admin.mods.output_empty"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -171,7 +182,6 @@
   async function init() {
     const user = await getUser();
     if (!user?.is_admin) { window.location.href = '/personal'; return; }
-    loadStatus();
     loadMods();
   }
 
@@ -181,21 +191,12 @@
     const mods = res?.ok ? await res.json() : [];
     renderModList(el, mods, { deletable: true });
     applyI18n(el);
+    const listed = mods.filter(m => m.ecosystems?.length).length;
     document.getElementById('mod-list-count').textContent =
-      t(mods.length === 1 ? 'catalog.mods.count_one' : 'catalog.mods.count').replace('{n}', mods.length);
+      t(listed === 1 ? 'catalog.mods.count_one' : 'catalog.mods.count').replace('{n}', listed);
   }
 
-  async function loadStatus() {
-    try {
-      const res = await apiFetch('/api/import/status');
-      if (!res?.ok) return;
-      const s = await res.json();
-      document.getElementById('mod-count').textContent =
-        t('admin.mods.total_mods').replace('{n}', s.total_mods);
-    } catch(e) { console.warn('status:', e); }
-  }
-
-  let _file = null;
+  let _files = [];
 
   const zipInput = document.getElementById('zip-input');
   const dropZone = document.getElementById('drop-zone');
@@ -205,26 +206,25 @@
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
   dropZone.addEventListener('drop', e => {
     e.preventDefault(); dropZone.classList.remove('dragover');
-    const f = e.dataTransfer.files[0];
-    if (f) setFile(f);
+    setFiles([...e.dataTransfer.files].filter(f => f.name.endsWith('.zip')));
   });
-  zipInput.addEventListener('change', () => { if (zipInput.files[0]) setFile(zipInput.files[0]); });
+  zipInput.addEventListener('change', () => setFiles([...zipInput.files]));
 
   document.getElementById('import-btn').addEventListener('click', runImport);
 
-  function setFile(f) {
-    _file = f;
-    document.getElementById('drop-file').textContent = f.name;
+  function setFiles(files) {
+    if (!files.length) return;
+    _files = files;
+    document.getElementById('drop-file').textContent = files.map(f => f.name).join(', ');
     document.getElementById('import-btn').disabled = false;
     setStatus('', '');
   }
 
   async function runImport() {
-    if (!_file) return;
+    if (!_files.length) return;
     const btn = document.getElementById('import-btn');
     btn.disabled = true;
     dropZone.classList.add('disabled');
-    document.getElementById('import-result').style.display = 'none';
     setStatus('', '');
 
     const pb = document.getElementById('progress-bar');
@@ -234,7 +234,7 @@
 
     try {
       const form = new FormData();
-      form.append('modfile', _file);
+      for (const f of _files) form.append('modfile', f);
       const res = await apiFetch('/api/import/modfile', { method: 'POST', body: form });
       pf.style.width = '85%';
       const data = await res.json();
@@ -242,50 +242,25 @@
       setTimeout(() => { pb.style.display = 'none'; pf.style.width = '0%'; }, 350);
       dropZone.classList.remove('disabled');
 
-      const result = Array.isArray(data) ? data[0] : data;
-
       if (!res.ok) {
-        document.getElementById('import-result-mod').textContent = '';
-        document.getElementById('import-stats').innerHTML =
-          `<div class="detail-row"><span class="detail-key" style="color:var(--danger)">${t('common.error')}</span><span class="detail-val">${esc(result?.message || String(res.status))}</span></div>`;
-        document.getElementById('import-warnings').innerHTML = '';
-        document.getElementById('import-result').style.display = '';
+        renderOutput([], data?.message || String(res.status));
         setStatus(t('msg.save_error'), 'err');
         btn.disabled = false;
         return;
       }
 
-      document.getElementById('import-result-mod').textContent = result.mod_id || '';
-      document.getElementById('import-stats').innerHTML = [
-        stat(result.machines,         t('admin.mods.stat.machines')),
-        stat(result.recipes_imported, t('admin.mods.stat.recipes')),
-        stat(result.items,            t('admin.mods.stat.items')),
-        stat(result.fluids,           t('admin.mods.stat.fluids')),
-        stat(result.translations,     t('admin.mods.stat.translations')),
-        stat(result.tags,             t('admin.mods.stat.tags')),
-        stat(result.textures,         t('admin.mods.stat.textures')),
-        stat(result.block_drops,      t('admin.mods.stat.block_drops')),
-        stat(result.villager_trades,  t('admin.mods.stat.villager_trades')),
-      ].filter(Boolean).join('');
+      const results = Array.isArray(data) ? data : [data];
+      renderOutput(results, '');
 
-      const warnings = result.warnings || [];
-      document.getElementById('import-warnings').innerHTML = warnings
-        .map(w => `<div class="import-warn-line">${esc(w)}</div>`)
-        .join('');
-
-      document.getElementById('import-result').style.display = '';
-      // Warnings mean part of the import silently failed (e.g. every texture,
-      // if the assets mount can't be written to) — "saved" alone would hide that.
-      setStatus(warnings.length ? t('admin.mods.saved_with_warnings') : t('msg.saved'),
-                warnings.length ? 'warn' : 'ok');
+      const warned = results.reduce((n, r) => n + (r.warnings?.length ?? 0), 0);
+      setStatus(warned ? t('admin.mods.saved_with_warnings') : t('msg.saved'), warned ? 'warn' : 'ok');
       document.getElementById('drop-file').textContent = '';
-      _file = null;
+      _files = [];
       btn.disabled = true;
-      loadStatus();
       loadMods();
 
       openModal({
-        title:        t(warnings.length ? 'admin.mods.verify.title_warn' : 'admin.mods.verify.title'),
+        title:        t(warned ? 'admin.mods.verify.title_warn' : 'admin.mods.verify.title'),
         bodyHTML:     `<p>${esc(t('admin.mods.verify.body'))}</p>`,
         confirmLabel: t('admin.mods.verify.confirm'),
         onConfirm:    () => { window.location.href = '/catalog/machines'; },
@@ -294,7 +269,37 @@
       pb.style.display = 'none';
       dropZone.classList.remove('disabled');
       setStatus(t('msg.network_error') + ': ' + e.message, 'err');
+      btn.disabled = false;
     }
+  }
+
+  function renderOutput(results, errMsg) {
+    const el = document.getElementById('import-output');
+    if (errMsg) {
+      el.innerHTML = `<div class="detail-row"><span class="detail-key" style="color:var(--danger)">${esc(t('common.error'))}</span>` +
+                     `<span class="detail-val">${esc(errMsg)}</span></div>`;
+      return;
+    }
+    el.innerHTML = results.map(r => {
+      const stats = [
+        stat(r.machines,         t('admin.mods.stat.machines')),
+        stat(r.recipes_imported, t('admin.mods.stat.recipes')),
+        stat(r.items,            t('admin.mods.stat.items')),
+        stat(r.fluids,           t('admin.mods.stat.fluids')),
+        stat(r.translations,     t('admin.mods.stat.translations')),
+        stat(r.tags,             t('admin.mods.stat.tags')),
+        stat(r.textures,         t('admin.mods.stat.textures')),
+        stat(r.block_drops,      t('admin.mods.stat.block_drops')),
+        stat(r.villager_trades,  t('admin.mods.stat.villager_trades')),
+      ].filter(Boolean).join('');
+      const warnings = (r.warnings || [])
+        .map(w => `<div class="import-warn-line">${esc(w)}</div>`).join('');
+      return `<div class="import-result-block">
+          <div class="import-result-mod">${esc(r.mod_id || '')}</div>
+          <div class="detail-grid">${stats}</div>
+          ${warnings ? `<div class="import-warn-list">${warnings}</div>` : ''}
+        </div>`;
+    }).join('');
   }
 
   function setStatus(msg, type) {

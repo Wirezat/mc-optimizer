@@ -222,13 +222,51 @@ export function iconImageHTML(entry, { cls = '', placeholder = true, dataset = n
 }
 
 /**
+ * infocardHTML(entry, { title, subtitle, sections, id, cycle }) → HTML string
+ * The app's one hover card, for wirezat-ui's infocard.js: the texture on the
+ * left, next to it the name above and where it comes from below — a mod, an
+ * id, or the tag that put an item in a slot. Every page that shows a catalog
+ * texture hands out this same card; extra content a page has to add (an id
+ * row, a rate table, a crafting card's amount) goes in through sections.
+ *
+ * Returns the hidden .infocard-def that infocard.js clones on hover. Place it
+ * immediately after its data-infocard-inline trigger, or give it an id and
+ * point a data-infocard trigger at it. Call initInfocards() on the container
+ * after inserting.
+ *
+ * cycle: frames ({ src, label }) for a card that stands for several items —
+ * the icon steps through them (icon-cycle.js, call initIconCycle() too) and
+ * the title follows, naming whichever member is showing.
+ */
+export function infocardHTML(entry, { title, subtitle = '', sections = '', id = '', cycle = null } = {}) {
+    const icon = iconImageHTML(entry, {
+        cls: 'infocard-icon', placeholder: false, hidpiPx: 28,
+        dataset: cycle ? { 'wui-cycle': JSON.stringify(cycle) } : null,
+    });
+    const sub = subtitle ? `<span class="infocard-subtitle">${esc(subtitle)}</span>` : '';
+    return `<div${id ? ` id="${esc(id)}"` : ''} class="infocard-def" hidden>
+      <div class="infocard-header">
+        ${icon}
+        <div class="infocard-heading">
+          <span class="infocard-title"${cycle ? ' data-wui-cycle-label' : ''}>${esc(title)}</span>
+          ${sub}
+        </div>
+      </div>${sections}
+    </div>`;
+}
+
+/**
  * iconTextHTML(modID, id, opts) → HTML string
  * Icon plus label, the wirezat-ui icontext component. Falls back to opts.name
  * when the reference is unknown.
+ *
+ * hoverCard adds the infocard hover (see infocardHTML): the item's name over
+ * its mod — opts.subtitle, the same text the row shows — or over its id where
+ * the caller gave no mod.
  */
 export function iconTextHTML(modID, id, {
     isFluid = false, name = null, subtitle = null,
-    size = null, marquee = false, extraClass = '',
+    size = null, marquee = false, extraClass = '', hoverCard = false,
 } = {}) {
     const entry = lookupCatalog(modID, id, isFluid);
     const label = entry?.name ?? name ?? id ?? '';
@@ -251,8 +289,14 @@ export function iconTextHTML(modID, id, {
         ? `<span class="icontext-subtitle">${esc(subtitle)}</span>`
         : '';
 
-    return `<span class="${rootCls}">${icon}<span class="icontext-body">` +
+    const body = `<span class="${rootCls}"${hoverCard ? ' data-infocard-inline' : ''}>` +
+           `${icon}<span class="icontext-body">` +
            `<span class="${textCls}">${textBody}</span>${sub}</span></span>`;
+    if (!hoverCard) return body;
+    return body + infocardHTML(entry, {
+        title: label,
+        subtitle: subtitle ?? `${modID ?? ''}:${id ?? ''}`,
+    });
 }
 
 /**
@@ -261,14 +305,25 @@ export function iconTextHTML(modID, id, {
  * members satisfies it, so showing one would claim the slot needs that
  * specific item. The icon cycles through every member that has a texture
  * (JEI-style, via wirezat-ui's icon-cycle.js — call initIconCycle() on the
- * container after inserting this), and the subtitle gives the count. Falls
- * back to the bare tag name when no member has a known texture.
+ * container after inserting this) once there is more than one, and the
+ * subtitle gives the count. The hover card (infocardHTML; call initInfocards()
+ * too) cycles with it, naming the member on show over the tag it came from.
+ * Falls back to the bare tag name when no member has a known texture, and
+ * skips the hover then — there is nothing to show.
  */
-export function tagIconTextHTML(tagRef, { size = null, extraClass = '' } = {}) {
+export function tagIconTextHTML(tagRef, { size = null, extraClass = '', chosenRef = null } = {}) {
     const resolved = lookupTag(tagRef);
-    const icons = resolved?.icons ?? [];
     const total = resolved?.total ?? 0;
+
+    // A chain step that resolved this tag to one specific item (chosenRef) names
+    // that item, not whichever member happens to be first — and leads the
+    // cycle with it, so icon and name start out agreeing.
+    const chosenEntry = chosenRef ? lookupCatalog(chosenRef.ModID, chosenRef.ItemID, chosenRef.IsFluid) : null;
+    const icons = [...(resolved?.icons ?? [])];
+    const chosenAt = chosenEntry ? icons.indexOf(chosenEntry) : -1;
+    if (chosenAt > 0) icons.unshift(...icons.splice(chosenAt, 1));
     const first = icons[0] ?? null;
+    const frames = icons.length > 1 ? icons.map(i => ({ src: i.textureUrl, label: i.name })) : null;
 
     const rootCls = esc(['icontext', size ? `icontext-${size}` : '', extraClass]
         .filter(Boolean).join(' '));
@@ -276,20 +331,24 @@ export function tagIconTextHTML(tagRef, { size = null, extraClass = '' } = {}) {
     const icon = iconImageHTML(first, {
         cls: 'icontext-icon',
         hidpiPx,
-        dataset: icons.length > 1
-            ? { 'wui-cycle': JSON.stringify(icons.map(i => ({ src: i.textureUrl }))) }
-            : null,
+        dataset: frames ? { 'wui-cycle': JSON.stringify(frames.map(f => ({ src: f.src }))) } : null,
     });
 
-    const label = first?.name ?? '#' + tagRef;
-    const sub = total > 1
-        ? t('catalog.recipes.card.tag_members').replace('{n}', total)
-        : '';
+    const label = chosenEntry?.name ?? first?.name ?? '#' + tagRef;
+    // Marks the slot as tag-derived even where there is only one known member
+    // today — the same total===1 wording recipe-card.js's tagCell already
+    // uses, so a tag stays visibly a tag whether or not there is anything to
+    // cycle through yet.
+    const sub = total === 0 ? ''
+        : total === 1 ? t('catalog.recipes.card.tag_members_one')
+        : t('catalog.recipes.card.tag_members').replace('{n}', total);
 
-    return `<span class="${rootCls}">${icon}<span class="icontext-body">` +
-           `<span class="icontext-text">${esc(label)}</span>` +
+    const body = `<span class="${rootCls}"${first ? ' data-infocard-inline' : ''}>${icon}` +
+           `<span class="icontext-body"><span class="icontext-text">${esc(label)}</span>` +
            (sub ? `<span class="icontext-subtitle">${esc(sub)}</span>` : '') +
            `</span></span>`;
+    if (!first) return body;
+    return body + infocardHTML(first, { title: label, subtitle: '#' + tagRef, cycle: frames });
 }
 
 /**
@@ -300,9 +359,21 @@ export function tagIconTextHTML(tagRef, { size = null, extraClass = '' } = {}) {
  * iconTextHTML so a page holding ItemRefs never has to special-case TagRef
  * itself; a page holding a bare (modID, itemID) pair still calls iconTextHTML
  * directly, same as always.
+ *
+ * opts.resolvedTag is a ChainItem's ResolvedTag ("#tag_name", matching
+ * TagResolutions' key format): set when ref is the concrete item a tag
+ * resolved to rather than a fixed recipe reference. The slot still renders
+ * via tagIconTextHTML — any of the tag's members would have satisfied it —
+ * naming ref as the chosen one instead of defaulting to the tag's first icon.
  */
 export function refIconTextHTML(ref, opts = {}) {
-    return ref?.TagRef
-        ? tagIconTextHTML(ref.TagRef, opts)
-        : iconTextHTML(ref?.ModID, ref?.ItemID, { ...opts, isFluid: ref?.IsFluid });
+    if (ref?.TagRef) return tagIconTextHTML(ref.TagRef, opts);
+    if (opts.resolvedTag) {
+        const tagName = opts.resolvedTag.replace(/^#/, '');
+        return tagIconTextHTML(tagName, { ...opts, chosenRef: ref });
+    }
+    // hoverCard: a plain item gets the same card its tag-shaped neighbours do,
+    // so every icon in a chain answers the same hover instead of some rows
+    // falling back to the browser's own title tooltip.
+    return iconTextHTML(ref?.ModID, ref?.ItemID, { ...opts, isFluid: ref?.IsFluid, hoverCard: true });
 }

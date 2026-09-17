@@ -5,7 +5,7 @@
    Used by catalog-items.html and catalog-fluids.html's side panel.
 */
 import { t, esc } from '/static/js/i18n.js';
-import { lookupCatalog, lookupTag, iconImageHTML } from '/static/js/catalog-registry.js';
+import { lookupCatalog, lookupTag, iconImageHTML, infocardHTML } from '/static/js/catalog-registry.js';
 
 const TAG_CARD_ICONS = 12;
 const TAG_CARD_COLS = 6;
@@ -68,7 +68,6 @@ function craftCell({ label, name, ref = '', entry = null,
                      count = '', amount = '', nonConsuming = false, extra = '', style = '' }) {
   const countMark = count ? `<span class="crafting-cell-count">${esc(count)}</span>` : '';
   const ncMark = nonConsuming ? `<span class="nc-badge">↺</span>` : '';
-  const icon = iconImageHTML(entry, { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 });
   const amtRow = amount
     ? `<div class="infocard-section"><div class="infocard-row">` +
       `<span class="infocard-key">${esc(t('catalog.recipes.card.amount'))}</span>` +
@@ -77,17 +76,9 @@ function craftCell({ label, name, ref = '', entry = null,
   const ncRow = nonConsuming
     ? `<div class="infocard-section">${esc(t('recipe.non_consuming_title'))}</div>`
     : '';
-  const sub = ref ? `<span class="infocard-subtitle">${esc(ref)}</span>` : '';
   const styleAttr = style ? ` style="${esc(style)}"` : '';
   return `<div class="crafting-cell${nonConsuming ? ' crafting-cell--nc' : ''}"${styleAttr} data-infocard-inline>${label}${countMark}${ncMark}</div>
-    <div class="infocard-def" hidden>
-      <div class="infocard-header">${icon}
-        <div class="infocard-heading">
-          <span class="infocard-title">${esc(name)}</span>
-          ${sub}
-        </div>
-      </div>${amtRow}${ncRow}${extra}
-    </div>`;
+    ${infocardHTML(entry, { title: name, subtitle: ref, sections: amtRow + ncRow + extra })}`;
 }
 
 // One recipe-card I/O entry ({item_mod_id,item_id}, {fluid_mod_id,fluid_id}

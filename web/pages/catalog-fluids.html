@@ -88,7 +88,7 @@
   import { init as initHeader } from '/static/js/header.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
-  import { loadCatalog, entryOf, iconImageHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, entryOf, iconImageHTML, infocardHTML } from '/static/js/catalog-registry.js';
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
@@ -152,15 +152,7 @@
             <span class="icontext-body"><span class="icontext-text">${esc(fluid.name || fluid.fluid_id)}</span></span>
           </span>
         </span>
-        <div class="infocard-def" hidden>
-          <div class="infocard-header">
-            ${iconImageHTML(entry, { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
-            <div class="infocard-heading">
-              <span class="infocard-title">${esc(fluid.name || fluid.fluid_id)}</span>
-              <span class="infocard-subtitle">${esc(fluid.mod_name)}</span>
-            </div>
-          </div>
-        </div>
+        ${infocardHTML(entry, { title: fluid.name || fluid.fluid_id, subtitle: fluid.mod_name })}
       </td>
       <td class="td-mono td-muted">${esc(fluid.fluid_id)}</td>`;
     tr.addEventListener('click', () => {

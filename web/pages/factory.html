@@ -292,7 +292,7 @@
   import { initKonfigBar, initModal, openModal } from '/static/ui/js/index.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
-  import { loadCatalog, lookupCatalog, iconTextHTML, iconImageHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, lookupCatalog, iconTextHTML, infocardHTML } from '/static/js/catalog-registry.js';
 
   await load(getLang());
   applyI18n();
@@ -560,21 +560,14 @@
   // option), so labelCls carries styling only — passing a cell-clamp modifier
   // here would be inert.
   function itemHtml(itemId, itemName, modId, labelCls = 'td-muted', isFluid = false) {
-    const modDisp = esc(modName(modId));
-    const def     = itemId ? `<div class="infocard-def" hidden>
-      <div class="infocard-header">
-        ${iconImageHTML(lookupCatalog(modId, itemId, isFluid),
-                        { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
-        <div class="infocard-heading">
-          <span class="infocard-title">${esc(itemName || itemId)}</span>
-          <span class="infocard-subtitle">${modDisp}</span>
-        </div>
-      </div>
-      <div class="infocard-section">
+    const def = itemId ? infocardHTML(lookupCatalog(modId, itemId, isFluid), {
+      title: itemName || itemId,
+      subtitle: modName(modId),
+      sections: `<div class="infocard-section">
         <div class="infocard-row"><span class="infocard-key">Item ID</span><span class="infocard-val">${esc(itemId)}</span></div>
         <div class="infocard-row"><span class="infocard-key">Mod ID</span><span class="infocard-val">${esc(modId || '')}</span></div>
-      </div>
-    </div>` : '';
+      </div>`,
+    }) : '';
     return `<div style="display:flex;align-items:center;gap:var(--gap-icon);">
       <div class="${esc(labelCls)}" style="flex:1;min-width:0;">
         ${iconTextHTML(modId, itemId, { isFluid, name: itemName, size: 'sm', marquee: true })}
@@ -1004,16 +997,11 @@
       const r = Math.round(n * 10000) / 10000;
       return Number.isInteger(r) ? String(r) : r.toFixed(4).replace(/\.?0+$/, '');
     };
-    return `<div id="${defId}" class="infocard-def" hidden>
-      <div class="infocard-header">
-        ${iconImageHTML(lookupCatalog(e.mod_id, e.item_fluid_id, e.io_type === 'fluid'),
-                        { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
-        <div class="infocard-heading">
-          <span class="infocard-title">${esc(e.name || e.item_fluid_id)}</span>
-          <span class="infocard-subtitle">${esc(e.item_fluid_id)}</span>
-        </div>
-      </div>
-      <div class="infocard-section" data-label="Rate">
+    return infocardHTML(lookupCatalog(e.mod_id, e.item_fluid_id, e.io_type === 'fluid'), {
+      id: defId,
+      title: e.name || e.item_fluid_id,
+      subtitle: e.item_fluid_id,
+      sections: `<div class="infocard-section" data-label="Rate">
         <div class="infocard-row">
           <span class="infocard-key">/min</span>
           <span class="infocard-val">${esc(fmtRateFrac(e.rate_num, e.rate_den))}</span>
@@ -1030,8 +1018,8 @@
           <span class="infocard-key">/tick</span>
           <span class="infocard-val">${esc(fmtN(perMin / 1200))}</span>
         </div>
-      </div>
-    </div>`;
+      </div>`,
+    });
   }
 
   // ── Source Mode IO ────────────────────────────────────

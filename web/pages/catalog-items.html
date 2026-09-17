@@ -89,7 +89,7 @@
   import { init as initHeader } from '/static/js/header.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
-  import { loadCatalog, entryOf, iconImageHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, entryOf, iconImageHTML, infocardHTML } from '/static/js/catalog-registry.js';
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
@@ -153,15 +153,7 @@
             <span class="icontext-body"><span class="icontext-text">${esc(item.name || item.item_id)}</span></span>
           </span>
         </span>
-        <div class="infocard-def" hidden>
-          <div class="infocard-header">
-            ${iconImageHTML(entry, { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
-            <div class="infocard-heading">
-              <span class="infocard-title">${esc(item.name || item.item_id)}</span>
-              <span class="infocard-subtitle">${esc(item.mod_name)}</span>
-            </div>
-          </div>
-        </div>
+        ${infocardHTML(entry, { title: item.name || item.item_id, subtitle: item.mod_name })}
       </td>
       <td class="td-mono td-muted">${esc(item.item_id)}</td>
       <td class="td-muted td-num">${esc(item.max_stack)}×</td>`;

@@ -411,6 +411,7 @@
   import { loadCatalog, lookupCatalog, refIconTextHTML, catalogEntries } from '/static/js/catalog-registry.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initIconCycle } from '/static/ui/js/icon-cycle.js';
+  import { initInfocards } from '/static/ui/js/infocard.js';
   import { openPluginWizard } from '/static/js/plugin-wizard.js';
   import { loadMachineHooks, columnsOf, cellText } from '/static/js/plugin-machines.js';
 
@@ -916,11 +917,11 @@
 
     const target = _chainItems.find(ci => ci.Level === 0);
     if (target) {
-      const key   = itemKey(target.Item);
-      const sub   = target.Item.TagRef ? '' : modName(target.Item.ModID);
-      const title = target.Item.TagRef ? '' : ` title="${esc(target.Item.ModID + ':' + target.Item.ItemID)}"`;
+      const key      = itemKey(target.Item);
+      const isTagRow = !!(target.Item.TagRef || target.ResolvedTag);
+      const sub      = isTagRow ? '' : modName(target.Item.ModID);
       rows.push(`<tr>
-        <td><span${title}>${refIconTextHTML(target.Item, { name: nameOf(target.Item), subtitle: sub, size: 'sm', extraClass: 'chain-target-icontext' })}</span></td>
+        <td>${refIconTextHTML(target.Item, { name: nameOf(target.Item), subtitle: sub, size: 'sm', extraClass: 'chain-target-icontext', resolvedTag: target.ResolvedTag })}</td>
         <td><div class="chain-cell-recipe">${_chainRecipeCell(target, key, false)}</div></td>
         ${_chainPluginCells(target)}
       </tr>`);
@@ -935,11 +936,12 @@
     for (const [level, items] of [...byLevel.entries()].sort((a, b) => a[0] - b[0])) {
       rows.push(`<tr class="table-group-hd"><td colspan="${2 + _machineColumns.length}">${t('solve.chain.level').toUpperCase()} ${level}</td></tr>`);
       for (const item of items) {
-        const key    = itemKey(item.Item);
-        const sub    = item.Item.TagRef ? '' : modName(item.Item.ModID);
-        const isStop = item.IsStop && !item.IsRawMaterial;
+        const key      = itemKey(item.Item);
+        const isTagRow = !!(item.Item.TagRef || item.ResolvedTag);
+        const sub      = isTagRow ? '' : modName(item.Item.ModID);
+        const isStop   = item.IsStop && !item.IsRawMaterial;
         rows.push(`<tr${isStop ? ' class="tc-stopped"' : ''}>
-          <td>${refIconTextHTML(item.Item, { name: nameOf(item.Item), subtitle: sub, size: 'sm' })}</td>
+          <td>${refIconTextHTML(item.Item, { name: nameOf(item.Item), subtitle: sub, size: 'sm', resolvedTag: item.ResolvedTag })}</td>
           <td><div class="chain-cell-recipe">${_chainRecipeCell(item, key, true)}</div></td>
           ${_chainPluginCells(item)}
         </tr>`);
@@ -955,6 +957,7 @@
     </table>`);
     initHiDPIRender(chainContainer.body);
     initIconCycle(chainContainer.body);
+    initInfocards(chainContainer.body);
   }
 
   // ── Graph view of the chain ───────────────────────────────────────────────
@@ -1366,10 +1369,8 @@
     const outputs = r.IOProfile?.Outputs || [];
     let io = '';
     const ioItemHTML = (e) => {
-      const sub  = e.Item.TagRef ? '' : modName(e.Item.ModID);
-      return `<span title="${esc(e.Item.ModID + ':' + (e.Item.ItemID || e.Item.TagRef))}">` +
-        refIconTextHTML(e.Item, { name: nameOf(e.Item), subtitle: sub, size: 'sm' }) +
-        `</span>`;
+      const sub = e.Item.TagRef ? '' : modName(e.Item.ModID);
+      return refIconTextHTML(e.Item, { name: nameOf(e.Item), subtitle: sub, size: 'sm' });
     };
     if (inputs.length) {
       io += `<div class="io-section-label">${t('solve.inputs')}</div>`;
@@ -1394,6 +1395,7 @@
     ioEl.innerHTML = io || `<span style="color:var(--text-faint);font-size:var(--text-sm);">—</span>`;
     initHiDPIRender(ioEl);
     initIconCycle(ioEl);
+    initInfocards(ioEl);
   }
 
   let _openChainPickerKey = null;

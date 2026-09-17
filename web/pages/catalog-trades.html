@@ -112,7 +112,7 @@
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
-  import { loadCatalog, lookupCatalog, iconTextHTML, iconImageHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, lookupCatalog, iconTextHTML, infocardHTML } from '/static/js/catalog-registry.js';
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
 
   await load(getLang());
@@ -160,21 +160,15 @@
   }
 
   function itemCell(modID, itemID, name) {
-    const label = esc(name || itemID);
     const recipesUrl = `/catalog/items?item=${encodeURIComponent(modID + ':' + itemID)}`;
     return `<span class="infocard-trigger" data-infocard-inline>${iconTextHTML(modID, itemID, { name, size: 'sm' })}</span>
-      <div class="infocard-def" hidden>
-        <div class="infocard-header">
-          ${iconImageHTML(lookupCatalog(modID, itemID), { cls: 'infocard-icon', placeholder: false, hidpiPx: 28 })}
-          <div class="infocard-heading">
-            <span class="infocard-title">${label}</span>
-            <span class="infocard-subtitle">${esc(modID)}:${esc(itemID)}</span>
-          </div>
-        </div>
-        <div class="infocard-section">
+      ${infocardHTML(lookupCatalog(modID, itemID), {
+        title: name || itemID,
+        subtitle: `${modID}:${itemID}`,
+        sections: `<div class="infocard-section">
           <a href="${esc(recipesUrl)}" class="catalog-link" data-i18n="catalog.trades.detail.catalog_link"></a>
-        </div>
-      </div>`;
+        </div>`,
+      })}`;
   }
 
   const openGroups = new Map(); // groupKey -> VirtualWindow

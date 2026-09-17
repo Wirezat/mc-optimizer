@@ -318,3 +318,77 @@ func TestResolveMachineTexture_RejectsEscapingSegments(t *testing.T) {
 		}
 	}
 }
+
+func writeText(t *testing.T, root, rel, content string) {
+	t.Helper()
+	full := filepath.Join(root, rel)
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+}
+
+// A classic flat item model — parent item/generated, sprite in layer0 — is
+// not a shape the renderer can draw; the item is the sprite itself.
+func TestResolveItemTexture_GeneratedModelIsItsSprite(t *testing.T) {
+	dir := t.TempDir()
+	writeText(t, dir, "ironfurnaces/models/item/augment_speed.json",
+		`{"parent": "item/generated", "textures": {"layer0": "ironfurnaces:item/augment_speed"}}`)
+	writeFixture(t, dir, "ironfurnaces/textures/item/augment_speed.png")
+
+	url, ok := ResolveItemTexture(dir, "ironfurnaces", "augment_speed")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if want := "/assets/ironfurnaces/textures/item/augment_speed.png"; url != want {
+		t.Errorf("url = %q, want the layer0 sprite %q", url, want)
+	}
+}
+
+// The generated parent may sit further up the chain, behind a mod's own base
+// model, and be spelled with or without the minecraft: namespace.
+func TestResolveItemTexture_GeneratedModelBehindParentChain(t *testing.T) {
+	dir := t.TempDir()
+	writeText(t, dir, "mod/models/item/tool_base.json",
+		`{"parent": "minecraft:item/handheld"}`)
+	writeText(t, dir, "mod/models/item/wrench.json",
+		`{"parent": "mod:item/tool_base", "textures": {"layer0": "mod:item/tools/wrench"}}`)
+	writeFixture(t, dir, "mod/textures/item/tools/wrench.png")
+
+	url, ok := ResolveItemTexture(dir, "mod", "wrench")
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if want := "/assets/mod/textures/item/tools/wrench.png"; url != want {
+		t.Errorf("url = %q, want %q", url, want)
+	}
+}
+
+// A model whose chain leads to a block shape still goes to the renderer.
+func TestResolveItemTexture_BlockModelStillRenders(t *testing.T) {
+	dir := t.TempDir()
+	writeText(t, dir, "ironfurnaces/models/item/iron_furnace.json",
+		`{"parent": "ironfurnaces:block/iron_furnace"}`)
+	writeText(t, dir, "ironfurnaces/models/block/iron_furnace.json",
+		`{"parent": "minecraft:block/orientable", "textures": {"front": "ironfurnaces:block/iron_furnace_front"}}`)
+
+	url, _ := ResolveItemTexture(dir, "ironfurnaces", "iron_furnace")
+	if want := "/assets/render/ironfurnaces/item/iron_furnace.png"; url != want {
+		t.Errorf("url = %q, want the model render %q", url, want)
+	}
+}
+
+// A generated model whose sprite is missing on disk has nothing better than
+// the renderer to offer.
+func TestResolveItemTexture_GeneratedModelWithoutSpriteStillRenders(t *testing.T) {
+	dir := t.TempDir()
+	writeText(t, dir, "mod/models/item/ghost.json",
+		`{"parent": "item/generated", "textures": {"layer0": "mod:item/ghost"}}`)
+
+	url, _ := ResolveItemTexture(dir, "mod", "ghost")
+	if want := "/assets/render/mod/item/ghost.png"; url != want {
+		t.Errorf("url = %q, want %q", url, want)
+	}
+}

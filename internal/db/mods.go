@@ -241,20 +241,6 @@ func (d *DB) UpdateMachineType(ctx context.Context, modID, machineID string, nam
 	return nil
 }
 
-// DeleteMod removes a mod (and cascades).
-func (d *DB) DeleteMod(ctx context.Context, modID string) error {
-	tag, err := d.Pool.Exec(ctx, `
-		DELETE FROM mods WHERE mod_id = $1
-	`, modID)
-	if err != nil {
-		return fmt.Errorf("db: delete mod: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 // ListItemsByMod returns all items for modID ordered by item_id.
 func (d *DB) ListItemsByMod(ctx context.Context, modID string) ([]*model.Item, error) {
 	var exists bool

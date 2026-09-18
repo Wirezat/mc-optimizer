@@ -208,6 +208,15 @@ func DeleteModHandler(database *db.DB) http.HandlerFunc {
 				errNotFound(w)
 				return
 			}
+			var inUse *db.ErrModInUse
+			if errors.As(err, &inUse) {
+				writeJSON(w, http.StatusConflict, map[string]any{
+					"error":    "MOD_IN_USE",
+					"message":  "mod is still in use",
+					"blockers": inUse.Blockers,
+				})
+				return
+			}
 			errInternal(w, err)
 			return
 		}

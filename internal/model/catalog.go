@@ -139,3 +139,12 @@ type VillagerTradeView struct {
 	MaxUses      *int `json:"max_uses,omitempty"`
 	XP           *int `json:"xp,omitempty"`
 }
+
+// ModBlocker is one reason a mod cannot be deleted.
+// Kind is one of production_line, factory_source, save, dependent_mod; Sample holds up to
+// three human-readable names out of Count.
+type ModBlocker struct {
+	Kind   string   `json:"kind"`
+	Count  int      `json:"count"`
+	Sample []string `json:"sample"`
+}

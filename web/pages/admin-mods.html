@@ -180,11 +180,45 @@
     const el  = document.getElementById('mod-list');
     const res = await apiFetch('/api/mods');
     const mods = res?.ok ? await res.json() : [];
-    renderModList(el, mods, { deletable: true });
+    renderModList(el, mods, { deletable: true, onDelete: deleteMod });
     applyI18n(el);
     const listed = mods.filter(m => m.ecosystems?.length).length;
     document.getElementById('mod-list-count').textContent =
       t(listed === 1 ? 'catalog.mods.count_one' : 'catalog.mods.count').replace('{n}', listed);
+  }
+
+  // A mod is only deletable while nothing references it; the server answers 409 with one
+  // blocker entry per reason.
+  async function deleteMod(modID) {
+    if (!confirm(t('catalog.mods.confirm_delete'))) return;
+
+    const res = await apiFetch('/api/mods/' + encodeURIComponent(modID), { method: 'DELETE' });
+    if (res?.ok) {
+      setStatus(t('catalog.mods.delete.deleted'), 'ok');
+      loadMods();
+      return;
+    }
+    if (res?.status === 409) {
+      const body = await res.json().catch(() => ({}));
+      showBlockers(body.blockers || []);
+      return;
+    }
+    setStatus(t('common.error'), 'err');
+  }
+
+  function showBlockers(blockers) {
+    const items = blockers.map(b => {
+      const key = 'catalog.mods.delete.blocker.' + b.kind + (b.count === 1 ? '_one' : '');
+      const head = esc(t(key).replace('{n}', b.count));
+      const names = (b.sample || []).map(esc).join(', ');
+      const more = b.count > (b.sample || []).length ? ' …' : '';
+      return `<li>${head}${names ? `<span class="td-faint"> — ${names}${more}</span>` : ''}</li>`;
+    }).join('');
+    openModal({
+      title:        t('catalog.mods.delete.in_use_title'),
+      bodyHTML:     `<p>${esc(t('catalog.mods.delete.in_use_intro'))}</p><ul>${items}</ul>`,
+      confirmLabel: t('common.ok'),
+    });
   }
 
   let _files = [];

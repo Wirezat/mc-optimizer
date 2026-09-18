@@ -126,3 +126,14 @@ func seedProductionLine(t *testing.T, d *DB, factoryID uuid.UUID) uuid.UUID {
 	}
 	return plID
 }
+
+// seedMachineGroup inserts a machine group into an existing production line.
+func seedMachineGroup(t *testing.T, d *DB, plID uuid.UUID, machineModID, machineID string, recipeID uuid.UUID) {
+	t.Helper()
+	if _, err := d.Pool.Exec(context.Background(), `
+		INSERT INTO machine_groups (pl_id, machine_mod_id, machine_id, recipe_id, count)
+		VALUES ($1, $2, $3, $4, 1)
+	`, plID, machineModID, machineID, recipeID); err != nil {
+		t.Fatalf("seed machine group: %v", err)
+	}
+}

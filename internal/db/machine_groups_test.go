@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// groupFixture seeds a mod, machine type, recipe, save and factory, and
-// returns the factory plus the recipe the machine groups will reference.
+// groupFixture seeds a mod, machine type, recipe, save and factory, and returns the factory
+// plus the recipe the machine groups will reference.
 func groupFixture(t *testing.T, d *DB) (factoryID uuid.UUID, recipeID uuid.UUID) {
 	t.Helper()
 	seedMod(t, d, "testmod")
@@ -39,8 +39,6 @@ func assertVariantColumns(t *testing.T, mg *model.MachineGroup) {
 	if mg.VariantID != "adv-x3" {
 		t.Errorf("variant_id = %q, want %q", mg.VariantID, "adv-x3")
 	}
-	// The caller left CurrentVariantID empty: nothing is built yet, so the
-	// build state is the host variant.
 	if mg.CurrentVariantID != "default" {
 		t.Errorf("current_variant_id = %q, want %q", mg.CurrentVariantID, "default")
 	}
@@ -53,8 +51,8 @@ func assertVariantColumns(t *testing.T, mg *model.MachineGroup) {
 	}
 }
 
-// Both insert paths must carry the plugin columns; a column dropped from one
-// of them silently reverts the group to the host default.
+// Both insert paths must carry the plugin columns; a column dropped from one of them
+// silently reverts the group to the host default.
 func TestMachineGroupVariantColumnsRoundTrip(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -94,8 +92,8 @@ func TestMachineGroupVariantColumnsRoundTrip(t *testing.T) {
 	})
 }
 
-// A group with no config override stores an empty object, which means "the
-// save-wide config applies" — not SQL NULL, which the column forbids.
+// A group with no config override stores an empty object, which means "the save-wide config
+// applies" — not SQL NULL, which the column forbids.
 func TestMachineGroupWithoutConfigStoresEmptyObject(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -121,8 +119,7 @@ func TestMachineGroupWithoutConfigStoresEmptyObject(t *testing.T) {
 	}
 }
 
-// Switching to a faster variant shrinks the group below its built count. The
-// built count has to follow, or the row violates built_count <= count.
+// Switching to a faster variant shrinks the group below its built count.
 func TestUpdateMachineGroupVariantClampsBuiltCount(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -160,9 +157,6 @@ func TestUpdateMachineGroupVariantClampsBuiltCount(t *testing.T) {
 	}
 }
 
-// The built variant is recorded on its own: a build-state update leaves it
-// alone, and a later target switch must not touch it either — the machines
-// standing in-game don't change just because the target did.
 func TestUpdateMachineGroupCurrentVariantIsIndependent(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -222,8 +216,8 @@ func TestUpdateMachineGroupVariantMissingGroup(t *testing.T) {
 	}
 }
 
-// The variant endpoint needs the save a group belongs to, to read that save's
-// mod config, alongside the owner it authorises against.
+// The variant endpoint needs the save a group belongs to, to read that save's mod config,
+// alongside the owner it authorises against.
 func TestMachineGroupScopeReturnsOwnerAndSave(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()

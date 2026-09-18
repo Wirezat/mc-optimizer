@@ -16,15 +16,14 @@ const supportedAPIVersion = 1
 
 const pluginPrefix = "plugin/"
 
-// pluginBundle holds the raw contents of an optional plugin/ subtree in a
-// mod ZIP.
+// pluginBundle holds the raw contents of an optional plugin/ subtree in a mod ZIP.
 type pluginBundle struct {
 	PluginYML []byte
 	PluginJS  []byte
 }
 
-// findPluginBundle looks for the plugin/ subtree. A nil, nil result means no
-// plugin is bundled, which is allowed.
+// findPluginBundle looks for the plugin/ subtree. A nil, nil result means no plugin is
+// bundled, which is allowed.
 func findPluginBundle(files []*zip.File) (*pluginBundle, error) {
 	var b pluginBundle
 	found := false
@@ -90,12 +89,8 @@ func ParsePluginFile(data []byte) (*model.PluginDef, error) {
 	return &model.PluginDef{DisplayName: raw.DisplayName, Version: raw.Version, APIVersion: raw.APIVersion}, nil
 }
 
-// validatePluginJS loads the source into a throwaway VM to make sure it
-// binds a plugin object with an evaluate function, and reports whether it also
-// binds a wizard. plugins.Compile also runs the plugin's top-level code under
-// a bootstrap deadline, so this call can legitimately take up to that timeout
-// and legitimately fail — callers must not add a second timeout around it or
-// swallow the error.
+// validatePluginJS loads the source into a throwaway VM to make sure it binds a plugin
+// object with an evaluate function, and reports whether it also binds a wizard.
 func validatePluginJS(source string) (hasWizard bool, err error) {
 	prog, err := plugins.Compile("import-check", source)
 	if err != nil {

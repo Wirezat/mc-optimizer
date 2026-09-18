@@ -5,11 +5,9 @@ import (
 )
 
 func TestPartialMachineReduction(t *testing.T) {
-	// Reflects real redstone_battery chain:
-	//   assembler   ExactCount = 10   (ticks=200, rate=1/20)
-	//   bending     ExactCount = 10   (ticks=50,  rate=1/5)
-	//   compressor  ExactCount = 25/2 (ticks=100, rate=1/4, output=2)
-	// Without partial: k=2, GCD=5 → 4/4/5 at 0.4/s
+	// Reflects real redstone_battery chain: assembler ExactCount = 10 (ticks=200, rate=1/20)
+	// bending ExactCount = 10 (ticks=50, rate=1/5) compressor ExactCount = 25/2 (ticks=100,
+	// rate=1/4, output=2) Without partial: k=2, GCD=5 → 4/4/5 at 0.4/s
 	assemblerID := "assembler-recipe"
 	bendingID := "bending-recipe"
 	compressorID := "compressor-recipe"
@@ -60,8 +58,8 @@ func TestPartialMachineReduction(t *testing.T) {
 		rateS := rate.Mul(NewRational(20, 1))
 		t.Logf("=== PARTIAL on compressor === Rate: %v/%v/s  %dx assembler util=%v, %dx bending util=%v, %dx compressor util=%v",
 			rateS.Num, rateS.Den, groups[0].Count, groups[0].Utilization, groups[1].Count, groups[1].Utilization, groups[2].Count, groups[2].Utilization)
-		// Non-partial (assembler, bending): LCM(1,1)=1, GCD(10,10)=10 → each ExactCount=1 at 100%.
-		// Partial compressor: ExactCount=1.25 → ceil=2 at 62.5%. Rate=0.1/s.
+		// Non-partial (assembler, bending): LCM(1,1)=1, GCD(10,10)=10 → each ExactCount=1 at
+		// 100%.
 		if groups[0].Count != 1 {
 			t.Errorf("assembler count=%d want 1", groups[0].Count)
 		}
@@ -95,9 +93,8 @@ func TestPartialMachineReduction(t *testing.T) {
 		rateS := rate.Mul(NewRational(20, 1))
 		t.Logf("=== PARTIAL on bending === Rate: %v/%v/s  %dx assembler util=%v, %dx bending util=%v, %dx compressor util=%v",
 			rateS.Num, rateS.Den, groups[0].Count, groups[0].Utilization, groups[1].Count, groups[1].Utilization, groups[2].Count, groups[2].Utilization)
-		// Non-partial (assembler, compressor): LCM(1,2)=2, GCD(20,25)=5 → assembler=4, compressor=5.
-		// Bending ExactCount after scaling = 4 (integer) → ceil=4 at 100%. Same as no-partial.
-		// (bending:assembler is exactly 1:1 for this chain, so partial has no effect here.)
+		// Non-partial (assembler, compressor): LCM(1,2)=2, GCD(20,25)=5 → assembler=4,
+		// compressor=5.
 		if groups[0].Count != 4 {
 			t.Errorf("assembler count=%d want 4", groups[0].Count)
 		}

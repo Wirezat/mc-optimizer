@@ -7,12 +7,12 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/plugins"
 )
 
-// MaxVariantIterations bounds the fixed-point iteration that runs when a chosen
-// variant changes a recipe's output amounts.
+// MaxVariantIterations bounds the fixed-point iteration that runs when a chosen variant
+// changes a recipe's output amounts.
 const MaxVariantIterations = 4
 
-// VariantSource yields the evaluated variants for a (machine, recipe) pair
-// under the mod config that applies to the machine's ecosystem.
+// VariantSource yields the evaluated variants for a (machine, recipe) pair under the mod
+// config that applies to the machine's ecosystem.
 type VariantSource interface {
 	Variants(ctx context.Context, machine *MachineSpec, recipe *RecipeRow, config json.RawMessage) ([]plugins.Variant, error)
 }
@@ -21,16 +21,12 @@ type VariantSource interface {
 const VanillaEcosystem = "vanilla"
 
 // coalBurnTicks is how long one coal or charcoal keeps a vanilla machine lit.
-// Vanilla fuel burns by time, not by operation: the same coal is eight items in
-// a furnace and sixteen in a blast furnace, which runs the recipe twice as fast.
-// Iron Furnaces differs - it scales burn time with cook time, so its furnaces
-// hold at eight - and says so in its own plugin.
 const coalBurnTicks = 1600
 
 var vanillaFuelBurners = map[string]bool{"furnace": true, "blast_furnace": true, "smoker": true}
 
-// vanillaVariant is the host's own evaluator: rate from the recipe duration and
-// coal per tick, so vanilla is not the free cell that beats every modded furnace.
+// vanillaVariant is the host's own evaluator: rate from the recipe duration and coal per
+// tick, so vanilla is not the free cell that beats every modded furnace.
 func vanillaVariant(machine *MachineSpec, recipe *RecipeRow, configs map[string]json.RawMessage) plugins.Variant {
 	ticks := max(int64(recipe.DurationTicks), 1)
 	v := plugins.Variant{
@@ -57,8 +53,8 @@ func displacesFuel(configs map[string]json.RawMessage) bool {
 	return cfg.Mode == "factory"
 }
 
-// DefaultVariant is the behavior for machines whose mod ships no plugin:
-// nominal recipe duration, no operating costs, catalog outputs.
+// DefaultVariant is the behavior for machines whose mod ships no plugin: nominal recipe
+// duration, no operating costs, catalog outputs.
 func DefaultVariant(recipe *RecipeRow) plugins.Variant {
 	ticks := int64(recipe.DurationTicks)
 	if ticks < 1 {
@@ -107,8 +103,8 @@ func indexYields(g *RecipeGraph, groups []MachineGroupDraft) yieldIndex {
 	return out
 }
 
-// byproductValue is the machines a cell saves elsewhere by raising an output the
-// chain also produces. One step only and never rounded up, so it under-counts.
+// byproductValue is the machines a cell saves elsewhere by raising an output the chain also
+// produces.
 func byproductValue(c cell, demand Rational, yi yieldIndex) Rational {
 	saved := NewRational(0, 1)
 	if len(yi) == 0 || c.recipe == nil {
@@ -150,11 +146,6 @@ func catalogOutputs(r *RecipeRow) map[string]Rational {
 }
 
 // pickCell picks one cell of a node; false when none can run the recipe.
-//
-//	1 valid                        2 min ceil(demand/rate)
-//	3 max utilization              4 max byproduct value
-//	5 min consumption per resource 6 max mod affinity
-//	7 min rank                     8 (mod, machine, variant id)
 func pickCell(cells []cell, demand Rational, lc *ladderCtx) (cell, bool) {
 	rem := make([]cell, 0, len(cells))
 	for _, c := range cells {
@@ -172,8 +163,8 @@ func pickCell(cells []cell, demand Rational, lc *ladderCtx) (cell, bool) {
 		for i := range rem {
 			rem[i].byproduct = byproductValue(rem[i], demand, lc.yields)
 		}
-		// Whole machines only: a tenth of one must not outweigh the energy the
-		// cell draws for it, which is stage 5's call.
+		// Whole machines only: a tenth of one must not outweigh the energy the cell draws for it,
+		// which is stage 5's call.
 		rem = keepBest(rem, func(a, b cell) int {
 			return -cmpInt64(a.byproduct.FloorInt(), b.byproduct.FloorInt())
 		})
@@ -209,8 +200,8 @@ func keepBest(cells []cell, cmp func(a, b cell) int) []cell {
 	return out
 }
 
-// keepCheapestPerResource drops a cell when another with the same resource set
-// is nowhere dearer. rf, eu and coal have no exchange rate.
+// keepCheapestPerResource drops a cell when another with the same resource set is nowhere
+// dearer.
 func keepCheapestPerResource(cells []cell) []cell {
 	costs := make([]map[string]Rational, len(cells))
 	for i, c := range cells {
@@ -312,8 +303,7 @@ func cmpInt64(a, b int64) int {
 	return 0
 }
 
-// variantsFor returns the variants for one machine group. Without a configured
-// source the host default applies.
+// variantsFor returns the variants for one machine group.
 func (s *Solver) variantsFor(ctx context.Context, machine *MachineSpec, recipe *RecipeRow, req SolveRequest) ([]plugins.Variant, error) {
 	if machine.Ecosystem == VanillaEcosystem {
 		return []plugins.Variant{vanillaVariant(machine, recipe, req.ModConfigs)}, nil
@@ -331,8 +321,8 @@ func (s *Solver) variantsFor(ctx context.Context, machine *MachineSpec, recipe *
 	return vs, nil
 }
 
-// PluginMod names the mod whose plugin evaluates this machine: its ecosystem,
-// or the machine's own mod when no ecosystem is set.
+// PluginMod names the mod whose plugin evaluates this machine: its ecosystem, or the
+// machine's own mod when no ecosystem is set.
 func PluginMod(machine *MachineSpec) string {
 	if machine.Ecosystem != "" {
 		return machine.Ecosystem
@@ -340,9 +330,8 @@ func PluginMod(machine *MachineSpec) string {
 	return machine.ModID
 }
 
-// baseVariant returns the variant without installed items, falling back to the
-// first usable entry. Needed when no variant is runnable and the group still
-// has to be costed.
+// baseVariant returns the variant without installed items, falling back to the first usable
+// entry.
 func baseVariant(vs []plugins.Variant, recipe *RecipeRow) plugins.Variant {
 	for _, v := range vs {
 		if len(v.Items) == 0 && v.Rate.Num > 0 && v.Rate.Den > 0 {
@@ -355,8 +344,7 @@ func baseVariant(vs []plugins.Variant, recipe *RecipeRow) plugins.Variant {
 	return DefaultVariant(recipe)
 }
 
-// chooseCell runs the ladder over a node's matrix at recipeRate (recipes per
-// tick). A pin narrows the matrix first; !runnable costs the node's own machine.
+// chooseCell runs the ladder over a node's matrix at recipeRate (recipes per tick).
 func chooseCell(m nodeMatrix, recipeRate Rational, lc *ladderCtx, pinnedID string) (c cell, runnable bool, err error) {
 	defer guardRateArithmetic(&err)
 	cells := m.cells
@@ -398,9 +386,8 @@ func variantOptionsFor(cells []cell, machine *MachineSpec) []VariantOption {
 	return out
 }
 
-// EffectiveOutputs maps a variant's output overrides to the net amount per
-// craft (amount times probability), keyed by output ref. Nil when the variant
-// leaves the catalog amounts alone.
+// EffectiveOutputs maps a variant's output overrides to the net amount per craft (amount
+// times probability), keyed by output ref.
 func EffectiveOutputs(v plugins.Variant) map[string]plugins.Rational {
 	if len(v.Outputs) == 0 {
 		return nil
@@ -410,8 +397,8 @@ func EffectiveOutputs(v plugins.Variant) map[string]plugins.Rational {
 		if o.Amount.Den <= 0 {
 			continue
 		}
-		// A wholly missing probability field arrives as 0/0; treat it as 1/1,
-		// the same default plugins.Validate applies.
+		// A wholly missing probability field arrives as 0/0; treat it as 1/1, the same default
+		// plugins.Validate applies.
 		prob := Rational{Num: 1, Den: 1}
 		if o.Probability.Den > 0 {
 			prob = NewRational(o.Probability.Num, o.Probability.Den)
@@ -422,15 +409,15 @@ func EffectiveOutputs(v plugins.Variant) map[string]plugins.Rational {
 	return out
 }
 
-// outputBaseline holds one recipe node's catalog output amounts so a later round
-// can restore them once the winning variant stops overriding them.
+// outputBaseline holds one recipe node's catalog output amounts so a later round can
+// restore them once the winning variant stops overriding them.
 type outputBaseline struct {
 	primary Rational
 	edges   []Rational
 }
 
-// captureOutputBaseline snapshots the catalog output amounts of every recipe
-// node, keyed by item key.
+// captureOutputBaseline snapshots the catalog output amounts of every recipe node, keyed by
+// item key.
 func captureOutputBaseline(g *RecipeGraph) map[string]outputBaseline {
 	base := make(map[string]outputBaseline, len(g.Nodes))
 	for key, node := range g.Nodes {
@@ -446,10 +433,10 @@ func captureOutputBaseline(g *RecipeGraph) map[string]outputBaseline {
 	return base
 }
 
-// syncVariantOutputs reconciles the graph's output amounts with the variants
-// the groups chose and reports whether the two differed; with apply set, the
-// difference is written into the graph. Groups match nodes by their rate key -
-// the ladder may have put another machine or recipe in the group.
+// syncVariantOutputs reconciles the graph's output amounts with the variants the groups
+// chose and reports whether the two differed; with apply set, the difference is written
+// into the graph. Groups match nodes by their rate key - the ladder may have put another
+// machine or recipe in the group.
 func syncVariantOutputs(g *RecipeGraph, base map[string]outputBaseline, groups []MachineGroupDraft, apply bool) bool {
 	chosen := make(map[string]plugins.Variant, len(groups))
 	for _, gr := range groups {
@@ -478,9 +465,6 @@ func syncVariantOutputs(g *RecipeGraph, base map[string]outputBaseline, groups [
 			if o, ok := overrides[node.Outputs[i].Item.Key()]; ok {
 				edgeWant = Rational{Num: o.Num, Den: o.Den}
 			}
-			// Edge.Probability keeps its catalog value on purpose: EffectiveOutputs
-			// folds probability into the amount exactly as graph.go stores it, and
-			// no consumer reads an output edge's Probability separately.
 			if !edgeWant.Eq(node.Outputs[i].Amount) {
 				changed = true
 				if apply {
@@ -492,9 +476,8 @@ func syncVariantOutputs(g *RecipeGraph, base map[string]outputBaseline, groups [
 	return changed
 }
 
-// repickVariants runs the ladder again at the scaled rate; the first pick saw
-// fractions of a machine. Cells overriding outputs are left out - the rates
-// were solved on catalog amounts.
+// repickVariants runs the ladder again at the scaled rate; the first pick saw fractions of
+// a machine.
 func repickVariants(groups []MachineGroupDraft, req SolveRequest, lc *ladderCtx) []MachineGroupDraft {
 	for i := range groups {
 		g := &groups[i]

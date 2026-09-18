@@ -10,9 +10,9 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
-// A too-large factory surfaces as ErrRateOverflow/ErrRateDomain from the rate
-// arithmetic; the client needs a structured code (not a raw Go error string)
-// so it can show translated text instead of an opaque 500.
+// A too-large factory surfaces as ErrRateOverflow/ErrRateDomain from the rate arithmetic;
+// the client needs a structured code (not a raw Go error string) so it can show translated
+// text instead of an opaque 500.
 func TestWriteSolveErrorRateOverflow(t *testing.T) {
 	for _, err := range []error{solver.ErrRateOverflow, solver.ErrRateDomain} {
 		w := httptest.NewRecorder()
@@ -32,9 +32,9 @@ func TestWriteSolveErrorRateOverflow(t *testing.T) {
 	}
 }
 
-// A chain that only balances by running a recipe backwards is a catalog
-// condition, not a server fault: 422 with a structured code, never a 500 whose
-// raw Go text would reach the unauthenticated demo endpoint.
+// A chain that only balances by running a recipe backwards is a catalog condition, not a
+// server fault: 422 with a structured code, never a 500 whose raw Go text would reach the
+// unauthenticated demo endpoint.
 func TestWriteSolveErrorNegativeRate(t *testing.T) {
 	inner := &solver.ErrNegativeRate{RecipeID: "mi:cutting_machine/steel"}
 	for name, err := range map[string]error{

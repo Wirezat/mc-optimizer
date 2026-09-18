@@ -26,14 +26,11 @@ type ProductionLine struct {
 	ModMissing     bool            `json:"mod_missing"`
 	SolveRequest   json.RawMessage `json:"-"`
 	CurrentRate    float64         `json:"current_rate"`
-	// Costs is the line's total operating cost per tick, summed across its
-	// machine groups' chosen variants. Computed on demand from the variant
-	// cache, never stored. ListProductionLinesHandler always sets it to a
-	// list (possibly empty); handlers that don't populate it leave it null.
+	// Costs is the line's total operating cost per tick, summed across its machine groups'
+	// chosen variants.
 	Costs []plugins.Cost `json:"costs"`
-	// Machines is what the line runs on, one entry per machine kind with the
-	// counts of every group using it added up. Derived from the machine
-	// groups on read, never stored; null from handlers that don't populate it.
+	// Machines is what the line runs on, one entry per machine kind with the counts of every
+	// group using it added up.
 	Machines []MachineUse `json:"machines"`
 }
 
@@ -58,29 +55,27 @@ type MachineGroup struct {
 	RecipeID     uuid.UUID `json:"recipe_id"`
 	Count        int       `json:"count"`
 	Status       string    `json:"status"`
-	// ModConfig overrides the save-wide plugin config for this group; an empty
-	// object means the save-wide config applies. Opaque to the host.
+	// ModConfig overrides the save-wide plugin config for this group; an empty object means
+	// the save-wide config applies.
 	ModConfig json.RawMessage `json:"mod_config,omitempty"`
-	// VariantID is the operating variant this group targets, CurrentVariantID
-	// the one actually built in-game.
+	// VariantID is the operating variant this group targets, CurrentVariantID the one actually
+	// built in-game.
 	VariantID        string `json:"variant_id"`
 	CurrentVariantID string `json:"current_variant_id"`
 	ExactCountNum    int64  `json:"exact_count_num"`
 	ExactCountDen    int64  `json:"exact_count_den"`
 	BuiltCount       int    `json:"built_count"`
-	// Costs is the chosen variant's operating cost per tick. Computed on
-	// demand from the plugin, never stored.
+	// Costs is the chosen variant's operating cost per tick.
 	Costs []plugins.Cost `json:"costs,omitempty"`
-	// Variant and CurrentVariant describe the target and the built operating
-	// variant; VariantOptions lists every runnable one. All three are resolved
-	// from the plugin on read, never stored.
+	// Variant and CurrentVariant describe the target and the built operating variant;
+	// VariantOptions lists every runnable one.
 	Variant        *VariantView  `json:"variant,omitempty"`
 	CurrentVariant *VariantView  `json:"current_variant,omitempty"`
 	VariantOptions []VariantView `json:"variant_options,omitempty"`
 }
 
-// VariantView is an operating variant as a client renders it: the plugin's
-// label and the items one machine needs installed.
+// VariantView is an operating variant as a client renders it: the plugin's label and the
+// items one machine needs installed.
 type VariantView struct {
 	ID    string        `json:"id"`
 	Label string        `json:"label"`

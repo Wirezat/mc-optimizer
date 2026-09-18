@@ -6,8 +6,7 @@ import (
 	"testing"
 )
 
-// A model's parent and texture names are content from an imported ZIP. They
-// must not be able to walk out of the asset tree.
+// A model's parent and texture names are content from an imported ZIP.
 func TestLoadSceneRejectsEscapingRefs(t *testing.T) {
 	root := t.TempDir()
 	assetsDir := filepath.Join(root, "assets")
@@ -30,9 +29,8 @@ func TestLoadSceneRejectsEscapingRefs(t *testing.T) {
 	}
 }
 
-// ResolveModel is the seam a future client-side renderer would call instead
-// of LoadScene: same parent-merge, no texture decode. It must see exactly
-// what LoadScene sees, since LoadScene is defined in terms of it.
+// ResolveModel is the seam a future client-side renderer would call instead of LoadScene:
+// same parent-merge, no texture decode.
 func TestResolveModel_MergesParentChain(t *testing.T) {
 	dir := t.TempDir()
 	writeFixtureFile(t, dir, "mod/models/block/parent.json",

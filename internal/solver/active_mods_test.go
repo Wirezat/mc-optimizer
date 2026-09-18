@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// ── filterByActiveMods (pure) ───────────────────────────────────────────────
+// filterByActiveMods (pure)
 
 func TestFilterByActiveMods_nilMeansUnrestricted(t *testing.T) {
 	recipes := []*RecipeRow{{ID: "r1", MachineMod: "modern_industrialization"}}
@@ -32,7 +32,7 @@ func TestFilterByActiveMods_keepsOnlyActiveMachineMod(t *testing.T) {
 	}
 }
 
-// ── Discover: ModRestricted vs. IsRawMaterial ───────────────────────────────
+// Discover: ModRestricted vs. IsRawMaterial
 
 func modRestrictedStub() *stubStore {
 	r := &RecipeRow{
@@ -129,7 +129,7 @@ func TestDiscover_rawMaterial_unaffectedByModFilter(t *testing.T) {
 	}
 }
 
-// ── BuildRecipeGraph: filtered recipes fall back to IsRawMaterial ──────────
+// BuildRecipeGraph: filtered recipes fall back to IsRawMaterial
 
 func TestBuildRecipeGraph_modRestricted_fallsBackToRawMaterial(t *testing.T) {
 	s := NewSolver(modRestrictedStub(), 0)
@@ -167,9 +167,9 @@ func TestBuildRecipeGraph_activeMod_selectsRecipe(t *testing.T) {
 	}
 }
 
-// A stale recipe override (pointing at a recipe whose mod has since been
-// deactivated) must not silently fall through to some other active recipe
-// the user never chose — it must be a dead end, same as the fluid branch.
+// A stale recipe override (pointing at a recipe whose mod has since been deactivated) must
+// not silently fall through to some other active recipe the user never chose — it must be a
+// dead end, same as the fluid branch.
 func TestBuildRecipeGraph_staleOverride_fallsBackToRawMaterial(t *testing.T) {
 	active := &RecipeRow{ID: "recipe:active", MachineMod: "minecraft", MachineID: "furnace"}
 	overridden := &RecipeRow{ID: "recipe:overridden", MachineMod: "powah", MachineID: "press"}

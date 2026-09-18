@@ -14,7 +14,6 @@
     })();
   </script>
   <style>
-    /* ── Action row (bottom of container) ─────────────────────────────────── */
     .import-actions {
       display: flex;
       align-items: center;
@@ -23,10 +22,8 @@
       border-top: 1px solid var(--border);
     }
 
-    /* ── Drop zone (page-specific: wui has no disabled modifier) ───────────── */
     #drop-zone.disabled { opacity: 0.4; pointer-events: none; }
 
-    /* ── One imported ZIP's result block ──────────────────────────────────── */
     .import-result-block + .import-result-block {
       margin-top: var(--gap-section);
       padding-top: var(--gap-section);
@@ -38,7 +35,6 @@
       margin-bottom: var(--gap-inline);
     }
 
-    /* ── Warnings ──────────────────────────────────────────────────────────── */
     .import-warn-list { margin-top: var(--gap-control); max-height: 160px; overflow-y: auto; }
     .import-warn-line {
       font-family: var(--font-mono);
@@ -51,7 +47,6 @@
 </head>
 <body class="app-shell">
 
-  <!-- ── Header ── -->
   <header class="header">
     <a class="header-brand" href="/saves">
       <div class="header-logo">⚙️</div>

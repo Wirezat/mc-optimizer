@@ -14,9 +14,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// ListAllMachinesHandler returns all machine types across all mods, grouped
-// by tier-variant relationships (see ListAllMachinesGrouped), each with its
-// icon texture resolved.
+// ListAllMachinesHandler returns all machine types across all mods, grouped by tier-variant
+// relationships (see ListAllMachinesGrouped), each with its icon texture resolved.
 func ListAllMachinesHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		machines, err := database.ListAllMachinesGrouped(r.Context())
@@ -36,9 +35,9 @@ func ListAllMachinesHandler(database *db.DB, assetsDir string) http.HandlerFunc 
 	}
 }
 
-// attachMachineCosts populates each machine's base operating cost from the
-// variant cache, leaving it nil when no variant has been computed for it —
-// the catalog never presents a missing measurement as a zero cost.
+// attachMachineCosts populates each machine's base operating cost from the variant cache,
+// leaving it nil when no variant has been computed for it — the catalog never presents a
+// missing measurement as a zero cost.
 func attachMachineCosts(ctx context.Context, database *db.DB, machines []*model.MachineType) error {
 	for _, m := range machines {
 		costs, err := database.GetAnyBaseVariantCosts(ctx, m.ModID, m.MachineID)
@@ -53,8 +52,8 @@ func attachMachineCosts(ctx context.Context, database *db.DB, machines []*model.
 	return nil
 }
 
-// attachMachineTextures populates TextureURL on each machine and each of its
-// Variants by resolving the icon file on disk, leaving it nil when none exists.
+// attachMachineTextures populates TextureURL on each machine and each of its Variants by
+// resolving the icon file on disk, leaving it nil when none exists.
 func attachMachineTextures(machines []*model.MachineType, assetsDir string) {
 	for _, m := range machines {
 		if url, ok := assets.ResolveMachineTexture(assetsDir, m.ModID, m.MachineID); ok {
@@ -69,8 +68,8 @@ func attachMachineTextures(machines []*model.MachineType, assetsDir string) {
 	}
 }
 
-// ListModsHandler returns all mods, each with its installed plugin's
-// display name and wizard flag.
+// ListModsHandler returns all mods, each with its installed plugin's display name and
+// wizard flag.
 func ListModsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		mods, err := database.ListMods(r.Context())
@@ -89,8 +88,8 @@ func ListModsHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// attachModPlugins fills Mod.Plugin from the installed plugins, leaving it nil
-// for every mod that ships none.
+// attachModPlugins fills Mod.Plugin from the installed plugins, leaving it nil for every
+// mod that ships none.
 func attachModPlugins(r *http.Request, database *db.DB, mods []*model.Mod) error {
 	installed, err := database.ListModPlugins(r.Context())
 	if err != nil {
@@ -110,7 +109,7 @@ func attachModPlugins(r *http.Request, database *db.DB, mods []*model.Mod) error
 	return nil
 }
 
-// UpdateModHandler updates all editable fields of a mod. Admin only (enforced at route level).
+// UpdateModHandler updates all editable fields of a mod.
 func UpdateModHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := strings.TrimSpace(r.PathValue("mod_id"))
@@ -158,9 +157,8 @@ func UpdateModHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// ModrinthPreviewHandler fetches Modrinth metadata for a mod without saving it.
-// Accepts optional ?slug= query param to override the lookup slug.
-// Admin only (enforced at route level).
+// ModrinthPreviewHandler fetches Modrinth metadata for a mod without saving it. Accepts
+// optional ?slug= query param to override the lookup slug.
 func ModrinthPreviewHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := strings.TrimSpace(r.PathValue("mod_id"))
@@ -197,7 +195,7 @@ func ModrinthPreviewHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// DeleteModHandler deletes a mod. Admin only (enforced at route level).
+// DeleteModHandler deletes a mod.
 func DeleteModHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := strings.TrimSpace(r.PathValue("mod_id"))
@@ -287,8 +285,8 @@ func ListModFluidsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	}
 }
 
-// attachItemTextures populates TextureURL on each item by resolving its
-// texture file on disk, leaving it nil when no file exists.
+// attachItemTextures populates TextureURL on each item by resolving its texture file on
+// disk, leaving it nil when no file exists.
 func attachItemTextures(items []*model.Item, assetsDir string) {
 	for _, it := range items {
 		if url, ok := assets.ResolveItemTexture(assetsDir, it.ModID, it.ItemID); ok {
@@ -298,8 +296,8 @@ func attachItemTextures(items []*model.Item, assetsDir string) {
 	}
 }
 
-// attachFluidTextures populates TextureURL on each fluid by resolving its
-// texture file on disk, leaving it nil when no file exists.
+// attachFluidTextures populates TextureURL on each fluid by resolving its texture file on
+// disk, leaving it nil when no file exists.
 func attachFluidTextures(fluids []*model.Fluid, assetsDir string) {
 	for _, fl := range fluids {
 		if url, ok := assets.ResolveFluidTexture(assetsDir, fl.ModID, fl.FluidID); ok {
@@ -309,8 +307,8 @@ func attachFluidTextures(fluids []*model.Fluid, assetsDir string) {
 	}
 }
 
-// resolveAnimation describes how to play a texture that turns out to be a sprite
-// sheet, and returns nil for an ordinary one so the field stays out of the JSON.
+// resolveAnimation describes how to play a texture that turns out to be a sprite sheet, and
+// returns nil for an ordinary one so the field stays out of the JSON.
 func resolveAnimation(assetsDir, url string) *model.TextureAnimation {
 	sheet, ok := assets.ResolveAnimation(assetsDir, url)
 	if !ok {
@@ -324,8 +322,8 @@ func resolveAnimation(assetsDir, url string) *model.TextureAnimation {
 	}
 }
 
-// splitCatalogRef splits a "mod_id:id" query param into its parts. Returns ("", "")
-// if ref is empty or malformed (no colon), which callers treat as "no filter".
+// splitCatalogRef splits a "mod_id:id" query param into its parts. Returns ("", "") if ref
+// is empty or malformed (no colon), which callers treat as "no filter".
 func splitCatalogRef(ref string) (modID, id string) {
 	modID, id, ok := strings.Cut(strings.TrimSpace(ref), ":")
 	if !ok {
@@ -359,9 +357,7 @@ func ListModRecipesHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// optionalSaveID parses an optional ?save_id= query param. Returns nil (no
-// filter) if absent or malformed — this endpoint is also used by /demo/solve,
-// which has no save, so a missing/bad save_id must never be a hard error.
+// optionalSaveID parses an optional ?save_id= query param.
 func optionalSaveID(r *http.Request) *uuid.UUID {
 	raw := r.URL.Query().Get("save_id")
 	if raw == "" {
@@ -375,9 +371,6 @@ func optionalSaveID(r *http.Request) *uuid.UUID {
 }
 
 // SearchItemsHandler returns items matching an optional query string across all mods.
-// ?all=true  → returns all items (catalog use, no limit)
-// ?all=true&save_id=<id> → same, restricted to mods active for that save (Solve target picker)
-// ?q=&offset → paginated search (autocomplete use, LIMIT 50)
 func SearchItemsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if producedByMod := r.URL.Query().Get("producedByMod"); producedByMod != "" {
@@ -443,7 +436,6 @@ func SearchItemsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 }
 
 // SearchFluidsHandler returns fluids matching an optional query string across all mods.
-// Optional query params: ?q=<search term>&offset=<int>&all=true&save_id=<id>
 func SearchFluidsHandler(database *db.DB, assetsDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if producedByMod := r.URL.Query().Get("producedByMod"); producedByMod != "" {

@@ -11,10 +11,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
-// A confirmed line must keep the plugin config it was solved under. Without it
-// the row falls back to the save-wide config, so unlocking a higher upgrade
-// tier later re-evaluates an existing line against variants its stored
-// variant_id is not part of.
+// A confirmed line must keep the plugin config it was solved under.
 func TestSolveResultToContentsFreezesTheConfigPerGroup(t *testing.T) {
 	miConfig := json.RawMessage(`{"max_upgrade":"modern_industrialization:advanced_upgrade"}`)
 	result := solver.SolveResult{
@@ -52,15 +49,13 @@ func TestSolveResultToContentsFreezesTheConfigPerGroup(t *testing.T) {
 	if got := byMachine["macerator"]; got != string(miConfig) {
 		t.Errorf("macerator mod_config = %q, want the config it was solved under %q", got, miConfig)
 	}
-	// A mod without a plugin contributes no config; the row stays empty and the
-	// save-wide fallback applies, which is also empty.
 	if got := byMachine["furnace"]; got != "" {
 		t.Errorf("furnace mod_config = %q, want empty for a mod with no plugin", got)
 	}
 }
 
-// Scaling a saved line keeps every row's identity — the groups are updated in
-// place, so build state survives.
+// Scaling a saved line keeps every row's identity — the groups are updated in place, so
+// build state survives.
 func TestScalePLRows(t *testing.T) {
 	groups := []*model.MachineGroup{
 		{ID: uuid.New(), Count: 2, ExactCountNum: 3, ExactCountDen: 2, BuiltCount: 2},
@@ -82,8 +77,8 @@ func TestScalePLRows(t *testing.T) {
 	}
 }
 
-// Shrinking a line below what is already standing in the world is refused:
-// the build state is the one thing the app cannot recompute.
+// Shrinking a line below what is already standing in the world is refused: the build state
+// is the one thing the app cannot recompute.
 func TestScalePLRows_RefusesToShrinkBelowBuilt(t *testing.T) {
 	groups := []*model.MachineGroup{
 		{ID: uuid.New(), MachineID: "macerator", Count: 4, ExactCountNum: 4, ExactCountDen: 1, BuiltCount: 3},

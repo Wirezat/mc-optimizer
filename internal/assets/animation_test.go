@@ -10,8 +10,8 @@ import (
 	"testing"
 )
 
-// writePNG lays down a real PNG, since these paths decode the image header to
-// work out how many frames a sheet holds.
+// writePNG lays down a real PNG, since these paths decode the image header to work out how
+// many frames a sheet holds.
 func writePNG(t *testing.T, root, rel string, w, h int) string {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
@@ -49,8 +49,6 @@ func TestInspectAnimation_SquareIsNotAnimated(t *testing.T) {
 	}
 }
 
-// Mods ship animation metadata inconsistently, so the frame count is inferred
-// from the proportions when no .mcmeta says otherwise.
 func TestInspectAnimation_InfersFramesFromProportions(t *testing.T) {
 	path := writePNG(t, t.TempDir(), "mod/textures/fluid/x_still.png", 16, 512)
 
@@ -70,8 +68,8 @@ func TestInspectAnimation_InfersFramesFromProportions(t *testing.T) {
 	}
 }
 
-// frametime is the field that actually matters: vanilla and MI both use 2, so
-// defaulting to 1 would play every fluid at twice its real speed.
+// frametime is the field that actually matters: vanilla and MI both use 2, so defaulting to
+// 1 would play every fluid at twice its real speed.
 func TestInspectAnimation_UsesFrametimeFromMeta(t *testing.T) {
 	path := writePNG(t, t.TempDir(), "mod/textures/fluid/x_still.png", 16, 512)
 	writeMeta(t, path, `{"animation":{"frametime":2}}`)
@@ -85,8 +83,8 @@ func TestInspectAnimation_UsesFrametimeFromMeta(t *testing.T) {
 	}
 }
 
-// An explicit height overrides the proportions, which is the only way to
-// describe non-square cells.
+// An explicit height overrides the proportions, which is the only way to describe
+// non-square cells.
 func TestInspectAnimation_MetaHeightOverridesProportions(t *testing.T) {
 	path := writePNG(t, t.TempDir(), "mod/textures/fluid/x_still.png", 16, 64)
 	writeMeta(t, path, `{"animation":{"height":32}}`)
@@ -101,8 +99,6 @@ func TestInspectAnimation_MetaHeightOverridesProportions(t *testing.T) {
 }
 
 // Vanilla lava and one MI fluid list their frames running up and back down.
-// That is a palindrome, so it plays by alternating direction over half the
-// list — getting this wrong would run the animation backwards through a jump.
 func TestInspectAnimation_DetectsPingPong(t *testing.T) {
 	path := writePNG(t, t.TempDir(), "minecraft/textures/block/lava_still.png", 16, 320)
 	writeMeta(t, path, `{"animation":{"frametime":2,"frames":[
@@ -127,8 +123,6 @@ func TestInspectAnimation_DetectsPingPong(t *testing.T) {
 	}
 }
 
-// A reordered or repeating list is not expressible as an alternating play, so
-// it must fall back to a plain loop rather than be mistaken for one.
 func TestInspectAnimation_NonPalindromeIsNotPingPong(t *testing.T) {
 	path := writePNG(t, t.TempDir(), "mod/textures/fluid/x_still.png", 16, 64)
 	writeMeta(t, path, `{"animation":{"frames":[0,2,1,3]}}`)
@@ -159,8 +153,7 @@ func TestInspectAnimation_BrokenMetaFallsBackToInference(t *testing.T) {
 	}
 }
 
-// ResolveAnimation takes a URL this package handed out. It must not be usable
-// to walk out of the asset tree.
+// ResolveAnimation takes a URL this package handed out.
 func TestResolveAnimation_RejectsPathsOutsideAssets(t *testing.T) {
 	dir := t.TempDir()
 	writePNG(t, dir, "mod/textures/fluid/x_still.png", 16, 512)
@@ -187,9 +180,7 @@ func TestResolveAnimation_ResolvesOwnURL(t *testing.T) {
 	}
 }
 
-// A frame list may cover fewer cells than the file holds. Cells and Play then
-// differ, and conflating them makes a renderer slice the file at the wrong
-// height — it would treat two stacked frames as one.
+// A frame list may cover fewer cells than the file holds.
 func TestInspectAnimation_PartialPingPongKeepsCellCount(t *testing.T) {
 	// 8 cells of 16px; the list plays only the first four, up and back down.
 	path := writePNG(t, t.TempDir(), "mod/textures/fluid/x_still.png", 16, 128)

@@ -29,7 +29,8 @@ func (d *DB) CreateToken(ctx context.Context, userID uuid.UUID, tokenHash, token
 	return t, nil
 }
 
-// GetTokenByHash looks up a non-expired token by hash; returns ErrNotFound if missing or expired.
+// GetTokenByHash looks up a non-expired token by hash; returns ErrNotFound if missing or
+// expired.
 func (d *DB) GetTokenByHash(ctx context.Context, tokenHash string) (*model.Token, error) {
 	t := &model.Token{}
 	err := d.Pool.QueryRow(ctx,

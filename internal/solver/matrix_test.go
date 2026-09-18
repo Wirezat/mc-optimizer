@@ -8,7 +8,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/plugins"
 )
 
-// byMachineSource answers per machine, so a matrix can hold different speeds.
+// byMachineSource answers per machine.
 type byMachineSource struct{ vs map[string][]plugins.Variant }
 
 func (s *byMachineSource) Variants(_ context.Context, m *MachineSpec, r *RecipeRow, _ json.RawMessage) ([]plugins.Variant, error) {
@@ -41,8 +41,7 @@ func matrixGroupFor(t *testing.T, st *stubStore, src VariantSource, recipeID str
 	s.VariantSource = src
 	ctx := context.Background()
 	nodeKey := RecipeOptionKey(recipeID, nodeMachine.ModID, nodeMachine.MachineID)
-	// Naming a machine is what pins it. A node on the recipe's own machine is
-	// the default the ladder may still improve on, so it overrides by recipe.
+	// Naming a machine is what pins it.
 	override := recipeID
 	if own := st.recipes[recipeID]; own == nil ||
 		own.MachineMod != nodeMachine.ModID || own.MachineID != nodeMachine.MachineID {
@@ -130,8 +129,8 @@ func TestMatrixSkipsInactiveMods(t *testing.T) {
 	}
 }
 
-// Nodes are visited through a map, which Go randomizes; with one pass instead
-// of two these runs would disagree.
+// Nodes are visited through a map, which Go randomizes; with one pass instead of two these
+// runs would disagree.
 func TestMatrixPickIsStableAcrossRuns(t *testing.T) {
 	src := &byMachineSource{vs: map[string][]plugins.Variant{
 		"minecraft:furnace":         {{ID: "plain", Rate: rate(1, 200), Valid: true}},
@@ -243,8 +242,8 @@ func TestIOSignatureIsStrict(t *testing.T) {
 	}
 }
 
-// pulverizerCells is Thermal's case: an output augment raises the nickel
-// byproduct from 1/10 to 19/100 for 3.8x the energy, at the same rate.
+// pulverizerCells is Thermal's case: an output augment raises the nickel byproduct from
+// 1/10 to 19/100 for 3.8x the energy, at the same rate.
 func pulverizerCells() []cell {
 	mc := "minecraft"
 	recipe := &RecipeRow{
@@ -322,9 +321,7 @@ func vanillaMachine(id string) *MachineSpec {
 	return &MachineSpec{ModID: "minecraft", MachineID: id, Ecosystem: VanillaEcosystem}
 }
 
-// Fuel burns by time, so the rate changes with the recipe and the coal per tick
-// does not: the blast furnace gets sixteen items out of the coal the furnace
-// turns into eight.
+// Fuel burns by time.
 func TestVanillaVariantChargesFuelPerTick(t *testing.T) {
 	for _, tc := range []struct {
 		machine string

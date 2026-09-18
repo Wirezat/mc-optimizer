@@ -8,22 +8,19 @@ import (
 	"sort"
 )
 
-// blockState is the subset of Minecraft's blockstate format this renderer
-// resolves, used as a fallback when a block-item ships no models/item/<id>.json.
-// Placement state (facing, powered, ...) is not evaluated: variants/multipart
-// entries are picked deterministically instead (see resolveBlockState).
+// blockState is the subset of Minecraft's blockstate format this renderer resolves, used as
+// a fallback when a block-item ships no models/item/<id>.json.
 type blockState struct {
 	Variants  map[string]variantEntry `json:"variants"`
 	Multipart []multipartEntry        `json:"multipart"`
 }
 
-// multipartEntry is one layer of a multipart blockstate. Only Apply.Model is read.
+// multipartEntry is one layer of a multipart blockstate.
 type multipartEntry struct {
 	Apply variantEntry `json:"apply"`
 }
 
-// variantEntry is a variant's model choice. A JSON list (vanilla's random
-// visual variety) collapses to its first element.
+// variantEntry is a variant's model choice.
 type variantEntry struct {
 	Model string
 }
@@ -46,9 +43,7 @@ func (v *variantEntry) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// itemDefinition is vanilla's per-item model file (assets/<ns>/items/<id>.json,
-// 1.21.2+). Only its "minecraft:model" entry type (a bare model reference) is
-// read; other entry types (composite, select, condition, ...) are left unresolved.
+// itemDefinition is vanilla's per-item model file (assets/<ns>/items/<id>.json, 1.21.2+).
 type itemDefinition struct {
 	Model itemModelEntry `json:"model"`
 }
@@ -58,9 +53,8 @@ type itemModelEntry struct {
 	Model string `json:"model"`
 }
 
-// resolveItemDefinition returns modID/itemID's model ref from its
-// items/<id>.json, or ok=false if the file is missing or not a bare
-// "minecraft:model" entry.
+// resolveItemDefinition returns modID/itemID's model ref from its items/<id>.json, or
+// ok=false if the file is missing or not a bare "minecraft:model" entry.
 func (l *Loader) resolveItemDefinition(modID, itemID string) (ref string, ok bool) {
 	path := filepath.Join(l.assetsDir, modID, "items", itemID+".json")
 	data, err := os.ReadFile(path)
@@ -77,10 +71,8 @@ func (l *Loader) resolveItemDefinition(modID, itemID string) (ref string, ok boo
 	return def.Model.Model, true
 }
 
-// resolveBlockState returns modID/blockID's model ref from its blockstate, or
-// ok=false if the file is missing, malformed, or has no usable variant/multipart
-// entry. The "" variant wins if present, else the alphabetically-first key,
-// else a multipart blockstate's first entry — a deterministic, real model.
+// resolveBlockState returns modID/blockID's model ref from its blockstate, or ok=false if
+// the file is missing, malformed, or has no usable variant/multipart entry.
 func (l *Loader) resolveBlockState(modID, blockID string) (ref string, ok bool) {
 	path := filepath.Join(l.assetsDir, modID, "blockstates", blockID+".json")
 	data, err := os.ReadFile(path)

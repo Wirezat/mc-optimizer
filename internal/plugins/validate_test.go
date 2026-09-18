@@ -18,8 +18,8 @@ func TestEvaluateRejectsChangedOutputSet(t *testing.T) {
 	}
 }
 
-// On a blasting recipe every cell carries the red augment, so there is none
-// without items; both baseVariant implementations fall back on their own.
+// On a blasting recipe every cell carries the red augment, so there is none without items;
+// both baseVariant implementations fall back on their own.
 func TestValidateAllowsZeroBaseVariants(t *testing.T) {
 	prog := loadFixture(t, "no_base.js")
 	got, err := prog.Evaluate(context.Background(), sampleContext())
@@ -54,14 +54,10 @@ func TestEvaluatePropagatesPluginException(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsZeroDenominator asserts that a present numerator paired
-// with a zero denominator (Rational{1, 0}) is rejected as a zero
-// denominator specifically, not conflated with a wholly missing field
-// (Rational{0, 0}, checked separately by TestValidateRejectsMissingField).
-// Evaluate's own pipeline never reaches this branch - extract.go's
-// readRational rejects a present Den == 0 first, with its own message - but
-// Validate is called directly here, so this exercises checkRational's own
-// fallback for that case.
+// TestValidateRejectsZeroDenominator asserts that a present numerator paired with a zero
+// denominator (Rational{1, 0}) is rejected as a zero denominator specifically, not
+// conflated with a wholly missing field (Rational{0, 0}, checked separately by
+// TestValidateRejectsMissingField).
 func TestValidateRejectsZeroDenominator(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{ID: "base", Rate: Rational{Num: 1, Den: 0}, Outputs: ec.Recipe.Outputs, Valid: true}}
@@ -74,10 +70,9 @@ func TestValidateRejectsZeroDenominator(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsMissingField asserts that a wholly missing field -
-// Rational{0, 0}, exactly what extract.go's readRational returns for a
-// field the plugin never wrote at all - is reported as missing, not as a
-// zero denominator.
+// TestValidateRejectsMissingField asserts that a wholly missing field - Rational{0, 0},
+// exactly what extract.go's readRational returns for a field the plugin never wrote at all
+// - is reported as missing, not as a zero denominator.
 func TestValidateRejectsMissingField(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{ID: "base", Rate: Rational{}, Outputs: ec.Recipe.Outputs, Valid: true}}
@@ -90,11 +85,8 @@ func TestValidateRejectsMissingField(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsEmptyResult pins down the len(vs) == 0 check
-// specifically, not just "some error". Without that check, Validate(ec, nil)
-// still returns an error - so a test that only asserts err != nil cannot tell
-// the two checks apart and would stay green even if the empty-result check
-// itself were deleted.
+// TestValidateRejectsEmptyResult pins down the len(vs) == 0 check specifically, not just
+// "some error".
 func TestValidateRejectsEmptyResult(t *testing.T) {
 	err := Validate(sampleContext(), nil)
 	if err == nil {
@@ -120,10 +112,6 @@ func TestValidateAcceptsChangedAmounts(t *testing.T) {
 	}
 }
 
-// TestValidateDefaultsMissingProbability asserts that a wholly missing
-// probability field - which extracts as Rational{0, 0} (extract.go's
-// readRational) - is defaulted to 1/1 rather than rejected, since a
-// deterministic output is the common case.
 func TestValidateDefaultsMissingProbability(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{
@@ -138,12 +126,8 @@ func TestValidateDefaultsMissingProbability(t *testing.T) {
 	}
 }
 
-// TestValidateDefaultsMissingProbabilityWithoutMutatingSharedSlice asserts
-// that defaulting a missing probability writes into a copy of Outputs, not
-// the slice the caller passed in. Go callers commonly build
-// Variant{Outputs: ec.Recipe.Outputs}, sharing the recipe's own backing
-// array; mutating it in place would leak the default into the recipe
-// itself, which every other variant and every future call sees.
+// TestValidateDefaultsMissingProbabilityWithoutMutatingSharedSlice asserts that defaulting
+// a missing probability writes into a copy of Outputs, not the slice the caller passed in.
 func TestValidateDefaultsMissingProbabilityWithoutMutatingSharedSlice(t *testing.T) {
 	ec := sampleContext()
 	ec.Recipe.Outputs = []Output{{Ref: "testmod:dust", Amount: Rational{1, 1}}} // no Probability -> zero value
@@ -160,10 +144,9 @@ func TestValidateDefaultsMissingProbabilityWithoutMutatingSharedSlice(t *testing
 	}
 }
 
-// TestValidateRejectsNegativeDenominator asserts that a negative
-// denominator such as -20 is rejected: rational.go's normPos and cmpCross
-// assume Den > 0 throughout, and the extraction layer only rejects
-// Den == 0, not a negative Den.
+// TestValidateRejectsNegativeDenominator asserts that a negative denominator such as -20 is
+// rejected: rational.go's normPos and cmpCross assume Den > 0 throughout, and the
+// extraction layer only rejects Den == 0, not a negative Den.
 func TestValidateRejectsNegativeDenominator(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{ID: "base", Rate: Rational{Num: 1, Den: -20}, Outputs: ec.Recipe.Outputs, Valid: true}}
@@ -173,9 +156,9 @@ func TestValidateRejectsNegativeDenominator(t *testing.T) {
 }
 
 // TestValidateRejectsOversizedMagnitude asserts that a numerator one past
-// maxPluginMagnitude is rejected: the extraction layer lets any exact int64
-// through, but rational.go's smul/sadd panic on overflow, so this bound
-// must be enforced here, before the value can reach the solver.
+// maxPluginMagnitude is rejected: the extraction layer lets any exact int64 through, but
+// rational.go's smul/sadd panic on overflow, so this bound must be enforced here, before
+// the value can reach the solver.
 func TestValidateRejectsOversizedMagnitude(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{ID: "base", Rate: Rational{Num: maxPluginMagnitude + 1, Den: 1}, Outputs: ec.Recipe.Outputs, Valid: true}}
@@ -185,9 +168,8 @@ func TestValidateRejectsOversizedMagnitude(t *testing.T) {
 }
 
 // TestValidateRejectsOversizedDenominator is the Den-side counterpart of
-// TestValidateRejectsOversizedMagnitude: checkRational bounds Num and Den
-// with two separate comparisons, and a numerator-only test does not exercise
-// the Den branch at all.
+// TestValidateRejectsOversizedMagnitude: checkRational bounds Num and Den with two separate
+// comparisons, and a numerator-only test does not exercise the Den branch at all.
 func TestValidateRejectsOversizedDenominator(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{ID: "base", Rate: Rational{Num: 1, Den: maxPluginMagnitude + 1}, Outputs: ec.Recipe.Outputs, Valid: true}}
@@ -196,9 +178,9 @@ func TestValidateRejectsOversizedDenominator(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsMinInt64 asserts that math.MinInt64 is rejected:
-// NewRational in rational.go explicitly panics on it, and the extraction
-// layer lets it through unmodified since it is an exact, in-range int64.
+// TestValidateRejectsMinInt64 asserts that math.MinInt64 is rejected: NewRational in
+// rational.go explicitly panics on it, and the extraction layer lets it through unmodified
+// since it is an exact, in-range int64.
 func TestValidateRejectsMinInt64(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{ID: "base", Rate: Rational{Num: math.MinInt64, Den: 1}, Outputs: ec.Recipe.Outputs, Valid: true}}
@@ -207,11 +189,9 @@ func TestValidateRejectsMinInt64(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsZeroRate asserts that rate == 0 is rejected: it is
-// meaningless as recipes per tick, and solver.Rational.Div panics on a
-// zero-numerator divisor the same way it does on Den == 0 - the same panic
-// class Den == 0 is rejected for. amount and probability are deliberately
-// not held to this rule; see TestValidateAcceptsZeroAmountAndProbability.
+// TestValidateRejectsZeroRate asserts that rate == 0 is rejected: it is meaningless as
+// recipes per tick, and solver.Rational.Div panics on a zero-numerator divisor the same way
+// it does on Den == 0 - the same panic class Den == 0 is rejected for.
 func TestValidateRejectsZeroRate(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{ID: "base", Rate: Rational{Num: 0, Den: 1}, Outputs: ec.Recipe.Outputs, Valid: true}}
@@ -220,10 +200,8 @@ func TestValidateRejectsZeroRate(t *testing.T) {
 	}
 }
 
-// TestValidateAcceptsZeroAmountAndProbability asserts the other side of I4:
-// checkRational's allowZero only applies to rate. A zero output amount or
-// probability is meaningful ("this output does not occur in this variant")
-// and the solver computes with it cleanly, so it must not be rejected.
+// TestValidateAcceptsZeroAmountAndProbability asserts the other side of I4: checkRational's
+// allowZero only applies to rate.
 func TestValidateAcceptsZeroAmountAndProbability(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{
@@ -235,9 +213,8 @@ func TestValidateAcceptsZeroAmountAndProbability(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsProbabilityAboveOne asserts that a probability above 1
-// is rejected: it is not a probability. A variant that produces more than
-// one unit on average belongs in amount instead, at probability 1/1.
+// TestValidateRejectsProbabilityAboveOne asserts that a probability above 1 is rejected: it
+// is not a probability.
 func TestValidateRejectsProbabilityAboveOne(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{
@@ -249,9 +226,9 @@ func TestValidateRejectsProbabilityAboveOne(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsEmptyID and TestValidateRejectsDuplicateID assert that
-// an empty variant id and a duplicate variant id are each rejected on their
-// own: neither check is exercised by any other test in this file.
+// TestValidateRejectsEmptyID and TestValidateRejectsDuplicateID assert that an empty
+// variant id and a duplicate variant id are each rejected on their own: neither check is
+// exercised by any other test in this file.
 func TestValidateRejectsEmptyID(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{ID: "", Rate: Rational{1, 20}, Outputs: ec.Recipe.Outputs, Valid: true}}
@@ -274,8 +251,8 @@ func TestValidateRejectsDuplicateID(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsEmptyCostResource asserts that a cost with an empty
-// resource name is rejected.
+// TestValidateRejectsEmptyCostResource asserts that a cost with an empty resource name is
+// rejected.
 func TestValidateRejectsEmptyCostResource(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{
@@ -288,14 +265,8 @@ func TestValidateRejectsEmptyCostResource(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsNonPositiveItemCount and
-// TestValidateRejectsOversizedItemCount assert that an installed item's
-// count must be positive and within the plugin magnitude bound. Both tests
-// include a separate, valid base variant so bases == 1 is already
-// satisfied: without one, removing the item-count check under test would
-// still leave the "no base variant" check to fail the test for an
-// unrelated reason - the same confound TestValidateRejectsEmptyResult
-// isolates against for the empty-result check.
+// TestValidateRejectsNonPositiveItemCount and TestValidateRejectsOversizedItemCount assert
+// that an installed item's count must be positive and within the plugin magnitude bound.
 func TestValidateRejectsNonPositiveItemCount(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{
@@ -335,10 +306,9 @@ func TestValidateRejectsOversizedItemCount(t *testing.T) {
 }
 
 // TestValidateRejectsBadCostAmount, TestValidateRejectsBadOutputAmount and
-// TestValidateRejectsBadOutputProbability assert each of checkRational's
-// three other call sites independently: cost amount, output amount and
-// output probability all reuse checkRational, and each needs its own bad
-// value to exercise that call site specifically.
+// TestValidateRejectsBadOutputProbability assert each of checkRational's three other call
+// sites independently: cost amount, output amount and output probability all reuse
+// checkRational, and each needs its own bad value to exercise that call site specifically.
 func TestValidateRejectsBadCostAmount(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{
@@ -373,11 +343,9 @@ func TestValidateRejectsBadOutputProbability(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsUnknownOutputRef isolates the per-output membership
-// check (want[o.Ref] == 0) from the multiset count comparison that follows
-// it: the recipe's one required ref is present at the right count, so the
-// count comparison alone would not catch an extra, unrelated ref appended
-// alongside it - only the membership check does.
+// TestValidateRejectsUnknownOutputRef isolates the per-output membership check (want[o.Ref]
+// == 0) from the multiset count comparison that follows it: the recipe's one required ref
+// is present at the right count.
 func TestValidateRejectsUnknownOutputRef(t *testing.T) {
 	ec := sampleContext()
 	vs := []Variant{{
@@ -396,10 +364,9 @@ func TestValidateRejectsUnknownOutputRef(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsOutputMultisetMismatch asserts that Validate rejects a
-// variant that drops one recipe output and duplicates another at the same
-// total count (dust, slag -> dust, dust): the output set is checked as a
-// multiset per ref, not merely by total length.
+// TestValidateRejectsOutputMultisetMismatch asserts that Validate rejects a variant that
+// drops one recipe output and duplicates another at the same total count (dust, slag ->
+// dust, dust): the output set is checked as a multiset per ref, not merely by total length.
 func TestValidateRejectsOutputMultisetMismatch(t *testing.T) {
 	ec := sampleContext()
 	ec.Recipe.Outputs = []Output{
@@ -418,11 +385,10 @@ func TestValidateRejectsOutputMultisetMismatch(t *testing.T) {
 	}
 }
 
-// TestValidateAcceptsDuplicateRecipeOutputsEchoedBack asserts the reverse
-// case: a recipe that itself repeats an output ref has want[ref] > 1, and a
-// variant echoing ctx.recipe.outputs back verbatim must still be accepted -
-// a plain set comparison with len(Recipe.Outputs) would undercount a
-// repeated ref and wrongly reject this.
+// TestValidateAcceptsDuplicateRecipeOutputsEchoedBack asserts the reverse case: a recipe
+// that itself repeats an output ref has want[ref] > 1, and a variant echoing
+// ctx.recipe.outputs back verbatim must still be accepted - a plain set comparison with
+// len(Recipe.Outputs) would undercount a repeated ref and wrongly reject this.
 func TestValidateAcceptsDuplicateRecipeOutputsEchoedBack(t *testing.T) {
 	ec := sampleContext()
 	ec.Recipe.Outputs = []Output{

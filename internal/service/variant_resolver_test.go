@@ -26,8 +26,8 @@ var plugin = {
 }
 `
 
-// doublingPlugin echoes every output ref back with twice the amount, which is
-// how a real mod expresses an output-boosting upgrade.
+// doublingPlugin echoes every output ref back with twice the amount, which is how a real
+// mod expresses an output-boosting upgrade.
 const doublingPlugin = `
 var plugin = {
   api_version: 1,
@@ -55,8 +55,6 @@ var plugin = {
 }
 `
 
-// configReadingPlugin reads ctx.config.tier, which throws in JS if
-// ctx.config is null or undefined rather than an object.
 const configReadingPlugin = `
 var plugin = {
   api_version: 1,
@@ -71,8 +69,7 @@ var plugin = {
 }
 `
 
-// stubStore is an in-memory variantStore. Each field controls one leg of the
-// resolver: the plugin lookup, the cache read, and the cache write.
+// stubStore is an in-memory variantStore.
 type stubStore struct {
 	plugin    *db.ModPlugin
 	pluginErr error
@@ -117,9 +114,7 @@ func testMachine() *solver.MachineSpec {
 	return &solver.MachineSpec{ModID: "testmod", MachineID: "boiler", Name: "Boiler"}
 }
 
-// steamRecipe burns one coal into 100 mB of steam in 20 ticks. The output is a
-// FLUID on purpose: its item key is "fluid:testmod:steam", the one ref shape a
-// naive mod+":"+id concatenation gets wrong.
+// steamRecipe burns one coal into 100 mB of steam in 20 ticks.
 func steamRecipe() *solver.RecipeRow {
 	coalMod, coalID := "testmod", "coal"
 	return &solver.RecipeRow{
@@ -157,9 +152,7 @@ func TestVariantsFallsBackToHostDefaultWithoutPlugin(t *testing.T) {
 	}
 }
 
-// A failing plugin lookup must not read as "this mod has no plugin". Were it
-// swallowed, a database outage would cost every machine at its nominal
-// duration and report nothing.
+// A failing plugin lookup must not read as "this mod has no plugin".
 func TestVariantsPropagatesPluginLookupFailure(t *testing.T) {
 	boom := errors.New("connection refused")
 	r := newVariantResolver(&stubStore{pluginErr: boom}, plugins.NewRegistry())
@@ -205,8 +198,8 @@ func TestVariantsServesCacheHitWithoutRunningThePlugin(t *testing.T) {
 	}
 }
 
-// A miss evaluates the plugin and writes the result under the key derived from
-// the plugin version and the config.
+// A miss evaluates the plugin and writes the result under the key derived from the plugin
+// version and the config.
 func TestVariantsEvaluatesAndCachesOnMiss(t *testing.T) {
 	store := &stubStore{plugin: modPlugin(echoPlugin), cacheErr: db.ErrNotFound}
 	r := newVariantResolver(store, plugins.NewRegistry())
@@ -231,9 +224,7 @@ func TestVariantsEvaluatesAndCachesOnMiss(t *testing.T) {
 	}
 }
 
-// A broken plugin surfaces as an error. The resolver must not substitute the
-// host default itself: the solver owns that degradation and counts one warning
-// per mod while doing it.
+// A broken plugin surfaces as an error.
 func TestVariantsReturnsPluginFailureRatherThanDegrading(t *testing.T) {
 	store := &stubStore{plugin: modPlugin(throwingPlugin), cacheErr: db.ErrNotFound}
 	r := newVariantResolver(store, plugins.NewRegistry())
@@ -250,9 +241,7 @@ func TestVariantsReturnsPluginFailureRatherThanDegrading(t *testing.T) {
 	}
 }
 
-// The refs handed to a plugin are ItemRef keys. A fluid's key carries the
-// "fluid:" prefix; getting this wrong raises no error anywhere, it just makes
-// every amount override miss its node.
+// The refs handed to a plugin are ItemRef keys.
 func TestRecipeOutputsUseItemRefKeys(t *testing.T) {
 	recipe := steamRecipe()
 	recipe.ItemOutputs = []solver.RecipeRowItemIO{
@@ -293,11 +282,7 @@ func TestRecipeInputsUseTagKeys(t *testing.T) {
 	}
 }
 
-// A caller with nothing configured passes nil, not "{}". db.VariantCacheHash
-// canonicalizes both to the same cache key, so without normalizing the value
-// handed to the plugin, whichever call happens to run first and fill the
-// cache decides whether every later reader (including one that explicitly
-// passed "{}") sees ctx.config as null or as an object.
+// A caller with nothing configured passes nil, not "{}".
 func TestVariantsNormalizesNilConfigLikeEmptyObject(t *testing.T) {
 	nilStore := &stubStore{plugin: modPlugin(configReadingPlugin), cacheErr: db.ErrNotFound}
 	nilResolver := newVariantResolver(nilStore, plugins.NewRegistry())
@@ -321,10 +306,10 @@ func TestVariantsNormalizesNilConfigLikeEmptyObject(t *testing.T) {
 	}
 }
 
-// ── the whole chain ───────────────────────────────────────────────────────
+// the whole chain
 
-// solveStore is the RecipeStore for the end-to-end test: one boiler recipe
-// producing a fluid, with coal as a raw leaf.
+// solveStore is the RecipeStore for the end-to-end test: one boiler recipe producing a
+// fluid, with coal as a raw leaf.
 type solveStore struct{ recipe *solver.RecipeRow }
 
 func (s *solveStore) GetRecipesForItem(_ context.Context, _, _ string) ([]*solver.RecipeRow, error) {
@@ -361,12 +346,6 @@ func (s *solveStore) GetTagMembers(_ context.Context, _ string) ([]solver.ItemRe
 }
 
 // A plugin that doubles a FLUID output must change the solved machine count.
-// This is the end of the chain the ref format runs through: recipeOutputs
-// builds ctx.recipe.outputs, the plugin echoes those refs back, and the solver
-// matches them against its graph nodes by exact string equality. Build the ref
-// as mod+":"+id instead of ItemRef.Key() and every step still succeeds — the
-// plugin validates, the variant is chosen, no warning is raised — while the
-// doubled amount silently never reaches the graph.
 func TestFluidOutputOverrideChangesTheSolvedMachineCount(t *testing.T) {
 	recipe := steamRecipe()
 	store := &solveStore{recipe: recipe}
@@ -400,8 +379,8 @@ func TestFluidOutputOverrideChangesTheSolvedMachineCount(t *testing.T) {
 	if g.VariantID != "boosted" {
 		t.Fatalf("variant = %q, want %q", g.VariantID, "boosted")
 	}
-	// 10 mB/t at 200 mB per craft is 1/20 crafts/t, which one boiler at
-	// 1/20 crafts/t covers exactly. At the catalog's 100 mB it would take two.
+	// 10 mB/t at 200 mB per craft is 1/20 crafts/t, which one boiler at 1/20 crafts/t covers
+	// exactly. At the catalog's 100 mB it would take two.
 	if g.Count != 1 {
 		t.Errorf("machine count = %d, want 1 (2 means the doubled fluid output never reached the graph)", g.Count)
 	}
@@ -431,9 +410,8 @@ func TestFluidOutputOverrideChangesTheSolvedMachineCount(t *testing.T) {
 
 func ptr(s string) *string { return &s }
 
-// The cache is an optimization: the variants are already computed and correct
-// when the write is attempted. Failing the call would reach the solver as a
-// plugin failure and degrade the whole mod to the host default.
+// The cache is an optimization: the variants are already computed and correct when the
+// write is attempted.
 func TestVariantsSurvivesACacheWriteFailure(t *testing.T) {
 	store := &stubStore{
 		plugin:   modPlugin(echoPlugin),

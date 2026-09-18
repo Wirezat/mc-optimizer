@@ -55,7 +55,8 @@ func (m *mockPositionStore) SetPosition(_ context.Context, id uuid.UUID, positio
 	return nil
 }
 
-// withUserCtx injects a userID into the request context (same key as RequireAuth middleware).
+// withUserCtx injects a userID into the request context (same key as RequireAuth
+// middleware).
 func withUserCtx(r *http.Request, userID uuid.UUID) *http.Request {
 	ctx := context.WithValue(r.Context(), contextKeyUserID, userID)
 	return r.WithContext(ctx)

@@ -58,8 +58,8 @@ func resolveTagResolutions(trs map[string]solver.TagResolution, names map[string
 	return out
 }
 
-// discoverRequest is the shared wire format for both the real (factory-scoped)
-// and demo discover endpoints.
+// discoverRequest is the shared wire format for both the real (factory-scoped) and demo
+// discover endpoints.
 type discoverRequest struct {
 	TargetItem      solver.ItemRef    `json:"TargetItem"`
 	RecipeOverrides map[string]string `json:"RecipeOverrides"`
@@ -88,9 +88,7 @@ func decodeDiscoverRequest(w http.ResponseWriter, r *http.Request) (discoverRequ
 	return req, true
 }
 
-// respondDiscover resolves display names for a DiscoverResult and writes the
-// JSON response. Shared by the factory-scoped and demo discover handlers so
-// the wire format can't drift between them.
+// respondDiscover resolves display names for a DiscoverResult and writes the JSON response.
 func respondDiscover(w http.ResponseWriter, r *http.Request, database *db.DB, result solver.DiscoverResult) {
 	var allRefs []solver.ItemRef
 	for _, ci := range result.Items {
@@ -141,8 +139,8 @@ func respondDiscover(w http.ResponseWriter, r *http.Request, database *db.DB, re
 	})
 }
 
-// DiscoverHandler runs a BFS to enumerate all items in the production chain
-// with their recipe options, without computing rates.
+// DiscoverHandler runs a BFS to enumerate all items in the production chain with their
+// recipe options, without computing rates.
 func DiscoverHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())
@@ -190,14 +188,8 @@ func loadActiveModsForFactory(w http.ResponseWriter, r *http.Request, database *
 	return activeMods, true
 }
 
-// DemoDiscoverHandler is the factory-less counterpart to DiscoverHandler, used
-// by the /demo/solve page. No factory backs it, so FactoryState is always
-// empty here — deliberately, not just "not filled in yet": there is no
-// factory to draw state from, by construction, regardless of how much richer
-// FactoryState usage in the real (factory-scoped) path becomes over time.
-// Kept as its own handler (not a thin wrapper around DiscoverHandler) so
-// future changes to the real path's factory-state derivation don't leak into
-// demo behaviour by accident.
+// DemoDiscoverHandler is the factory-less counterpart to DiscoverHandler, used by the
+// /demo/solve page.
 func DemoDiscoverHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		req, ok := decodeDiscoverRequest(w, r)
@@ -217,8 +209,6 @@ func DemoDiscoverHandler(database *db.DB) http.HandlerFunc {
 }
 
 // SolveHandler runs the solver for a factory and stores a solver_draft.
-// decodeSolveRequest validates the common SolveRequest fields shared by the
-// factory-scoped and demo solve endpoints.
 func decodeSolveRequest(w http.ResponseWriter, r *http.Request) (solver.SolveRequest, bool) {
 	var req solver.SolveRequest
 	if !decodeJSON(w, r, &req) {
@@ -239,8 +229,8 @@ func decodeSolveRequest(w http.ResponseWriter, r *http.Request) (solver.SolveReq
 	return req, true
 }
 
-// writeSolveError maps solver errors to their HTTP responses. Returns true if
-// it wrote a response (caller should stop), false if err was nil.
+// writeSolveError maps solver errors to their HTTP responses. Returns true if it wrote a
+// response (caller should stop), false if err was nil.
 func writeSolveError(w http.ResponseWriter, err error) bool {
 	if err == nil {
 		return false
@@ -262,9 +252,9 @@ func writeSolveError(w http.ResponseWriter, err error) bool {
 	}
 	var negErr *solver.ErrNegativeRate
 	if errors.As(err, &negErr) {
-		// A chain that can only balance by running a recipe backwards is a
-		// property of the catalog, not a server fault. The recipe id goes to
-		// the log, not to the unauthenticated /api/demo/solve response.
+		// A chain that can only balance by running a recipe backwards is a property of the
+		// catalog, not a server fault. The recipe id goes to the log, not to the unauthenticated
+		// /api/demo/solve response.
 		GoLog.Warnf("solve: %v", err)
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
 			"error": "NEGATIVE_RATE",
@@ -272,8 +262,8 @@ func writeSolveError(w http.ResponseWriter, err error) bool {
 		return true
 	}
 	if errors.Is(err, solver.ErrRateOverflow) || errors.Is(err, solver.ErrRateDomain) {
-		// A structured code, not a message: the client picks its own
-		// translated text (solve.error.rate_overflow), same as CYCLE_BREAK_NEEDED.
+		// A structured code, not a message: the client picks its own translated text
+		// (solve.error.rate_overflow), same as CYCLE_BREAK_NEEDED.
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
 			"error": "RATE_OVERFLOW",
 		})
@@ -283,9 +273,7 @@ func writeSolveError(w http.ResponseWriter, err error) bool {
 	return true
 }
 
-// respondSolve resolves display names for a SolveResult and writes the JSON
-// response. draftID/expiresAt are omitted (nil) for the demo endpoint, which
-// persists nothing. Shared with SolveHandler so the wire format can't drift.
+// respondSolve resolves display names for a SolveResult and writes the JSON response.
 func respondSolve(w http.ResponseWriter, r *http.Request, database *db.DB, result solver.SolveResult, draftID *uuid.UUID, expiresAt *time.Time) {
 	var allRefs []solver.ItemRef
 	for _, mg := range result.MachineGroups {
@@ -386,12 +374,8 @@ func SolveHandler(database *db.DB, svc *service.PLService) http.HandlerFunc {
 	}
 }
 
-// DemoSolveHandler is the factory-less counterpart to SolveHandler, used by
-// the /demo/solve page. Calls the solver directly and persists nothing (no
-// solver_draft row — there is no production line to later confirm into, by
-// construction). Kept as its own handler, not a wrapper around SolveHandler/
-// PLService.Solve, for the same reason as DemoDiscoverHandler: real-path
-// factory-state usage may grow over time and must not leak into demo mode.
+// DemoSolveHandler is the factory-less counterpart to SolveHandler, used by the /demo/solve
+// page.
 func DemoSolveHandler(database *db.DB, autoScaleMax int64, variants solver.VariantSource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		req, ok := decodeSolveRequest(w, r)
@@ -399,8 +383,6 @@ func DemoSolveHandler(database *db.DB, autoScaleMax int64, variants solver.Varia
 			return
 		}
 		req.FactoryState = solver.FactoryState{}
-		// No save backs the demo page, so every mod is evaluated under its
-		// plugin's own defaults rather than a configured one.
 		req.ModConfigs = nil
 
 		sv := solver.NewSolver(database, autoScaleMax)
@@ -488,9 +470,9 @@ func ListProductionLinesHandler(database *db.DB, variants solver.VariantSource) 
 	}
 }
 
-// aggregateMachines folds a line's machine groups into one entry per machine
-// kind, busiest first — a line built from three bronze macerators in two
-// groups runs one kind of machine, six of them, and the list says so.
+// aggregateMachines folds a line's machine groups into one entry per machine kind, busiest
+// first — a line built from three bronze macerators in two groups runs one kind of machine,
+// six of them, and the list says so.
 func aggregateMachines(mgs []*model.MachineGroup) []model.MachineUse {
 	idx := make(map[string]int, len(mgs))
 	out := make([]model.MachineUse, 0, len(mgs))
@@ -507,7 +489,6 @@ func aggregateMachines(mgs []*model.MachineGroup) []model.MachineUse {
 			Count:        mg.Count,
 		})
 	}
-	// Ties break on the key so the column doesn't reshuffle between reloads.
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Count != out[j].Count {
 			return out[i].Count > out[j].Count
@@ -517,9 +498,8 @@ func aggregateMachines(mgs []*model.MachineGroup) []model.MachineUse {
 	return out
 }
 
-// groupOperatingCosts resolves each machine group's chosen operating variant
-// and scales its per-machine costs by the group's machine count. A group whose
-// variant no longer resolves contributes no costs.
+// groupOperatingCosts resolves each machine group's chosen operating variant and scales its
+// per-machine costs by the group's machine count.
 func groupOperatingCosts(r *http.Request, database *db.DB, variants solver.VariantSource, mgs []*model.MachineGroup) [][]plugins.Cost {
 	out := make([][]plugins.Cost, 0, len(mgs))
 	for _, mg := range mgs {
@@ -537,8 +517,8 @@ func groupOperatingCosts(r *http.Request, database *db.DB, variants solver.Varia
 	return out
 }
 
-// GetProductionLineHandler fetches a single production line with its IO and
-// machine groups, each group carrying its target and built variant.
+// GetProductionLineHandler fetches a single production line with its IO and machine groups,
+// each group carrying its target and built variant.
 func GetProductionLineHandler(database *db.DB, variants solver.VariantSource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())
@@ -680,9 +660,8 @@ func requirePLOwner(r *http.Request, w http.ResponseWriter, database *db.DB, plI
 	return nil
 }
 
-// ScaleProductionLineHandler handles POST /api/production-lines/{line_id}/scale:
-// the manual override that resizes a line to a multiple of what the solver
-// produced.
+// ScaleProductionLineHandler handles POST /api/production-lines/{line_id}/scale: the manual
+// override that resizes a line to a multiple of what the solver produced.
 func ScaleProductionLineHandler(database *db.DB, svc *service.PLService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())

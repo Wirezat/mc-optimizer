@@ -14,9 +14,8 @@
     })();
   </script>
   <style>
-    /* ── Progress bar — .wui-progress-track/.wui-progress-fill supply the
-       track/fill visuals (components/feedback.css); .progress-wrap/.progress-label
-       are page-local layout glue with no wui equivalent. ───────────────────── */
+    /* Progress bar layout glue; .wui-progress-track/.wui-progress-fill supply the visuals
+       (components/feedback.css). */
     .progress-wrap {
       display: flex;
       align-items: center;
@@ -31,10 +30,8 @@
       font-family: var(--font-mono);
     }
 
-    /* ── Machine group table — column widths/headers now come from the
-       shared .table component (tables.css); machine name+mod render via
-       .icontext. Build-state fields and the status toggle below have no wui
-       equivalent and stay as page-specific cell content. ────────────────── */
+    /* Machine group table: page-specific cell content; widths/headers come from .table
+       (tables.css), machine name+mod from .icontext. */
 
     /* Build-state fields: compact "n / N" number inputs, no spinner arrows. */
     .mg-build-field {
@@ -56,9 +53,8 @@
     .mg-build-field input.input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     .mg-build-field .mg-build-max { color: var(--text-faint); }
 
-    /* ── MG status toggle — planned (nothing built) / partial (some machines
-       missing) / built (complete). Derived from the numbers, click =
-       fill/reset shortcut. */
+    /* MG status toggle: planned (nothing built) / partial (some missing) / built (complete),
+       derived from the numbers; click is a fill/reset shortcut. */
     .mg-tog {
       display: inline-flex;
       align-items: center;
@@ -79,8 +75,7 @@
     .mg-tog.partial { --_icon-color: var(--warn); }
     .mg-tog.built   { --_icon-color: var(--success); }
 
-    /* ── IO section label — groups the Detail-Grid rows into Inputs/Outputs;
-       no wui equivalent (Detail-Grid itself has no sub-heading concept). ──── */
+    /* IO section label: groups the Detail-Grid rows into Inputs/Outputs. */
     .io-section-label {
       font-size: var(--text-xs); font-weight: var(--weight-semibold);
       text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
@@ -91,7 +86,6 @@
 </head>
 <body class="app-shell">
 
-  <!-- ── Header ── -->
   <header class="header">
     <a class="header-brand" href="/saves">
       <div class="header-logo">⚙️</div>
@@ -123,7 +117,6 @@
     <main class="main">
       <div class="page">
 
-        <!-- ── Page header ── -->
         <div class="page-header">
           <div>
             <div class="breadcrumb">
@@ -140,10 +133,8 @@
           <span class="badge" id="pl-status-pill"></span>
         </div>
 
-        <!-- ── Split layout ── -->
         <div class="split-layout fit">
 
-          <!-- ── main-panel: Meta + Machine Groups ── -->
           <div class="main-panel" style="display:flex;flex-direction:column;gap:var(--gap-container);">
 
             <!-- Meta + actions -->
@@ -183,7 +174,6 @@
 
           </div><!-- /.main-panel -->
 
-          <!-- ── side-panel: IO Profile ── -->
           <div class="side-panel">
             <div class="container">
               <div class="container-header">
@@ -454,8 +444,6 @@
   // installs something — the base variant has nothing to say.
   function mgVariantHTML(g) {
     if (!g.variant?.items?.length) return '';
-    // Its own line under the machine, now that the name and mod sit inside the
-    // icontext rather than sharing a stacked body with it.
     return `<div class="icontext-subtitle">${esc(g.variant.label)}</div>`;
   }
 
@@ -519,7 +507,6 @@
     </div>`;
   }
 
-  // ── Actions ───────────────────────────────────────────────────────────────
   async function markAllBuilt() {
     const res = await apiFetch('/api/production-lines/' + _plID + '/mark-built', { method: 'PATCH', body: '{}' });
     if (res?.ok || res?.status === 200) reload();
@@ -615,7 +602,6 @@
     render();
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   function fmtFrac(num, den) {
     if (!den || den === 1) return String(num);
     return fmtNum(num / den);

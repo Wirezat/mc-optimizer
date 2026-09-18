@@ -100,9 +100,6 @@ func TestListModPlugins(t *testing.T) {
 	seedMod(t, d, "testmod_b")
 	seedMod(t, d, "testmod_c")
 
-	// Insertion order is deliberately not sorted and not reverse-sorted
-	// relative to mod_id, so ordering by insertion time (ascending or
-	// descending) cannot coincidentally reproduce mod_id order.
 	for _, id := range []string{"testmod_b", "testmod_a", "testmod_c"} {
 		if err := d.UpsertModPlugin(ctx, ModPlugin{ModID: id, DisplayName: id, Version: "1", APIVersion: 1, Source: id}); err != nil {
 			t.Fatalf("upsert %s: %v", id, err)

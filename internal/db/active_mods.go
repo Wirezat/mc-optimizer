@@ -8,9 +8,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetActiveMods returns the set of mod IDs active for a save. An empty (but
-// non-nil) map means the save has no active mods configured — callers must
-// not treat that as "unrestricted"; that distinction belongs to the caller.
+// GetActiveMods returns the set of mod IDs active for a save. An empty (but non-nil) map
+// means the save has no active mods configured — callers must not treat that as
+// "unrestricted"; that distinction belongs to the caller.
 func (d *DB) GetActiveMods(ctx context.Context, saveID uuid.UUID) (map[string]bool, error) {
 	rows, err := d.Pool.Query(ctx,
 		`SELECT mod_id FROM save_active_mods WHERE save_id = $1`, saveID)
@@ -30,10 +30,8 @@ func (d *DB) GetActiveMods(ctx context.Context, saveID uuid.UUID) (map[string]bo
 	return out, rows.Err()
 }
 
-// GetDependentProductionLines returns every production line in the given save
-// (any status) that has at least one machine group belonging to one of modIDs
-// — i.e. lines that would be affected by deactivating those mods. Used to
-// warn the user before saving a narrower active-mod selection.
+// GetDependentProductionLines returns every production line in the given save (any status)
+// that has at least one machine group belonging to one of modIDs — i.e.
 func (d *DB) GetDependentProductionLines(ctx context.Context, saveID uuid.UUID, modIDs []string) ([]*model.DependentProductionLine, error) {
 	if len(modIDs) == 0 {
 		return nil, nil

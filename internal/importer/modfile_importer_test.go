@@ -12,9 +12,9 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/model"
 )
 
-// ModRecipeToNormalized must carry ModData through unchanged — it is the
-// only place a recipe's mod-specific fields cross from the parsed modfile
-// into what actually reaches the database and, from there, a plugin.
+// ModRecipeToNormalized must carry ModData through unchanged — it is the only place a
+// recipe's mod-specific fields cross from the parsed modfile into what actually reaches the
+// database and, from there, a plugin.
 func TestModRecipeToNormalized_CarriesModData(t *testing.T) {
 	r := model.ModRecipeDef{
 		MachineModID:  "testmod",
@@ -28,8 +28,8 @@ func TestModRecipeToNormalized_CarriesModData(t *testing.T) {
 	}
 }
 
-// fakeImporterDB is a no-op ImporterDB for exercising RunModFile's control
-// flow without a real database.
+// fakeImporterDB is a no-op ImporterDB for exercising RunModFile's control flow without a
+// real database.
 type fakeImporterDB struct{}
 
 func (fakeImporterDB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (bool, error) {
@@ -65,8 +65,7 @@ func (fakeImporterDB) UpsertDirectTagMembers(ctx context.Context, tagName string
 }
 func (fakeImporterDB) UpsertModPlugin(ctx context.Context, p db.ModPlugin) error { return nil }
 
-// recordingImporterDB wraps fakeImporterDB to count calls, so a test can
-// assert that a failed plugin validation left no DB write behind it.
+// recordingImporterDB wraps fakeImporterDB to count calls.
 type recordingImporterDB struct {
 	fakeImporterDB
 	upsertModCalls    int
@@ -83,8 +82,8 @@ func (r *recordingImporterDB) UpsertModPlugin(ctx context.Context, p db.ModPlugi
 	return nil
 }
 
-// buildFixtureZipWithPlugin writes a minimal mod ZIP with a plugin/ subtree
-// (plugin.yml + plugin.js) and returns its path.
+// buildFixtureZipWithPlugin writes a minimal mod ZIP with a plugin/ subtree (plugin.yml +
+// plugin.js) and returns its path.
 func buildFixtureZipWithPlugin(t *testing.T, pluginYML, pluginJS string) string {
 	t.Helper()
 	var buf bytes.Buffer
@@ -111,8 +110,8 @@ func buildFixtureZipWithPlugin(t *testing.T, pluginYML, pluginJS string) string 
 	return path
 }
 
-// A valid bundled plugin must be recorded with the fields from its
-// plugin.yml, its full plugin.js source, and the importer's UploadedBy.
+// A valid bundled plugin must be recorded with the fields from its plugin.yml, its full
+// plugin.js source, and the importer's UploadedBy.
 func TestRunModFile_InstallsBundledPlugin(t *testing.T) {
 	zipPath := buildFixtureZipWithPlugin(t,
 		"display_name: Test Plugin\nversion: 1.0.0\napi_version: 1\n",
@@ -141,9 +140,9 @@ func TestRunModFile_InstallsBundledPlugin(t *testing.T) {
 	}
 }
 
-// A broken bundled plugin.js must fail the whole import before any DB write
-// happens — a plugin that only fails at record time would already have left
-// a half-imported mod behind it.
+// A broken bundled plugin.js must fail the whole import before any DB write happens — a
+// plugin that only fails at record time would already have left a half-imported mod behind
+// it.
 func TestRunModFile_InvalidPluginJSFailsBeforeAnyDBWrite(t *testing.T) {
 	zipPath := buildFixtureZipWithPlugin(t,
 		"display_name: Test Plugin\nversion: 1.0.0\napi_version: 1\n",
@@ -163,8 +162,8 @@ func TestRunModFile_InvalidPluginJSFailsBeforeAnyDBWrite(t *testing.T) {
 	}
 }
 
-// buildFixtureZip writes a minimal mod ZIP (mod.yml + one assets/ texture
-// entry) to a temp file and returns its path.
+// buildFixtureZip writes a minimal mod ZIP (mod.yml + one assets/ texture entry) to a temp
+// file and returns its path.
 func buildFixtureZip(t *testing.T) string {
 	t.Helper()
 	var buf bytes.Buffer
@@ -217,8 +216,7 @@ func TestRunModFile_ExtractsTextureWithoutDoubledAssetsPrefix(t *testing.T) {
 	}
 }
 
-// A zip entry names its own destination path. One crafted to climb out of the
-// assets directory must be refused, not written wherever it points.
+// A zip entry names its own destination path.
 func TestUnderDir(t *testing.T) {
 	for _, tc := range []struct {
 		dir, path string

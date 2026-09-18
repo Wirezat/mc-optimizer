@@ -1,11 +1,7 @@
-/* mod-list.js
-   The installed-mod table, grouped by the ecosystem its machines declare.
-   Shared so the admin Mods page and the catalog show the same list; only the
-   delete column differs.
-
-   renderModList(container, mods, { deletable, onDelete })
-     mods: /api/mods rows. Call applyI18n() on the container afterwards.
-*/
+/**
+ * mod-list.js The installed-mod table, grouped by the ecosystem its machines declare.
+ * renderModList(container, mods, { deletable, onDelete }) mods: /api/mods rows.
+ */
 
 import { esc, t } from '/static/js/i18n.js';
 import { initCollapsibleGroups } from '/static/ui/js/table-features.js';
@@ -18,9 +14,9 @@ const LINKS = [
     { field: 'url_discord',  key: 'catalog.mods.detail.discord' },
 ];
 
-/** groupByEcosystem(mods) → [[ecosystem, mods], …], a mod repeated per ecosystem it serves.
-    Mods without machines are left out: they are in the catalog only because
-    something else references them. */
+/**
+ * groupByEcosystem(mods) → [[ecosystem, mods], …], a mod repeated per ecosystem it serves.
+ */
 function groupByEcosystem(mods) {
     const groups = new Map();
     for (const m of mods) {

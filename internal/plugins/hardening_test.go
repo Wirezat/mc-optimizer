@@ -7,16 +7,12 @@ import (
 	"time"
 )
 
-// The timeout/pool design must ensure plugins that panic, hang, or return
-// oversized results fail cleanly without crashing the host, hanging callers,
-// or exhausting memory.
+// The timeout/pool design must ensure plugins that panic, hang, or return oversized results
+// fail cleanly without crashing the host, hanging callers, or exhausting memory.
 
-// TestEvaluateSurvivesTimeoutThenSucceeds asserts a Program keeps working
-// correctly after one call on it times out, and - critically - that the call
-// following a timeout cannot observe state a timed-out call mutated.
-//
-// The counter distinguishes a fresh VM (reporting "call1") from a reused
-// one (which would report "call2" if timed-out state leaked into the next call).
+// TestEvaluateSurvivesTimeoutThenSucceeds asserts a Program keeps working correctly after
+// one call on it times out, and - critically - that the call following a timeout cannot
+// observe state a timed-out call mutated.
 func TestEvaluateSurvivesTimeoutThenSucceeds(t *testing.T) {
 	prog, err := Compile("testmod", `var counter = 0;
 	var plugin = {
@@ -55,9 +51,9 @@ func TestEvaluateSurvivesTimeoutThenSucceeds(t *testing.T) {
 	}
 }
 
-// TestEvaluateRecoversFromThrowingGetter asserts that when a property
-// getter throws while walking a result, Evaluate catches it as an error
-// instead of allowing a process-level panic.
+// TestEvaluateRecoversFromThrowingGetter asserts that when a property getter throws while
+// walking a result, Evaluate catches it as an error instead of allowing a process-level
+// panic.
 func TestEvaluateRecoversFromThrowingGetter(t *testing.T) {
 	prog, err := Compile("testmod", `var plugin = {
 		evaluate: function (ctx) {
@@ -73,8 +69,8 @@ func TestEvaluateRecoversFromThrowingGetter(t *testing.T) {
 	if _, err := prog.Evaluate(context.Background(), sampleContext()); err == nil {
 		t.Fatal("want error from a throwing getter, got nil")
 	}
-	// Reaching this line at all proves Evaluate did not panic; a discarded
-	// (poisoned) instance must not stop the Program from being usable again.
+	// Reaching this line at all proves Evaluate did not panic; a discarded (poisoned) instance
+	// must not stop the Program from being usable again.
 	prog2, err := Compile("testmod", `var plugin = { evaluate: function(ctx) {
 		return [{ id: "base", label: "", rate: { num: 1, den: 1 }, costs: [], outputs: [], items: [], valid: true }];
 	} }`)
@@ -86,9 +82,9 @@ func TestEvaluateRecoversFromThrowingGetter(t *testing.T) {
 	}
 }
 
-// TestCompileRejectsTopLevelInfiniteLoop asserts that top-level plugin code
-// (run once per VM, including lazily inside the pool) is bounded by the same
-// guard as evaluate() itself, instead of hanging Compile's caller forever.
+// TestCompileRejectsTopLevelInfiniteLoop asserts that top-level plugin code (run once per
+// VM, including lazily inside the pool) is bounded by the same guard as evaluate() itself,
+// instead of hanging Compile's caller forever.
 func TestCompileRejectsTopLevelInfiniteLoop(t *testing.T) {
 	start := time.Now()
 	_, err := Compile("testmod", "while (true) {}\nvar plugin = { evaluate: function(ctx) { return []; } }")
@@ -101,37 +97,9 @@ func TestCompileRejectsTopLevelInfiniteLoop(t *testing.T) {
 	}
 }
 
-// TestEvaluateRejectsOversizedResultWithoutExporting asserts that a result
-// over maxVariants is rejected by reading the JS array's length before
-// ExportTo would walk and allocate a Go struct per element. Checking the
-// length only after exporting would pay for the full walk first - over a
-// gigabyte of allocation and multiple seconds of CPU for a 100000-element
-// result - so a fixture of that size is what actually exercises the cost
-// the pre-export check exists to avoid.
-//
-// The fixture builds a *sparse* array (`o.length = 100000` on an otherwise
-// empty array) instead of a dense one built by pushing 100000 real elements.
-// A dense array of that size is itself real, unavoidable work inside the
-// same guard()-enforced evalTimeout as the rejection, and under -race that
-// construction alone approaches or exceeds evalTimeout, so a dense fixture
-// needs a much smaller element count (2000) to keep the test from racing
-// its own deadline. That smaller count does not actually separate the
-// two code paths: with the pre-export length check removed, a 2000-element
-// export costs only ~4.8 MiB on top of what building the JS array already
-// costs - small enough that any ceiling loose enough to tolerate normal
-// allocation variance at that size would pass the unguarded path too, so a
-// dense fixture small enough to respect evalTimeout cannot discriminate the
-// two code paths at all.
-//
-// The sparse form separates the two paths independent of element count: JS
-// `arr.length = n` on an array with no real elements is an O(1) metadata
-// write, so building it costs nothing proportional to n either with -race or
-// without. Go's export path is not sparse-aware, though: goja's own
-// arrayObject.exportToArrayOrSlice reads the array's length once and
-// immediately does reflect.MakeSlice(typ, l, l) to size the destination,
-// before iterating any actual elements - so an unguarded ExportTo still
-// allocates a slice of l Variant structs regardless of how many of them are
-// real, holes and all.
+// TestEvaluateRejectsOversizedResultWithoutExporting asserts that a result over maxVariants
+// is rejected by reading the JS array's length before ExportTo would walk and allocate a Go
+// struct per element.
 func TestEvaluateRejectsOversizedResultWithoutExporting(t *testing.T) {
 	prog, err := Compile("testmod", `var plugin = {
 		evaluate: function (ctx) {
@@ -163,10 +131,9 @@ func TestEvaluateRejectsOversizedResultWithoutExporting(t *testing.T) {
 	if elapsed >= evalTimeout {
 		t.Fatalf("rejecting a sparse length=100000 array took %s, want well under evalTimeout=%s (may indicate the interrupt fired instead of the length check)", elapsed, evalTimeout)
 	}
-	// A bound clearly below what reflect.MakeSlice(typ, 100000, 100000) for
-	// []Variant would allocate on its own (well over a megabyte, see the
-	// mutation probe recorded in the fix report), while generous enough for
-	// the O(1) length write and the length check itself.
+	// A bound clearly below what reflect.MakeSlice(typ, 100000, 100000) for []Variant would
+	// allocate on its own (well over a megabyte, see the mutation probe recorded in the fix
+	// report), while generous enough for the O(1) length write and the length check itself.
 	const ceiling = 256 << 10 // 256 KiB
 	delta := after.TotalAlloc - before.TotalAlloc
 	if delta > ceiling {
@@ -175,17 +142,9 @@ func TestEvaluateRejectsOversizedResultWithoutExporting(t *testing.T) {
 	t.Logf("oversized-result rejection: elapsed=%s allocated=%d bytes", elapsed, delta)
 }
 
-// TestEvaluateRejectsLyingLengthGetter verifies that a plain object whose
-// length getter lies between two reads is rejected; 648 MiB was measured
-// when the getter returned 1 then 5000000.
-//
-// The fix requires evaluate()'s return value to be a genuine Array
-// (ClassName() == "Array"): ECMAScript's ArraySetLength invariant makes a
-// real array's length property permanently a plain data property, never an
-// accessor, so it cannot be redefined to lie between two reads the way this
-// fixture's plain object can. A Proxy wrapping a real array does not bypass
-// this either - goja's proxyObject.ClassName() always reports "Object" or
-// "Function", never "Array", regardless of what it wraps.
+// TestEvaluateRejectsLyingLengthGetter verifies that a plain object whose length getter
+// lies between two reads is rejected; 648 MiB was measured when the getter returned 1 then
+// 5000000.
 func TestEvaluateRejectsLyingLengthGetter(t *testing.T) {
 	prog, err := Compile("testmod", `var plugin = {
 		evaluate: function (ctx) {
@@ -221,9 +180,9 @@ func TestEvaluateRejectsLyingLengthGetter(t *testing.T) {
 	t.Logf("lying-length-getter rejection: allocated=%d bytes", delta)
 }
 
-// TestHardenedGlobalsAreDeterministic asserts Date and Math.random are
-// unreachable from plugin code, since results are cached by config hash and
-// a non-deterministic plugin would freeze an arbitrary value forever.
+// TestHardenedGlobalsAreDeterministic asserts Date and Math.random are unreachable from
+// plugin code, since results are cached by config hash and a non-deterministic plugin would
+// freeze an arbitrary value forever.
 func TestHardenedGlobalsAreDeterministic(t *testing.T) {
 	prog, err := Compile("testmod", `var plugin = {
 		evaluate: function (ctx) {

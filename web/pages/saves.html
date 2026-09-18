@@ -16,7 +16,6 @@
 </head>
 <body class="app-shell">
 
-  <!-- ── Header ── -->
   <header class="header">
     <a class="header-brand" href="/saves">
       <div class="header-logo">⚙️</div>
@@ -44,10 +43,8 @@
 
   <div class="app-body">
 
-    <!-- ── Sidebar (populated by header.js) ── -->
     <nav class="sidebar"></nav>
 
-    <!-- ── Main ── -->
     <main class="main">
       <div class="page">
 
@@ -73,7 +70,6 @@
     </main>
   </div>
 
-  <!-- ── New Save Modal ── -->
   <div class="modal-backdrop" data-wui-modal>
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -155,7 +151,6 @@
   document.getElementById('modal-create-btn').addEventListener('click', doCreate);
   document.getElementById('save-name').addEventListener('keydown', e => { if (e.key === 'Enter') doCreate(); });
 
-  // ── Load saves ────────────────────────────────────────────────────────────
   async function loadSaves() {
     const res = await apiFetch('/api/saves');
     if (!res) return;
@@ -163,7 +158,6 @@
     listView.render(saves);
   }
 
-  // ── Create save ───────────────────────────────────────────────────────────
   function openModal() {
     document.getElementById('save-name').value = '';
     document.getElementById('status-create').className = 'status-msg';
@@ -201,7 +195,6 @@
     loadSaves();
   }
 
-  // ── Delete save ───────────────────────────────────────────────────────────
   async function deleteSave(id, btn = null) {
     if (!confirm(t('saves.confirm_delete'))) return;
     if (btn) btn.disabled = true;
@@ -210,7 +203,6 @@
     else if (btn) btn.disabled = false;
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   function fmtFactories(n) {
     if (!n) return esc(t('saves.factories_none'));
     if (n === 1) return esc(t('saves.factory_count_one'));
@@ -228,7 +220,6 @@
     el.className = 'status-msg ' + cls;
     el.textContent = text;
   }
-
 
   function fmtDate(iso) {
     if (!iso) return '';

@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// tagStub is a minimal RecipeStore for tag-resolution tests: one recipe whose
-// input is a tag with two members.
+// tagStub is a minimal RecipeStore for tag-resolution tests: one recipe whose input is a
+// tag with two members.
 type tagStub struct {
 	recipe  *RecipeRow
 	byItem  map[string][]*RecipeRow
@@ -38,8 +38,8 @@ func (s *tagStub) GetTagMembers(_ context.Context, tagName string) ([]ItemRef, e
 	return nil, nil
 }
 
-// newTagStub builds a store where a Macerator recipe turns
-// #c:raw_materials/copper into copper_dust, and the tag has two members.
+// newTagStub builds a store where a Macerator recipe turns #c:raw_materials/copper into
+// copper_dust, and the tag has two members.
 func newTagStub() *tagStub {
 	tagName := "c:raw_materials/copper"
 	mc, modb := "minecraft", "modb"
@@ -66,10 +66,9 @@ func newTagStub() *tagStub {
 	}
 }
 
-// A ChainItem produced by resolving a multi-member tag must carry the tag's
-// key so the frontend can render it as a cycling tag icon (JEI-style)
-// instead of a plain, static item icon — the underlying item is still just
-// one of several the recipe would accept.
+// A ChainItem produced by resolving a multi-member tag must carry the tag's key so the
+// frontend can render it as a cycling tag icon (JEI-style) instead of a plain, static item
+// icon — the underlying item is still just one of several the recipe would accept.
 func TestDiscover_TagResolvedItemCarriesOriginTag(t *testing.T) {
 	stub := newTagStub()
 	s := NewSolver(stub, 1000)

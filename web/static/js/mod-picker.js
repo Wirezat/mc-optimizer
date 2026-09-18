@@ -1,17 +1,13 @@
-/* Shared mod-selection checklist for the save-scoped "active mods" feature.
-   Renders into a container element and reports back which mods are checked;
-   the caller decides when/where to persist the selection (PUT .../active-mods).
-*/
+/**
+ * Shared mod-selection checklist for the save-scoped "active mods" feature. Renders into a
+ * container element and reports back which mods are checked; the caller decides when/where to
+ * persist the selection (PUT .../active-mods).
+ */
 import { apiFetch } from '/static/ui/js/auth.js';
 import { t, esc } from './i18n.js';
 
-// containerEl: element that receives the checklist markup.
-// selectedIds: mod_id[] that should start checked. Omitted (undefined) means
-// "no preference given" — everything starts checked, for the "new save"
-// flow where a fresh world should work immediately. Pass an explicit array
-// (possibly empty) to reflect a real stored selection, e.g. in the settings
-// modal, where an empty array genuinely means "nothing active yet".
-// Returns { getSelected(): string[] } reading the live DOM state.
+// containerEl: element that receives the checklist markup. selectedIds: mod_id[] that should
+// start checked.
 export async function renderModPicker(containerEl, selectedIds) {
   const res = await apiFetch('/api/mods');
   const mods = res && res.ok ? (await res.json()).filter(m => m.recipe_count > 0) : [];

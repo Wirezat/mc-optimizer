@@ -1,14 +1,14 @@
 package solver
 
-// Comprehensive solver tests covering all relevant recipe constellations.
-// Uses buildGraph + SolveDAG / SolveLinearSystem / ComputeIOProfile directly
-// (no DB required) via the test helpers in byproduct_test.go.
+// Comprehensive solver tests covering all relevant recipe constellations. Uses buildGraph +
+// SolveDAG / SolveLinearSystem / ComputeIOProfile directly (no DB required) via the test
+// helpers in byproduct_test.go.
 
 import (
 	"testing"
 )
 
-// ── helpers ───────────────────────────────────────────────────────────────
+// helpers
 
 func solveBoth(t *testing.T, g *RecipeGraph, target Rational) (dag RateVector, lin RateVector) {
 	t.Helper()
@@ -24,9 +24,9 @@ func solveBoth(t *testing.T, g *RecipeGraph, target Rational) (dag RateVector, l
 	return dag, lin
 }
 
-// rateFor looks up a rate by bare recipe ID, ignoring which machine it landed
-// on — RateVector is keyed by RecipeOptionKey(recipe, machine) now, but these
-// fixture tests only ever attach one machine per synthetic recipe id.
+// rateFor looks up a rate by bare recipe ID, ignoring which machine it landed on —
+// RateVector is keyed by RecipeOptionKey(recipe, machine) now, but these fixture tests only
+// ever attach one machine per synthetic recipe id.
 func rateFor(rv RateVector, recipeID string) Rational {
 	for k, v := range rv.RecipeRates {
 		if id, _, _, ok := ParseRecipeOptionKey(k); ok && id == recipeID {
@@ -71,15 +71,7 @@ func ioHasOutput(profile IOProfile, itemID string) *IOEntry {
 	return nil
 }
 
-// ── 1. Linear chain ───────────────────────────────────────────────────────
-//
-// steel → [assembler, 20t] → gear (1 per run)
-// iron  → [furnace,   20t] → steel (2 per run)
-// iron is raw material.
-//
-// Target: 4 gear/t (=4/1 per tick)
-//   gear rate: 4/1 per tick → assembler at 4/1 rate, needs 4 steel/t
-//   steel: 4/t; furnace outputs 2/run → runs at 2/t, needs 2 iron/t
+// 1.
 
 func TestChain_linear(t *testing.T) {
 	furnace := makeRecipe("r:furnace", "mc", "furnace", 20)
@@ -123,19 +115,7 @@ func TestChain_linear(t *testing.T) {
 	}
 }
 
-// ── 2. Shared intermediate ────────────────────────────────────────────────
-//
-// A and B both need C. C has its own recipe from D (raw).
-//   C ← [machine_c, 20t] ← D (1 per run → 3 C)
-//   A ← [machine_a, 20t] ← 1 C (1 per run → 1 A)
-//   B ← [machine_b, 20t] ← 2 C (1 per run → 1 B)
-//   root ← [machine_r, 20t] ← 1 A + 1 B (→ 1 root)
-//
-// Target: 1 root/tick
-//   root runs at 1/t → needs 1 A + 1 B per tick
-//   A machine at 1/t, needs 1 C/t
-//   B machine at 1/t, needs 2 C/t
-//   Total C demand: 3/t → C machine at 1/t (produces 3/run), needs 1 D/t
+// 2.
 
 func TestChain_sharedIntermediate(t *testing.T) {
 	machC := makeRecipe("r:c", "mi", "mc", 20)
@@ -194,11 +174,7 @@ func TestChain_sharedIntermediate(t *testing.T) {
 	}
 }
 
-// ── 3. Probability < 1 on output ─────────────────────────────────────────
-//
-// Centrifuge: 1 ore → 1 dust (prob 1) + 1 gem (prob 1/2)
-// Target: 1 gem/t. Centrifuge must run at 2/t (half the runs yield gem).
-// Dust appears as byproduct output at 2/t (produced every run).
+// 3.
 
 func TestChain_probabilisticOutput(t *testing.T) {
 	centrifuge := makeRecipe("r:centrifuge", "mi", "centrifuge", 20)
@@ -221,8 +197,7 @@ func TestChain_probabilisticOutput(t *testing.T) {
 	}
 	g := buildGraph(item("mi", "gem"), byItem, nil)
 
-	// OutputAmount for gem = 1 * 1/2 = 1/2
-	// To get 1 gem/t: centrifuge rate = 1 / (1/2) = 2/t
+	// OutputAmount for gem = 1 * 1/2 = 1/2 To get 1 gem/t: centrifuge rate = 1 / (1/2) = 2/t
 	// ore demand = 2/t; dust byproduct = 2/t
 
 	target := NewRational(1, 1)
@@ -243,12 +218,7 @@ func TestChain_probabilisticOutput(t *testing.T) {
 	}
 }
 
-// ── 4. Stop-point in the middle of the chain ─────────────────────────────
-//
-// Chain: root ← mid ← leaf
-// mid is declared a stop-point → treated as externally supplied.
-// Expected: only root recipe runs; mid and leaf don't appear as recipes.
-// mid appears as external INPUT in IO balance.
+// 4.
 
 func TestChain_stopPoint(t *testing.T) {
 	recipeLeaf := makeRecipe("r:leaf", "mi", "m", 20)
@@ -295,10 +265,7 @@ func TestChain_stopPoint(t *testing.T) {
 	}
 }
 
-// ── 5. Factory-provided item ─────────────────────────────────────────────
-//
-// Same as stop-point but uses IsFactoryProvided flag.
-// Expected: no recipe runs for the provided item; it appears as input in IO balance.
+// 5.
 
 func TestChain_factoryProvided(t *testing.T) {
 	recipeRoot := makeRecipe("r:root", "mi", "m", 20)
@@ -347,18 +314,12 @@ func TestChain_factoryProvided(t *testing.T) {
 	}
 }
 
-// ── 6. Multiple byproducts, both consumed downstream ─────────────────────
-//
-// smelter: 2 ore → 1 iron + 1 slag (byproduct)
-// slag_press: 1 slag → 1 plate
-// assembler: 1 iron + 1 plate → 1 gear (root)
-//
-// Target: 1 gear/t
-//   assembler at 1/t needs 1 iron + 1 plate
-//   iron: smelter at 1/t produces 1 iron + 1 slag as byproduct
-//   plate: slag_press at 1/t needs 1 slag — smelter byproduct covers exactly
-//   slag: internal (produced 1/t, consumed 1/t) → not in IO balance
-//   external inputs: only ore (2/t)
+// 6. Multiple byproducts, both consumed downstream   smelter: 2 ore
+// → 1 iron + 1 slag (byproduct) slag_press: 1 slag → 1 plate assembler: 1 iron + 1 plate →
+// 1 gear (root) Target: 1 gear/t assembler at 1/t needs 1 iron + 1 plate iron: smelter at
+// 1/t produces 1 iron + 1 slag as byproduct plate: slag_press at 1/t needs 1 slag — smelter
+// byproduct covers exactly slag: internal (produced 1/t, consumed 1/t) → not in IO balance
+// external inputs: only ore (2/t)
 
 func TestChain_multipleByproducts_bothConsumed(t *testing.T) {
 	smelter := makeRecipe("r:smelter", "mi", "smelter", 20)
@@ -415,13 +376,9 @@ func TestChain_multipleByproducts_bothConsumed(t *testing.T) {
 	}
 }
 
-// ── 7. Byproduct excess: more produced than consumed ─────────────────────
-//
-// smelter: 1 ore → 1 iron + 3 slag
-// only 1 slag consumed by slag_press per gear
-// assembler: 1 iron + 1 plate → 1 gear
-//
-// slag produced: 3/t; consumed: 1/t → net export: 2/t in IO outputs
+// 7. Byproduct excess: more produced than consumed   smelter: 1 ore
+// → 1 iron + 3 slag only 1 slag consumed by slag_press per gear assembler: 1 iron + 1 plate
+// → 1 gear slag produced: 3/t; consumed: 1/t → net export: 2/t in IO outputs
 
 func TestChain_byproductExcess(t *testing.T) {
 	smelter := makeRecipe("r:smelter", "mi", "smelter", 20)
@@ -465,22 +422,7 @@ func TestChain_byproductExcess(t *testing.T) {
 	}
 }
 
-// ── 8. Cyclic graph (only linalg) ─────────────────────────────────────────
-//
-// Nuclear fuel cycle:
-//   centrifuge:  1 depleted_cell + water → 1 enriched_uranium
-//   reactor:     1 enriched_uranium + coolant → 2 depleted_cell  (surplus: 1 per run)
-//   packager:    1 depleted_cell → 1 fuel_rod  (uses the surplus depleted_cell)
-//
-// Cycle: enriched_uranium ↔ depleted_cell (balanced 1:1 between centrifuge and reactor)
-// Reactor produces 2 depleted_cells per run: 1 goes back to centrifuge, 1 goes to packager.
-// Matrix rows:
-//   fuel_rod:         packager=+1 = target (1/t)
-//   depleted_cell:    packager=-1, reactor=+2, centrifuge=-1 = 0
-//   enriched_uranium: reactor=-1, centrifuge=+1 = 0
-// Solution: packager=1, centrifuge=reactor=1 (all run at equal rate).
-//
-// SolveDAG must FAIL; SolveLinearSystem must succeed.
+// 8.
 
 func TestCycle_linearOnly(t *testing.T) {
 	centrifuge := makeRecipe("r:centrifuge", "mi", "centrifuge", 100)
@@ -525,10 +467,7 @@ func TestCycle_linearOnly(t *testing.T) {
 	assertRate(t, "centrifuge", rateFor(rv, "r:centrifuge"), 1, 1)
 }
 
-// ── 9. DAG and linalg produce identical results (acyclic) ─────────────────
-//
-// Multi-step acyclic chain with a shared intermediate.
-// Both solvers must return the same recipe rates to within floating-point precision.
+// 9.
 
 func TestSolvers_dagLinalgParity(t *testing.T) {
 	// plastic ← chemical_plant ← ethylene + chlorine (raws)
@@ -571,17 +510,16 @@ func TestSolvers_dagLinalgParity(t *testing.T) {
 		}
 	}
 
-	// machine at 1/t → needs 4 circuits/t → circuit machine at 4/t, needs 8 plastic/t
-	// plastic at 8/t, chem outputs 3/run → chem at 8/3/t
+	// machine at 1/t → needs 4 circuits/t → circuit machine at 4/t, needs 8 plastic/t plastic
+	// at 8/t, chem outputs 3/run → chem at 8/3/t
 	assertRate(t, "fabricator", rateFor(dag, "r:machine"), 1, 1)
 	assertRate(t, "circuit assembler", rateFor(dag, "r:circuit"), 4, 1)
 	assertRate(t, "chem plant", rateFor(dag, "r:chem"), 8, 3)
 }
 
-// ── 10. Zero-rate recipe when item is fully stop-pointed ──────────────────
-//
-// If an item has a recipe but is declared as a stop-point, the recipe must
-// not appear in the rate vector at all (or be zero).
+// 10. Zero-rate recipe when item is fully stop-pointed   If an item has
+// a recipe but is declared as a stop-point, the recipe must not appear in the rate vector
+// at all (or be zero).
 
 func TestChain_stopPointZerosRecipe(t *testing.T) {
 	recipeA := makeRecipe("r:a", "mi", "m", 20)

@@ -12,20 +12,14 @@ import (
 )
 
 // ImportModFileHandler accepts one or more modfile ZIP uploads and imports them.
-// Content-Type: multipart/form-data; field name "modfile" (repeatable)
-//
-// renderCache is dropped once the import finishes: an import overwrites models
-// and textures at paths the cache has already rendered from, and it holds those
-// renders for the process's lifetime. Without this an icon would keep showing
-// the pre-import geometry until a restart.
 func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rc := http.NewResponseController(w)
 		_ = rc.SetReadDeadline(time.Now().Add(10 * time.Minute))
 		_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Minute))
 
-		// Deferred, not called after the loop: a later file can fail and return
-		// early once an earlier one already overwrote rendered assets.
+		// Deferred, not called after the loop: a later file can fail and return early once an
+		// earlier one already overwrote rendered assets.
 		if renderCache != nil {
 			defer renderCache.Invalidate()
 		}
@@ -40,8 +34,8 @@ func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render
 			return
 		}
 
-		// Resolved once per request and attributed to any plugin a ZIP in
-		// this batch bundles; empty if the acting user cannot be resolved.
+		// Resolved once per request and attributed to any plugin a ZIP in this batch bundles;
+		// empty if the acting user cannot be resolved.
 		var uploadedBy string
 		if u, err := database.GetUserByID(r.Context(), userIDFromContext(r.Context())); err == nil {
 			uploadedBy = u.Username

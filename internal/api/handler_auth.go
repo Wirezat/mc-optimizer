@@ -32,7 +32,8 @@ type tokenPair struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-// issueTokensForUser generates, persists, and returns an access+refresh token pair for the given user.
+// issueTokensForUser generates, persists, and returns an access+refresh token pair for the
+// given user.
 func issueTokensForUser(r *http.Request, database *db.DB, u *model.User) (*tokenPair, error) {
 	now := time.Now().UTC()
 	rawAccess, hashedAccess, err := auth.GenerateToken()
@@ -210,7 +211,8 @@ func RefreshHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// LogoutHandler handles POST /api/auth/logout — invalidates access and optional refresh token.
+// LogoutHandler handles POST /api/auth/logout — invalidates access and optional refresh
+// token.
 func LogoutHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if raw := bearerToken(r); raw != "" {

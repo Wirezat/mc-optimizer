@@ -7,17 +7,14 @@ type RecipeOption struct {
 	RecipeID   string
 	MachineMod string
 	MachineID  string
-	// Key uniquely identifies this (recipe, machine) choice — use this, not
-	// RecipeID, as the override value sent back to the server. RecipeID alone
-	// is ambiguous when a recipe is reachable via multiple machine tiers
-	// (bronze/steel/electric all implementing the same base recipe).
+	// Key uniquely identifies this (recipe, machine) choice — use this, not RecipeID, as the
+	// override value sent back to the server.
 	Key     string
 	IOKey   string   // options with identical I/O; the solver picks between them
 	Inputs  []string // "item_id", "#tag_name", or "~fluid_id" — complete list;
 	Outputs []string // the graph view derives its edges from these, so no cap.
-	// DurationTicks orders an IOKey group's siblings for display: the longest
-	// duration is the recipe the others speed up (e.g. blasting/smoking halve
-	// a furnace's), so it is the one name shown for the whole group.
+	// DurationTicks orders an IOKey group's siblings for display: the longest duration is the
+	// recipe the others speed up (e.g.
 	DurationTicks int
 }
 
@@ -32,10 +29,7 @@ type ChainItem struct {
 	IsStop           bool
 	IsRawMaterial    bool
 	ModRestricted    bool
-	// ResolvedTag is the "#tag" key (matching TagResolutions' key format) this
-	// item was chosen to satisfy, when it reached the chain by resolving a
-	// tag input rather than a fixed item reference. Empty for chain items
-	// that a recipe names directly.
+	// Empty for chain items that a recipe names directly.
 	ResolvedTag string
 }
 
@@ -45,9 +39,8 @@ type DiscoverResult struct {
 	TagResolutions map[string]TagResolution
 }
 
-// Discover runs a BFS from targetItem to collect all items in the production
-// chain, along with their available recipes, without computing any rates.
-// stopPoints, recipeOverrides, and tagOverrides are the same as in Solve.
+// Discover runs a BFS from targetItem to collect all items in the production chain, along
+// with their available recipes, without computing any rates.
 func (s *Solver) Discover(
 	ctx context.Context,
 	targetItem ItemRef,
@@ -175,8 +168,8 @@ func (s *Solver) Discover(
 			ci.Options = append(ci.Options, opt)
 		}
 
-		// Only follow a recipe if the user explicitly chose one.
-		// No override → stop here by default.
+		// Only follow a recipe if the user explicitly chose one. No override → stop here by
+		// default.
 		overrideKey, hasOverride := recipeOverrides[key]
 		if !hasOverride {
 			ci.IsStop = true

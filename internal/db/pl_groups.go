@@ -113,8 +113,8 @@ func (d *DB) SetGroupPosition(ctx context.Context, id uuid.UUID, position string
 	return nil
 }
 
-// GetLastGroupPosition returns the highest position key among all groups in a
-// factory, or "" if none exist (use fracidx.Between("", "") for the first).
+// GetLastGroupPosition returns the highest position key among all groups in a factory, or
+// "" if none exist (use fracidx.Between("", "") for the first).
 func (d *DB) GetLastGroupPosition(ctx context.Context, factoryID uuid.UUID) (string, error) {
 	var pos string
 	err := d.Pool.QueryRow(ctx,

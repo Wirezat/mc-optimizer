@@ -14,7 +14,6 @@
     })();
   </script>
   <style>
-    /* ── Solve form layout ─────────────────────────────────────────────────── */
     .solve-grid {
       display: grid;
       grid-template-columns: 1fr 130px 180px auto;
@@ -23,7 +22,6 @@
     }
     @media (max-width: 640px) { .solve-grid { grid-template-columns: 1fr; } }
 
-    /* ── Rate group ────────────────────────────────────────────────────────── */
     .rate-group {
       display: flex;
       gap: 0;
@@ -39,7 +37,6 @@
     }
     .rate-field.rate-disabled { opacity: 0.4; pointer-events: none; }
 
-    /* ── Step label ────────────────────────────────────────────────────────── */
     .step-label {
       font-size: var(--text-xs);
       font-weight: var(--weight-bold);
@@ -55,7 +52,6 @@
       color: var(--text-faint);
     }
 
-    /* ── Chain table helpers ───────────────────────────────────────────────── */
     .chain-cell-recipe {
       display: flex;
       align-items: center;
@@ -85,7 +81,6 @@
     .cycle-warn-hidden { display: none; }
     .tc-stopped { opacity: 0.5; }
 
-    /* ── Override / partial buttons ────────────────────────────────────────── */
     .chain-override-btn {
       font-size: var(--text-xs);
       padding: 2px var(--gap-inline);
@@ -100,7 +95,6 @@
     .chain-override-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
     .chain-override-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
 
-    /* ── Machine picker in the chain row ───────────────────────────────────── */
     .chain-machine {
       --pad-machine-btn-y: 1px;
       --text-machine-chev: 10px;
@@ -153,7 +147,6 @@
     .partial-btn:hover:not(.active) { border-color: var(--border-strong); color: var(--text-muted); }
     .partial-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
 
-    /* ── Result stats bar ──────────────────────────────────────────────────── */
     .result-stats {
       display: flex;
       gap: var(--gap-section);
@@ -168,14 +161,12 @@
     .stat-label { font-size: var(--text-xs); color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; }
     .stat-value { font-size: var(--text-md); font-weight: var(--weight-bold); color: var(--text); }
 
-    /* ── Result body split ─────────────────────────────────────────────────── */
     .result-body { display: grid; grid-template-columns: 2fr 1fr; gap: 0; }
     @media (max-width: 640px) { .result-body { grid-template-columns: 1fr; } }
     .result-col { padding: var(--gap-control) var(--pad-container); }
     .result-col + .result-col { border-left: 1px solid var(--border); }
     @media (max-width: 640px) { .result-col + .result-col { border-left: none; border-top: 1px solid var(--border); } }
 
-    /* ── Machine group row ─────────────────────────────────────────────────── */
     .mg-header {
       display: flex; align-items: center; gap: var(--gap-control);
       padding: 2px 0 var(--gap-inline);
@@ -197,7 +188,6 @@
     .mg-variant { font-size: var(--text-xs); color: var(--text-faint); }
     .mg-util    { font-size: var(--text-xs); color: var(--text-muted); flex-shrink: 0; }
 
-    /* ── IO profile ────────────────────────────────────────────────────────── */
     .io-section-label {
       font-size: var(--text-xs); font-weight: var(--weight-semibold);
       text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
@@ -211,7 +201,6 @@
     .io-sublabel { font-size: 10px; color: var(--text-faint); font-style: italic; font-family: var(--font-mono); }
     .io-rate { flex-shrink: 0; white-space: nowrap; }
 
-    /* ── Info banner ──────────────────────────────────────────────────────── */
     .info-banner {
       padding: var(--gap-control) var(--pad-card);
       margin-bottom: var(--gap-control);
@@ -223,7 +212,6 @@
       color: var(--text-muted);
     }
 
-    /* ── Confirm bar ───────────────────────────────────────────────────────── */
     .confirm-bar {
       display: flex; gap: var(--gap-control); align-items: flex-end; flex-wrap: wrap;
       padding: var(--gap-control) var(--pad-container);
@@ -280,7 +268,6 @@
           </div>
         </div>
 
-        <!-- ── No active mods banner (blocking) ───────────────────────────── -->
         <div id="no-mods-banner" class="alert warn" style="display:none;">
           <span class="alert-icon">⚠</span>
           <span>
@@ -292,7 +279,6 @@
           </span>
         </div>
 
-        <!-- ── Step 1: Target + Mode ───────────────────────────────────────── -->
         <div class="step-label"><span>1 — </span><span data-i18n="solve.step.target">What do you want to produce?</span></div>
         <div class="container container-config" style="margin-bottom:var(--gap-section);">
           <div class="container-body">
@@ -357,7 +343,6 @@
           </div>
         </div>
 
-        <!-- ── Cycle error banner (blocking) ──────────────────────────────── -->
         <div id="cycle-error-banner" class="alert danger" style="display:none;">
           <span class="alert-icon">⛔</span>
           <span>
@@ -367,7 +352,6 @@
           </span>
         </div>
 
-        <!-- ── Step 2: Chain Configuration ────────────────────────────────── -->
         <div class="step-label" id="chain-step-label" style="display:none;">
           <span>2 — </span>
           <span data-i18n="solve.step.chain">Recipe Selection</span>
@@ -375,7 +359,6 @@
         </div>
         <div id="chain-card" style="display:none;"></div>
 
-        <!-- ── Step 3: Result ──────────────────────────────────────────────── -->
         <div class="step-label" id="result-step-label" style="display:none;">
           <span>3 — </span><span data-i18n="solve.step.result">Result</span>
         </div>
@@ -600,9 +583,6 @@
       // Demo mode has no save, so no config to persist a wizard's changes into.
       if (!_isDemo) {
         renderPluginBar(mods);
-        // Load the hooks from the active mod list rather than waiting for a
-        // chain: their columns render with the first discover's table, and a
-        // discover reaching a further mod tops them up later.
         await addMachineHooks(mods
           .filter(m => _activeModIds.includes(m.mod_id) && m.plugin)
           .map(m => m.mod_id));
@@ -710,7 +690,6 @@
   targetInput.addEventListener('input', () => {
     _targetItem = null;
   });
-
 
   function setModSelect(options, selectedModID) {
     const sel = document.getElementById('target-mod');
@@ -963,7 +942,6 @@
     initInfocards(chainContainer.body);
   }
 
-  // ── Graph view of the chain ───────────────────────────────────────────────
   // The recipe selection is logically a graph, not a list: items are shared
   // between recipes (multiple in-edges), tags resolve to concrete items, and
   // fluid recipes can produce back-edges (cycles). Edges are derived from each
@@ -1416,7 +1394,6 @@
   let _openChainPickerKey = null;
   const PICKER_TRIGGERS = '[data-action="openChainPicker"],[data-action="openMachinePicker"]';
 
-  // ── Chain view container (table ↔ graph) ─────────────────────────────────
   const chainContainer = createContainer({
     views: [
       { key: 'table', icon: '☰', label: t('common.view_table') },

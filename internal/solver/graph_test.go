@@ -5,16 +5,14 @@ import (
 	"testing"
 )
 
-// An override naming a machine that reaches the recipe through
-// machine_interfaces must select that machine. Before the candidate list was
-// un-folded, the override matched nothing and the node silently became a raw
-// material - the chain truncated instead of reporting anything.
+// An override naming a machine that reaches the recipe through machine_interfaces must
+// select that machine.
 func TestBuildRecipeGraphOverrideSelectsInterfaceMachine(t *testing.T) {
 	mod := "m"
 	widget := "widget"
 
-	// Two candidates for one recipe, base first, exactly the shape
-	// GetRecipesForItem now returns.
+	// Two candidates for one recipe, base first, exactly the shape GetRecipesForItem now
+	// returns.
 	base := &RecipeRow{
 		ID: "r1", MachineMod: "m", MachineID: "base_machine", DurationTicks: 1,
 		ItemOutputs: []RecipeRowItemIO{
@@ -52,9 +50,9 @@ func TestBuildRecipeGraphOverrideSelectsInterfaceMachine(t *testing.T) {
 	}
 }
 
-// interfaceCandidates builds the two-candidate fixture BuildRecipeGraph now sees for
-// one recipe reachable through machine_interfaces: a base machine owned by baseMod
-// and an implementer owned by tierMod, base sorted first as GetRecipesForItem does.
+// interfaceCandidates builds the two-candidate fixture BuildRecipeGraph now sees for one
+// recipe reachable through machine_interfaces: a base machine owned by baseMod and an
+// implementer owned by tierMod, base sorted first as GetRecipesForItem does.
 func interfaceCandidates(baseMod, tierMod string) (base, tier *RecipeRow) {
 	mod := "m"
 	widget := "widget"
@@ -66,10 +64,8 @@ func interfaceCandidates(baseMod, tierMod string) (base, tier *RecipeRow) {
 	return base, tier
 }
 
-// If only the base machine's mod is active, filterByActiveMods must drop the
-// implementer candidate and leave the base machine as the sole (and therefore
-// default) pick. A filter that let both through regardless of mod, or that dropped
-// the whole recipe because it inspected only one candidate's mod, would fail here.
+// If only the base machine's mod is active, filterByActiveMods must drop the implementer
+// candidate and leave the base machine as the sole (and therefore default) pick.
 func TestBuildRecipeGraphActiveModsBaseSurvivesWhenImplementerInactive(t *testing.T) {
 	base, tier := interfaceCandidates("base_mod", "tier_mod")
 	target := ItemRef{ModID: "m", ItemID: "widget"}
@@ -90,10 +86,8 @@ func TestBuildRecipeGraphActiveModsBaseSurvivesWhenImplementerInactive(t *testin
 	}
 }
 
-// If only the implementer's mod is active, the base machine must be filtered out but
-// the recipe must still resolve through the implementer - not collapse to a raw
-// material. A filter keyed on the recipe's base machine (rather than per candidate)
-// would drop every row here and fail this.
+// If only the implementer's mod is active, the base machine must be filtered out but the
+// recipe must still resolve through the implementer - not collapse to a raw material.
 func TestBuildRecipeGraphActiveModsImplementerSurvivesWhenBaseInactive(t *testing.T) {
 	base, tier := interfaceCandidates("base_mod", "tier_mod")
 	target := ItemRef{ModID: "m", ItemID: "widget"}
@@ -117,10 +111,6 @@ func TestBuildRecipeGraphActiveModsImplementerSurvivesWhenBaseInactive(t *testin
 	}
 }
 
-// With both mods active, the base machine must still win as the unmarked default
-// (recipes[0] after filtering, unchanged from before un-folding), while the
-// implementer remains a real candidate an override can still select - filtering
-// must not have narrowed the field down to one row just because both survived.
 func TestBuildRecipeGraphActiveModsBothActiveKeepsBaseDefaultAndImplementerSelectable(t *testing.T) {
 	base, tier := interfaceCandidates("base_mod", "tier_mod")
 	target := ItemRef{ModID: "m", ItemID: "widget"}

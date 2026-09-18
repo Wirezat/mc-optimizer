@@ -16,7 +16,8 @@ func newRateVector() RateVector {
 	}
 }
 
-// DetectCycles returns ("", false) when acyclic, or (message with cycle nodes, true) when cyclic.
+// DetectCycles returns ("", false) when acyclic, or (message with cycle nodes, true) when
+// cyclic.
 func DetectCycles(g *RecipeGraph) (string, bool) {
 	_, err := TopologicalSort(g)
 	if err != nil {
@@ -25,8 +26,8 @@ func DetectCycles(g *RecipeGraph) (string, bool) {
 	return "", false
 }
 
-// CyclicNodeKeys returns the keys of all nodes involved in cycles, or nil if the graph is acyclic.
-// These are the nodes with non-zero in-degree after Kahn's algorithm terminates early.
+// CyclicNodeKeys returns the keys of all nodes involved in cycles, or nil if the graph is
+// acyclic.
 func CyclicNodeKeys(g *RecipeGraph) []string {
 	n := len(g.Nodes)
 	inDegree := make(map[string]int, n)
@@ -75,7 +76,8 @@ func CyclicNodeKeys(g *RecipeGraph) []string {
 	return keys
 }
 
-// TopologicalSort orders the recipe graph nodes via Kahn's algorithm, returning an error if a cycle is detected.
+// TopologicalSort orders the recipe graph nodes via Kahn's algorithm, returning an error if
+// a cycle is detected.
 func TopologicalSort(g *RecipeGraph) ([]*RecipeNode, error) {
 	n := len(g.Nodes)
 	inDegree := make(map[string]int, n)
@@ -126,7 +128,8 @@ func TopologicalSort(g *RecipeGraph) ([]*RecipeNode, error) {
 	return order, nil
 }
 
-// SolveDAG computes recipe and item rates for a target output rate by walking the topological order in reverse.
+// SolveDAG computes recipe and item rates for a target output rate by walking the
+// topological order in reverse.
 func SolveDAG(g *RecipeGraph, targetRatePerTick Rational) (RateVector, error) {
 	topoOrder, err := TopologicalSort(g)
 	if err != nil {

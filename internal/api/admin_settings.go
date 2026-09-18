@@ -6,8 +6,8 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/db"
 )
 
-// GetAdminSettingsHandler handles GET /api/admin/settings.
-// Returns current admin settings visible to admins.
+// GetAdminSettingsHandler handles GET /api/admin/settings. Returns current admin settings
+// visible to admins.
 func GetAdminSettingsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		enabled, err := database.RegistrationEnabled(r.Context())
@@ -22,7 +22,6 @@ func GetAdminSettingsHandler(database *db.DB) http.HandlerFunc {
 }
 
 // UpdateAdminSettingsHandler handles PATCH /api/admin/settings.
-// Allows admins to update individual settings.
 func UpdateAdminSettingsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body struct {

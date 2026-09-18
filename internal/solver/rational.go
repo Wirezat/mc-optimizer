@@ -10,15 +10,13 @@ import (
 var (
 	// ErrRateOverflow reports a rate whose magnitude no longer fits into int64.
 	ErrRateOverflow = errors.New("solver: rate overflow")
-	// ErrRateDomain reports a rate this arithmetic cannot represent at all:
-	// a zero denominator, a division by zero, or MinInt64.
+	// ErrRateDomain reports a rate this arithmetic cannot represent at all: a zero
+	// denominator, a division by zero, or MinInt64.
 	ErrRateDomain = errors.New("solver: invalid rate")
 )
 
-// rateArithmeticError classifies a recovered panic value as one raised by this
-// file, returning nil for anything else. The functions here panic with plain
-// strings; a runtime failure such as a nil dereference must keep crashing rather
-// than be laundered into a solver error.
+// rateArithmeticError classifies a recovered panic value as one raised by this file,
+// returning nil for anything else.
 func rateArithmeticError(v any) error {
 	msg, ok := v.(string)
 	if !ok || (!strings.HasPrefix(msg, "rational: ") && !strings.HasPrefix(msg, "LCM: ")) {
@@ -30,13 +28,12 @@ func rateArithmeticError(v any) error {
 	return fmt.Errorf("%w: %s", ErrRateDomain, msg)
 }
 
-// GuardRateArithmetic exports guardRateArithmetic: a rate-arithmetic panic
-// becomes *err, anything else still panics.
+// GuardRateArithmetic exports guardRateArithmetic: a rate-arithmetic panic becomes *err,
+// anything else still panics.
 func GuardRateArithmetic(err *error) { guardRateArithmetic(err) }
 
-// guardRateArithmetic turns a panic from this file into *err and re-panics on
-// anything else. Deferred wherever plugin-influenced numbers flow through
-// Rational arithmetic.
+// guardRateArithmetic turns a panic from this file into *err and re-panics on anything
+// else.
 func guardRateArithmetic(err *error) {
 	r := recover()
 	if r == nil {

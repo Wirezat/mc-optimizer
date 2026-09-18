@@ -12,10 +12,6 @@ type BlockDrop struct {
 }
 
 // VillagerTrade is one trade offer from a villager profession.
-//
-// SourceModID is the mod that defines the offer, not the mod of the items being
-// traded. TradeKey identifies the offer within that mod; profession, tier and
-// item pair are not unique.
 type VillagerTrade struct {
 	SourceModID string
 	TradeKey    string
@@ -32,8 +28,8 @@ type VillagerTrade struct {
 	ResultItemID   string
 	ResultCount    int
 	ResultModified bool
-	// CostVariable marks an offer whose price the data does not fix; CostCount
-	// is then the lowest it can be, not what it costs.
+	// CostVariable marks an offer whose price the data does not fix; CostCount is then the
+	// lowest it can be, not what it costs.
 	CostVariable bool
 	MaxUses      *int
 	XP           *int
@@ -57,19 +53,17 @@ type NormalizedRecipe struct {
 	SourceFile string
 	RecipeType string
 	ModID      string
-	// SourceModID is the mod whose modfile defines this recipe — may differ
-	// from ModID (the machine's mod) for addon-added recipes.
+	// SourceModID is the mod whose modfile defines this recipe — may differ from ModID (the
+	// machine's mod) for addon-added recipes.
 	SourceModID string
 	MachineID   string
 	Duration    int
 	ContentHash string
 
 	// Shape is a 9-element array for crafting_shaped recipes (row-major, 3×3).
-	// Each element is "mod:item_id", "#mod:tag", or "" for an empty slot.
 	Shape []string
 
-	// ModData holds every mod-specific field from the recipe entry, keyed as
-	// written. The host never interprets it, only passes it through to the plugin.
+	// ModData holds every mod-specific field from the recipe entry, keyed as written.
 	ModData map[string]any
 
 	ItemInputs   []NormalizedIO

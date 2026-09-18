@@ -5,34 +5,28 @@ import (
 	"math"
 )
 
-// Vanilla's display.gui transform for block models — rotation [30, 225, 0] and
-// scale 0.625 — is what gives every block in the inventory its three-quarter
-// view. With this rotation the camera sees the top, north and east faces, which
-// is why a furnace shows its front in the hotbar.
+// Vanilla's display.gui transform for block models — rotation [30, 225, 0] and scale 0.625
+// — is what gives every block in the inventory its three-quarter view.
 const (
 	guiRotX  = 30.0
 	guiRotY  = 225.0
 	guiRotZ  = 0.0
 	guiScale = 0.625
 
-	// Rendering at a multiple of the target and box-filtering down keeps the
-	// silhouette clean. Texels are sampled nearest-neighbour, but the box filter
-	// still averages across them, so this softens the art as well as the edges —
-	// the tradeoff is deliberate at icon sizes.
+	// Rendering at a multiple of the target and box-filtering down keeps the silhouette clean.
+	// Texels are sampled nearest-neighbour, but the box filter still averages across them, so
+	// this softens the art as well as the edges — the tradeoff is deliberate at icon sizes.
 	supersample = 4
 )
 
-// Texture is a decoded texture, indexed row-major with v running downward as in
-// the file. An animated texture is a sprite sheet; Cells says how many frames
-// are stacked in it, so only the first is drawn.
+// Texture is a decoded texture, indexed row-major with v running downward as in the file.
 type Texture struct {
 	Pix   []uint8 // RGBA, 4 bytes per pixel
 	W, H  int
 	Cells int
 }
 
-// At samples a texel, clamping to the texture. u and v are in 0..1 of the
-// visible cell, not of the whole sheet.
+// At samples a texel, clamping to the texture.
 func (t *Texture) At(u, v float64) (r, g, b, a uint8) {
 	cellH := t.H
 	if t.Cells > 1 {
@@ -96,15 +90,14 @@ func rad(deg float64) float64 { return deg * math.Pi / 180 }
 
 func identity() mat3 { return mat3{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}} }
 
-// guiMatrix is Rx*Ry*Rz, matching the order Minecraft builds its display
-// transform's quaternion from euler angles.
+// guiMatrix is Rx*Ry*Rz, matching the order Minecraft builds its display transform's
+// quaternion from euler angles.
 func guiMatrix() mat3 {
 	return rotX(guiRotX).mulM(rotY(guiRotY)).mulM(rotZ(guiRotZ))
 }
 
-// Corner order per face: counter-clockwise seen from outside, starting at the
-// face's uv origin. Each entry picks the low (0) or high (1) end of the box on
-// each axis.
+// Corner order per face: counter-clockwise seen from outside, starting at the face's uv
+// origin.
 var faceCorners = map[string][4][3]int{
 	"up":    {{0, 1, 0}, {0, 1, 1}, {1, 1, 1}, {1, 1, 0}},
 	"down":  {{0, 0, 1}, {0, 0, 0}, {1, 0, 0}, {1, 0, 1}},
@@ -122,9 +115,8 @@ type vertex struct {
 // Render draws the scene at size x size pixels.
 func Render(scene *Scene, size int) *image.RGBA {
 	n := size * supersample
-	// acc holds plain, non-premultiplied colour plus the texel's own alpha, one
-	// entry per supersampled pixel, overwritten whenever a nearer fragment wins
-	// the z-test. Premultiplication happens once, in downsample.
+	// acc holds plain, non-premultiplied colour plus the texel's own alpha, one entry per
+	// supersampled pixel, overwritten whenever a nearer fragment wins the z-test.
 	var (
 		acc    = make([]float64, n*n*4)
 		zbuf   = make([]float64, n*n)
@@ -135,8 +127,8 @@ func Render(scene *Scene, size int) *image.RGBA {
 	}
 
 	for _, el := range scene.Model.Elements {
-		// An element rotation happens in model space about the element's own
-		// origin, before the display transform ever runs.
+		// An element rotation happens in model space about the element's own origin, before the
+		// display transform ever runs.
 		local := identity()
 		var origin vec3
 		if el.Rotation != nil {
@@ -163,8 +155,8 @@ func Render(scene *Scene, size int) *image.RGBA {
 			if el.shaded() {
 				shade = faceShade[dir]
 			}
-			// tintindex -1 is vanilla's explicit "no tint"; any other index
-			// selects a colour, and this renderer only knows one.
+			// tintindex -1 is vanilla's explicit "no tint"; any other index selects a colour, and
+			// this renderer only knows one.
 			tint := uint32(0xFFFFFF)
 			if scene.Model.Tint != nil && face.TintIndex != nil && *face.TintIndex >= 0 {
 				tint = *scene.Model.Tint
@@ -178,12 +170,7 @@ func Render(scene *Scene, size int) *image.RGBA {
 	return downsample(acc, size)
 }
 
-// elementMatrix builds an element's own rotation. An unrecognised axis yields no
-// rotation, which is what vanilla does with a malformed model rather than
-// refusing to load it.
-//
-// Not implemented: `rescale`, which vanilla uses to grow a rotated element back
-// out to its bounding box. No model here sets it.
+// elementMatrix builds an element's own rotation.
 func elementMatrix(r ElementRot) mat3 {
 	switch r.Axis {
 	case "x":
@@ -197,17 +184,13 @@ func elementMatrix(r ElementRot) mat3 {
 }
 
 // faceQuad projects one face to buffer coordinates with its uv per corner.
-//
-// local and origin carry the element's own rotation: a point is rotated about
-// origin in model space first, and only the result goes through the display
-// transform.
 func faceQuad(el Element, dir string, face Face, matrix, local mat3, origin vec3, n int) [4]vertex {
 	uv := defaultUV(el, dir)
 	if face.UV != nil {
 		uv = *face.UV
 	}
-	// uv runs a -> b -> c -> d around the face; rotation shifts which corner
-	// the texture's origin lands on, in 90 degree steps as vanilla defines it.
+	// uv runs a -> b -> c -> d around the face; rotation shifts which corner the texture's
+	// origin lands on, in 90 degree steps as vanilla defines it.
 	corners := [4][2]float64{
 		{uv[0], uv[1]}, {uv[0], uv[3]}, {uv[2], uv[3]}, {uv[2], uv[1]},
 	}
@@ -242,9 +225,6 @@ func faceQuad(el Element, dir string, face Face, matrix, local mat3, origin vec3
 	return out
 }
 
-// defaultUV is the uv Minecraft infers when a face declares none: the element's
-// own extent on the two axes of that face, so a half-width element shows half
-// the texture rather than the whole thing squeezed onto it.
 func defaultUV(el Element, dir string) [4]float64 {
 	x0, x1 := el.From[0], el.To[0]
 	y0, y1 := el.From[1], el.To[1]
@@ -283,9 +263,7 @@ func (s *Scene) textureFor(face Face) *Texture {
 	return s.Textures[ref]
 }
 
-// rasterQuad fills a quad as two triangles with a z-buffer. Orthographic
-// projection of a planar triangle is affine, so interpolating uv and depth
-// linearly is exact — no perspective correction needed.
+// rasterQuad fills a quad as two triangles with a z-buffer.
 func rasterQuad(acc, zbuf []float64, n int, q [4]vertex, tex *Texture, shade float64, tint uint32) {
 	tr, tg, tb := float64((tint>>16)&255)/255, float64((tint>>8)&255)/255, float64(tint&255)/255
 
@@ -315,10 +293,6 @@ func rasterQuad(acc, zbuf []float64, n int, q [4]vertex, tex *Texture, shade flo
 					continue
 				}
 
-				// Camera looks along -Z, so a larger depth is nearer. Ties go to
-				// whatever is drawn later: the model format is painter-ordered,
-				// so an overlay element declared after a base one at the same
-				// coordinates is meant to cover it.
 				depth := w0*a.depth + w1*b.depth + w2*c.depth
 				idx := py*n + px
 				if depth < zbuf[idx] {
@@ -329,10 +303,6 @@ func rasterQuad(acc, zbuf []float64, n int, q [4]vertex, tex *Texture, shade flo
 				v := w0*a.v + w1*b.v + w2*c.v
 				r, g, bb, al := tex.At(u, v)
 				// Cutout, not blending: a texel is either drawn or it is not.
-				// A fully transparent one must not claim the pixel, or a hole
-				// would occlude whatever lies behind it. Partial alpha is kept
-				// for the edge filter but does not blend with what is underneath,
-				// so a genuinely translucent texture (glass) will read as solid.
 				if al == 0 {
 					continue
 				}
@@ -348,8 +318,6 @@ func rasterQuad(acc, zbuf []float64, n int, q [4]vertex, tex *Texture, shade flo
 	}
 }
 
-// downsample box-filters the supersampled buffer, weighting colour by alpha so
-// edge pixels take the colour of the geometry rather than of the void.
 func downsample(acc []float64, size int) *image.RGBA {
 	out := image.NewRGBA(image.Rect(0, 0, size, size))
 	n := size * supersample
@@ -368,10 +336,8 @@ func downsample(acc []float64, size int) *image.RGBA {
 				}
 			}
 			i := out.PixOffset(x, y)
-			// image.RGBA is alpha-premultiplied — png.Encode divides the colour
-			// back out on the way to the file. Storing the plain average here
-			// would have every partially covered edge pixel divided by its own
-			// coverage, which blows the colour out and shifts its hue.
+			// image.RGBA is alpha-premultiplied — png.Encode divides the colour back out on the way
+			// to the file.
 			coverage := sa / float64(supersample*supersample)
 			if sa > 0 {
 				out.Pix[i+0] = clampByte(sr / sa * coverage)

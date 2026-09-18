@@ -8,9 +8,9 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
-// TestGroupMachines_FoldsImplementersIntoBase asserts groupMachines folds
-// only real single-base implementers into their base's Variants (alphabetical,
-// RecipeCount summed), while name-alike and multi-base machines stay ungrouped.
+// TestGroupMachines_FoldsImplementersIntoBase asserts groupMachines folds only real
+// single-base implementers into their base's Variants (alphabetical, RecipeCount summed),
+// while name-alike and multi-base machines stay ungrouped.
 func TestGroupMachines_FoldsImplementersIntoBase(t *testing.T) {
 	all := []*model.MachineType{
 		{ModID: "testmod", MachineID: "compressor", Name: "compressor", RecipeCount: 5},
@@ -98,9 +98,6 @@ func TestGroupMachines_FoldsImplementersIntoBase(t *testing.T) {
 	}
 }
 
-// The browser decides which plugin to ask about a machine, so it needs the
-// same answer solver.PluginMod gives in Go: the ecosystem when one is set,
-// the machine's own mod otherwise.
 func TestLookupMachinePluginMods(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -145,9 +142,9 @@ func TestLookupMachinePluginModsEmpty(t *testing.T) {
 	}
 }
 
-// A mod's list row carries what the Mods page groups and counts by: its
-// items, and every ecosystem its machines declare (its own id where a
-// machine names none, the same fallback solver.PluginMod applies).
+// A mod's list row carries what the Mods page groups and counts by: its items, and every
+// ecosystem its machines declare (its own id where a machine names none, the same fallback
+// solver.PluginMod applies).
 func TestListMods_CountsAndEcosystems(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -194,8 +191,6 @@ func TestListMods_CountsAndEcosystems(t *testing.T) {
 	}
 }
 
-// A mod without machines belongs to no ecosystem at all — the page groups
-// those separately rather than inventing one from its id.
 func TestListMods_NoMachinesNoEcosystem(t *testing.T) {
 	d := testDB(t)
 	seedMod(t, d, "zz_test_bare")

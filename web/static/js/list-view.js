@@ -1,29 +1,10 @@
-/* list-view.js — shared tiles/table view-toggle helper for list pages
-   (save.html factories list, saves.html saves list, and any future
-   analogous list page).
-
-   Wraps the wirezat-ui `container` component's view-picker plus the
-   tiles/table rendering + delete-button wiring that both pages need,
-   so each page only supplies its per-item tile markup and table
-   column definitions instead of re-implementing the toggle/dispatch
-   boilerplate.
-
-   Usage:
-     import { createListView } from '/static/js/list-view.js'
-
-     const view = createListView({
-       containerEl: document.getElementById('factories-container'),
-       emptyEl:     document.getElementById('empty-state'),
-       storageKey:  'view:save-factories',
-       renderTile:  (f) => `<a class="tile" href="/factories/${esc(f.id)}">...</a>`,
-       tableCols:   [ { key: 'name', label: t('common.name'), ... }, ... ],
-       rowHref:     (row) => `/factories/${row.id}`,
-       getId:       (row) => row.id,
-       onDelete:    (id, btn) => deleteFactory(id, btn),
-     })
-
-     view.render(items)
-*/
+/**
+ * list-view.js — shared tiles/table view-toggle helper for list pages (save.html factories
+ * list, saves.html saves list, and any future analogous list page). Wraps the wirezat-ui
+ * `container` component's view-picker plus the tiles/table rendering + delete-button wiring
+ * that both pages need, so each page only supplies its per-item tile markup and table column
+ * definitions instead of re-implementing the toggle/dispatch boilerplate.
+ */
 
 import { createContainer } from '/static/ui/js/components/container.js';
 import { renderTable } from '/static/ui/js/components/table.js';

@@ -13,10 +13,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// VariantCacheHash maps everything evaluate() reads — plugin version, the
-// machine's and the recipe's mod_data, and the save's config — to a cache key.
-// Each part is canonicalized and separated, so key order never changes the
-// hash and content cannot slide from one part into the next.
+// VariantCacheHash maps everything evaluate() reads — plugin version, the machine's and the
+// recipe's mod_data, and the save's config — to a cache key.
 func VariantCacheHash(pluginVersion string, machineModData, recipeModData, cfg json.RawMessage) string {
 	h := sha256.New()
 	h.Write([]byte(pluginVersion))
@@ -27,9 +25,8 @@ func VariantCacheHash(pluginVersion string, machineModData, recipeModData, cfg j
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// canonicalJSON returns a key-order-independent encoding of raw, decoding
-// numbers as json.Number so large integers survive exactly. Anything that is
-// not exactly one JSON value is returned unchanged.
+// canonicalJSON returns a key-order-independent encoding of raw, decoding numbers as
+// json.Number so large integers survive exactly.
 func canonicalJSON(raw json.RawMessage) []byte {
 	if len(raw) == 0 {
 		return []byte("{}")
@@ -70,14 +67,10 @@ func (d *DB) GetVariants(ctx context.Context, modID, machineID, recipeID, config
 	return vs, nil
 }
 
-// GetAnyBaseVariantCosts returns the operating cost of a cached base variant
-// (no installed items) for a machine, regardless of which recipe or plugin
-// config produced it — the catalog has no save context to pick one
-// precisely. One machine legitimately carries different costs per recipe
-// (a macerator draws 100 EU/t on one recipe and 128 on another), and a
-// plugin may decline some pairs entirely, so a non-empty cost list wins over
-// an empty one, deterministically by (recipe_id, config_hash). ErrNotFound
-// means no base variant at all has been computed for this machine yet.
+// GetAnyBaseVariantCosts returns the operating cost of a cached base variant (no installed
+// items) for a machine, regardless of which recipe or plugin config produced it — the
+// catalog has no save context to pick one precisely. ErrNotFound means no base variant at
+// all has been computed for this machine yet.
 func (d *DB) GetAnyBaseVariantCosts(ctx context.Context, modID, machineID string) ([]plugins.Cost, error) {
 	var raw []byte
 	err := d.Pool.QueryRow(ctx, `
@@ -106,8 +99,7 @@ func (d *DB) GetAnyBaseVariantCosts(ctx context.Context, modID, machineID string
 	return costs, nil
 }
 
-// PutVariants stores a cache entry, replacing any existing entry under the
-// same key.
+// PutVariants stores a cache entry, replacing any existing entry under the same key.
 func (d *DB) PutVariants(ctx context.Context, modID, machineID, recipeID, configHash string, vs []plugins.Variant) error {
 	raw, err := json.Marshal(vs)
 	if err != nil {

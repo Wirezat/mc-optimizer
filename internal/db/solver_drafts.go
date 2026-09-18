@@ -32,7 +32,8 @@ func (d *DB) CreateSolverDraft(ctx context.Context, factoryID, userID uuid.UUID,
 	return draft, nil
 }
 
-// GetSolverDraft fetches a non-expired draft by ID; returns ErrNotFound if missing or expired.
+// GetSolverDraft fetches a non-expired draft by ID; returns ErrNotFound if missing or
+// expired.
 func (d *DB) GetSolverDraft(ctx context.Context, id uuid.UUID) (*model.SolverDraft, error) {
 	draft := &model.SolverDraft{}
 	err := d.Pool.QueryRow(ctx, `

@@ -26,8 +26,7 @@ func TestSetAndGetSaveModConfigDefaults(t *testing.T) {
 	}
 }
 
-// A second write replaces the first: the default is one value per mod, not a
-// history.
+// A second write replaces the first: the default is one value per mod, not a history.
 func TestSetSaveModConfigDefaultReplaces(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -52,8 +51,8 @@ func TestSetSaveModConfigDefaultReplaces(t *testing.T) {
 	}
 }
 
-// A save with no defaults yields an empty map, which every plugin reads as its
-// own defaults.
+// A save with no defaults yields an empty map, which every plugin reads as its own
+// defaults.
 func TestGetSaveModConfigDefaultsEmpty(t *testing.T) {
 	d := testDB(t)
 	got, err := d.GetSaveModConfigDefaults(context.Background(), uuid.New())

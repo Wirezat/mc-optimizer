@@ -37,8 +37,8 @@ func TestVariantCacheHashTreatsEmptyAsEmptyObject(t *testing.T) {
 	}
 }
 
-// Nested objects must canonicalize regardless of key order at every level,
-// not just the top one.
+// Nested objects must canonicalize regardless of key order at every level, not just the top
+// one.
 func TestVariantCacheHashStableAcrossNestedKeyOrder(t *testing.T) {
 	a := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"tier":"electric","limits":{"max":5,"min":1}}`))
 	b := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"limits":{"min":1,"max":5},"tier":"electric"}`))
@@ -47,8 +47,8 @@ func TestVariantCacheHashStableAcrossNestedKeyOrder(t *testing.T) {
 	}
 }
 
-// Objects inside an array must also canonicalize by key, independent of each
-// other and of the array's own position.
+// Objects inside an array must also canonicalize by key, independent of each other and of
+// the array's own position.
 func TestVariantCacheHashStableAcrossKeyOrderInArrayElements(t *testing.T) {
 	a := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"rules":[{"a":1,"b":2},{"c":3,"d":4}]}`))
 	b := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"rules":[{"b":2,"a":1},{"d":4,"c":3}]}`))
@@ -57,8 +57,8 @@ func TestVariantCacheHashStableAcrossKeyOrderInArrayElements(t *testing.T) {
 	}
 }
 
-// Arrays are order-sensitive: reordering elements is a different config and
-// must hash differently. Canonicalization must never touch array order.
+// Arrays are order-sensitive: reordering elements is a different config and must hash
+// differently.
 func TestVariantCacheHashArrayElementOrderMatters(t *testing.T) {
 	a := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"steps":["first","second"]}`))
 	b := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"steps":["second","first"]}`))
@@ -67,11 +67,8 @@ func TestVariantCacheHashArrayElementOrderMatters(t *testing.T) {
 	}
 }
 
-// A JSON object must never hash the same as a JSON array of [key, value]
-// pairs describing the same data. A canonicalizer that turns objects into
-// ordered pairs to sort them risks exactly this collision, which would be
-// worse than an unstable hash: two genuinely different configs would share a
-// cache entry and the wrong variants would be served.
+// A JSON object must never hash the same as a JSON array of [key, value] pairs describing
+// the same data.
 func TestVariantCacheHashObjectDoesNotCollideWithArrayOfPairs(t *testing.T) {
 	obj := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"a":1,"b":2}`))
 	arr := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`[["a",1],["b",2]]`))
@@ -80,10 +77,8 @@ func TestVariantCacheHashObjectDoesNotCollideWithArrayOfPairs(t *testing.T) {
 	}
 }
 
-// The whole no-invalidation design rests on a config change always landing
-// on a different hash. json.Unmarshal into `any` decodes every number as
-// float64 (53-bit mantissa), so two integers above 2^53 that differ only
-// beyond that precision would otherwise collide onto the same key.
+// The whole no-invalidation design rests on a config change always landing on a different
+// hash.
 func TestVariantCacheHashDiffersForIntegersAboveFloat64Precision(t *testing.T) {
 	a := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"x":9007199254740993}`))
 	b := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"x":9007199254740992}`))
@@ -92,13 +87,9 @@ func TestVariantCacheHashDiffersForIntegersAboveFloat64Precision(t *testing.T) {
 	}
 }
 
-// Replaces an earlier version of this test that only called VariantCacheHash
-// twice with the identical input and compared the results: that proves
-// nothing beyond "this function is deterministic", which holds trivially
-// and would have passed even under the float64 bug this test exists to
-// guard against. This version pins the actual property: two distinct
-// values at the top of json.Number's range must still get distinct hashes,
-// with call-to-call stability checked alongside as a secondary property.
+// This version pins the actual property: two distinct values at the top of json.Number's
+// range must still get distinct hashes, with call-to-call stability checked alongside as a
+// secondary property.
 func TestVariantCacheHashDistinguishesAndStabilizesValuesNearMaxInt64(t *testing.T) {
 	a := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"x":9223372036854775807}`))
 	b := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"x":9223372036854775806}`))
@@ -111,11 +102,10 @@ func TestVariantCacheHashDistinguishesAndStabilizesValuesNearMaxInt64(t *testing
 	}
 }
 
-// canonicalJSON must reject trailing content after the first JSON value
-// instead of silently canonicalizing only the leading document: a decoder
-// that stops at the first value without checking for more would make
-// `{"a":1}` and `{"a":1}{"b":2}` (or `{"a":1} trailing junk`) hash the same,
-// even though they are different configs.
+// canonicalJSON must reject trailing content after the first JSON value instead of silently
+// canonicalizing only the leading document: a decoder that stops at the first value without
+// checking for more would make `{"a":1}` and `{"a":1}{"b":2}` (or `{"a":1} trailing junk`)
+// hash the same, even though they are different configs.
 func TestVariantCacheHashRejectsTrailingContentAfterJSONValue(t *testing.T) {
 	clean := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"a":1}`))
 	concatenated := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"a":1}{"b":2}`))
@@ -128,8 +118,8 @@ func TestVariantCacheHashRejectsTrailingContentAfterJSONValue(t *testing.T) {
 	}
 }
 
-// Surrounding whitespace is not trailing content: a trailing newline or
-// padding around the same single document must not change the hash.
+// Surrounding whitespace is not trailing content: a trailing newline or padding around the
+// same single document must not change the hash.
 func TestVariantCacheHashIgnoresSurroundingWhitespace(t *testing.T) {
 	base := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"a":1}`))
 	trailingNewline := VariantCacheHash("1.0.0", nil, nil, json.RawMessage("{\"a\":1}\n"))
@@ -142,9 +132,8 @@ func TestVariantCacheHashIgnoresSurroundingWhitespace(t *testing.T) {
 	}
 }
 
-// A top-level JSON array or scalar is a single valid document like an
-// object is, and must still be canonicalized (re-encoded), not treated as
-// unparsable and passed through raw.
+// A top-level JSON array or scalar is a single valid document like an object is, and must
+// still be canonicalized (re-encoded), not treated as unparsable and passed through raw.
 func TestVariantCacheHashCanonicalizesTopLevelArrayAndScalar(t *testing.T) {
 	if VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`[1,2]`)) != VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`[ 1 , 2 ]`)) {
 		t.Error("a top-level array must canonicalize regardless of internal whitespace")
@@ -155,10 +144,6 @@ func TestVariantCacheHashCanonicalizesTopLevelArrayAndScalar(t *testing.T) {
 }
 
 // Deliberate: 1, 1.0 and 1e0 are equal JSON numbers but different literals.
-// Preserving numbers via json.Number keeps them at different hashes, trading
-// a cache miss (recompute) for what would otherwise be a false hash match
-// for integers above 2^53 (serving the wrong variants). This test pins that
-// choice down so it isn't "cleaned up" later.
 func TestVariantCacheHashDistinguishesNumericLiteralForms(t *testing.T) {
 	a := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"x":1}`))
 	b := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{"x":1.0}`))
@@ -174,9 +159,6 @@ func TestGetVariantsNotFound(t *testing.T) {
 	}
 }
 
-// testVariants builds a variant fixture that exercises every field, with
-// several distinct Rational pairs, so a lossy JSONB round trip would show up
-// as a value mismatch rather than a length mismatch.
 func testVariants() []plugins.Variant {
 	return []plugins.Variant{
 		{
@@ -254,16 +236,14 @@ func TestGetAnyBaseVariantCostsReturnsNoItemsVariant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	// fixture[0] ("auto") carries an installed item; fixture[1] ("eco") does
-	// not, so it is the base variant whose costs must come back.
 	want := fixture[1].Costs
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v (the no-items variant's costs)", got, want)
 	}
 }
 
-// A machine can have several cached rows, some with an empty base-variant cost
-// and one with a real one. The empty one must not shadow the real one.
+// A machine can have several cached rows, some with an empty base-variant cost and one with
+// a real one.
 func TestGetAnyBaseVariantCostsPrefersNonEmptyOverEmpty(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -279,9 +259,6 @@ func TestGetAnyBaseVariantCostsPrefersNonEmptyOverEmpty(t *testing.T) {
 		Valid: true,
 	}}
 	hash := VariantCacheHash("1.0.0", nil, nil, json.RawMessage(`{}`))
-	// recipeA sorts before recipeB by UUID string only sometimes; try both
-	// orderings by seeding whichever id is lexicographically smaller with
-	// the empty-cost row, so the test doesn't depend on UUID generation luck.
 	first, second := recipeA, recipeB
 	if second.String() < first.String() {
 		first, second = second, first
@@ -350,8 +327,8 @@ func TestPutVariantsReplacesExistingEntry(t *testing.T) {
 	}
 }
 
-// A different config hash under the same (mod, machine, recipe) is a
-// distinct cache slot; putting the new one must not disturb the old one.
+// A different config hash under the same (mod, machine, recipe) is a distinct cache slot;
+// putting the new one must not disturb the old one.
 func TestPutVariantsWithDifferentHashKeepsBothEntries(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()

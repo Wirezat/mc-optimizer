@@ -10,27 +10,24 @@ import (
 	"github.com/dop251/goja"
 )
 
-// evalTimeout bounds a single evaluate execution, and also bounds a VM's
-// top-level bootstrap code (see newInstance).
+// evalTimeout bounds a single evaluate execution, and also bounds a VM's top-level
+// bootstrap code (see newInstance).
 const evalTimeout = 2 * time.Second
 
 // maxVariants bounds how many variants a plugin may return per call.
 const maxVariants = 256
 
-// Program is a compiled plugin plus its VM pool. Safe for concurrent use
-// from multiple goroutines; a goja.Runtime itself is not.
+// Program is a compiled plugin plus its VM pool.
 type Program struct {
 	modID string
 	prog  *goja.Program
 	pool  sync.Pool
-	// hasWizard is resolved once in Compile, on the eager instance, before the
-	// Program is published — never from a pooled VM, which several goroutines
-	// build concurrently.
+	// hasWizard is resolved once in Compile, on the eager instance, before the Program is
+	// published — never from a pooled VM, which several goroutines build concurrently.
 	hasWizard bool
 }
 
 // HasWizard reports whether the plugin binds a wizard with a mount function.
-// The host shows a config button for this mod only if it does.
 func (p *Program) HasWizard() bool { return p.hasWizard }
 
 // instance is a warmed-up VM with its evaluate function already resolved.
@@ -39,8 +36,8 @@ type instance struct {
 	fn goja.Callable
 }
 
-// Compile parses the plugin source and checks that it binds an object
-// `plugin` with a function `evaluate`.
+// Compile parses the plugin source and checks that it binds an object `plugin` with a
+// function `evaluate`.
 func Compile(modID, source string) (*Program, error) {
 	prog, err := goja.Compile(modID+"/plugin.js", source, true)
 	if err != nil {
@@ -50,9 +47,6 @@ func Compile(modID, source string) (*Program, error) {
 	p.pool.New = func() any {
 		inst, err := p.newInstance()
 		if err != nil {
-			// Returned to the caller as-is (see Evaluate) and never put back
-			// into the pool, so a transient build failure cannot poison it:
-			// the next Get() simply invokes New() again.
 			return err
 		}
 		return inst
@@ -67,9 +61,7 @@ func Compile(modID, source string) (*Program, error) {
 	return p, nil
 }
 
-// bindsWizardMount reports whether plugin.wizard.mount is a function. The
-// wizard body only ever runs in a browser, so this inspects the binding
-// without calling it — the object literal holding it is plain data here.
+// bindsWizardMount reports whether plugin.wizard.mount is a function.
 func bindsWizardMount(vm *goja.Runtime) bool {
 	obj := vm.Get("plugin")
 	if obj == nil || goja.IsUndefined(obj) || goja.IsNull(obj) {
@@ -83,9 +75,8 @@ func bindsWizardMount(vm *goja.Runtime) bool {
 	return ok
 }
 
-// newInstance builds a fresh, isolated VM bound to the compiled program and
-// resolves its evaluate function. Top-level plugin code runs under the same
-// interrupt/timeout guard as evaluate() itself.
+// newInstance builds a fresh, isolated VM bound to the compiled program and resolves its
+// evaluate function.
 func (p *Program) newInstance() (*instance, error) {
 	vm := goja.New()
 	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
@@ -108,8 +99,8 @@ func (p *Program) newInstance() (*instance, error) {
 	return &instance{vm: vm, fn: fn}, nil
 }
 
-// hardenGlobals removes non-deterministic global sources so evaluate() is a
-// pure function of its input.
+// hardenGlobals removes non-deterministic global sources so evaluate() is a pure function
+// of its input.
 func hardenGlobals(vm *goja.Runtime) {
 	global := vm.GlobalObject()
 	_ = global.Delete("Date")
@@ -118,9 +109,7 @@ func hardenGlobals(vm *goja.Runtime) {
 	}
 }
 
-// Evaluate calls evaluate(ctx) and returns the plugin's variants. A timeout, a
-// plugin exception, or a panic raised while reading the result is an error for
-// this mod, never a crash and never a partial result.
+// Evaluate calls evaluate(ctx) and returns the plugin's variants.
 func (p *Program) Evaluate(ctx context.Context, ec EvalContext) ([]Variant, error) {
 	pooled := p.pool.Get()
 	if err, isErr := pooled.(error); isErr {
@@ -164,10 +153,8 @@ func (p *Program) Evaluate(ctx context.Context, ec EvalContext) ([]Variant, erro
 	return out, nil
 }
 
-// guard runs fn against vm under a deadline derived from ctx and timeout, and
-// turns any panic raised inside fn into a returned error. Interrupting is
-// delegated to a watcher goroutine, which is joined back via watcherDone
-// before ClearInterrupt() runs on both the normal and the recovery path.
+// guard runs fn against vm under a deadline derived from ctx and timeout, and turns any
+// panic raised inside fn into a returned error.
 func guard(ctx context.Context, timeout time.Duration, vm *goja.Runtime, fn func() error) (err error) {
 	deadline, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -196,8 +183,8 @@ func guard(ctx context.Context, timeout time.Duration, vm *goja.Runtime, fn func
 	return fn()
 }
 
-// toJSValue passes the context through JSON so json.RawMessage fields arrive
-// as real JS objects instead of strings.
+// toJSValue passes the context through JSON so json.RawMessage fields arrive as real JS
+// objects instead of strings.
 func toJSValue(vm *goja.Runtime, ec EvalContext) (goja.Value, error) {
 	raw, err := json.Marshal(ec)
 	if err != nil {

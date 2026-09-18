@@ -1,16 +1,5 @@
-/* mc_optimizer / theme.css
-   Color tokens for wirezatUI. Accent: copper.
-   Surface style: the page is the lowest level, containers sit above it, and
-   recessed strips inside them (table head, group header, container header)
-   drop back to the page's own color.
-   Load after: /static/ui/index.css
-*/
+/* Color tokens for wirezatUI. Accent: copper. */
 
-/* ── Typography scale ────────────────────────────────────────────────────── */
-/* Half a step above the package defaults, which are sized for dense admin
-   tables; these rows carry item names and rates someone reads at a glance. A
-   full step (15px base) was legible but cost the target column the width its
-   names need, so they clipped. */
 :root {
     --text-xs:   11px;
     --text-sm:   12px;
@@ -19,7 +8,6 @@
     --text-lg:   17px;
     --text-xl:   21px;
 
-    /* Rows hold a 28px icon; the package's 7px would clamp them. */
     --pad-cell-y: 9px;
 }
 
@@ -52,17 +40,11 @@
     --warn:             #d97706;
     --warn-muted:       #fef3c7;
 
-    /* .container-config reads --config; the --config-bg/-border/-header-bg
-       tokens that used to sit here were read by nothing, so the variant fell
-       back to the package's violet default. */
     --config:           color-mix(in srgb, var(--accent) 40%, var(--border-strong));
 }
 
 html.dark {
-    /* base.css fixes color-scheme to light; the browser renders every native
-       control it owns outright (select popups, scrollbars, date pickers) by
-       that, not by our custom properties — override it here or a plugin
-       wizard's <select> opens as a plain light list over a dark form. */
+    /* Dark mode for native controls: select popups, scrollbars, date pickers. */
     color-scheme: dark;
 
     /* Accent — copper (lighter for dark backgrounds) */
@@ -93,11 +75,10 @@ html.dark {
     --warn:             #fbbf24;
     --warn-muted:       #1c1500;
 
-    /* Config-container — see the light-mode note above. */
+    /* Config-container */
     --config:           color-mix(in srgb, var(--accent) 40%, var(--border-strong));
 }
 
-/* ── Mod picker (mod-picker.js) ──────────────────────────────────────────── */
 .check-all-row {
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 2px var(--gap-inline);
@@ -117,7 +98,6 @@ html.dark {
 .mod-check-name { flex: 1; font-size: var(--text-base); }
 .mod-check-count { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
 
-/* ── Measured values, and a line's progress against its target ────────────── */
 .metric {
     font-family: var(--font-mono);
     font-weight: var(--weight-semibold);
@@ -138,6 +118,5 @@ html.dark {
 .progress-cell .wui-progress-track { width: var(--progress-cell-track-width); flex: 0 0 auto; }
 .progress-cell-text { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
 
-/* State last, so it outranks the type rules above without a compound selector. */
 .metric-neg { color: var(--danger); }
 .metric-warn { color: var(--warn); }

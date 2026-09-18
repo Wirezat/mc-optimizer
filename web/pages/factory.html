@@ -14,7 +14,6 @@
     })();
   </script>
   <style>
-    /* ── PL table layout ──────────────────────────────────────────────────── */
     #pl-table { table-layout: fixed; }
     #pl-table .col-drag    { width: 28px; }
     #pl-table .col-check   { width: 36px; }
@@ -41,19 +40,16 @@
        permanently-reserved empty gutter for a state that's usually absent. */
     #pl-table:not(.has-mod-warnings) .col-warn { display: none; }
 
-    /* ── Row hover / cursor ───────────────────────────────────────────────── */
     #pl-table tbody tr[data-plid] { cursor: pointer; }
     #pl-table tbody tr[data-plid].pl-row-archived { cursor: default; }
     #pl-table tbody tr input, #pl-table tbody tr button { cursor: auto; }
     #pl-table .td-editable { cursor: text; }
 
-    /* ── Hover targets ────────────────────────────────────────────────────── */
     /* The cell content is its own infocard trigger — no separate glyph to aim
        at. Shrink-wrapped, so the box is the content rather than the whole cell
        width: pointing at empty space beside a value shouldn't raise its card. */
     .cell-hover { display: inline-block; max-width: 100%; vertical-align: middle; }
 
-    /* ── Machines cell ────────────────────────────────────────────────────── */
     /* Count first: the number is what someone reads off this column. After
        .cell-hover, whose display it has to override — it is both. */
     .machines-cell {
@@ -65,11 +61,8 @@
     .machines-cell .icontext { flex: 0 1 auto; min-width: 0; }
     .machines-more { flex: 0 0 auto; font-family: var(--font-mono); font-size: var(--text-xs); }
 
-
-    /* ── Rate cell ────────────────────────────────────────────────────────── */
     .pl-rate-val { white-space: nowrap; }
 
-    /* ── Tri-state status button ──────────────────────────────────────────── */
     .pl-tri-btn {
       display: inline-flex;
       align-items: center;
@@ -93,7 +86,6 @@
 
     .col-actions { white-space: nowrap; }
 
-    /* ── Archived rows ────────────────────────────────────────────────────── */
     tr.pl-row-archived { display: none; }
     #pl-tbody.show-archived tr.pl-row-archived { display: table-row; }
     tr.pl-row-archived td {
@@ -113,7 +105,6 @@
     }
     .pl-archived-check { opacity: .5; }
 
-    /* ── Archived toggle active state ─────────────────────────────────────── */
     .btn-archived-toggle.active {
       background: var(--bg-hover); border-color: var(--border-strong); color: var(--text);
     }
@@ -121,7 +112,6 @@
     /* Drag handle always readable on group header rows (not just on hover) */
     #pl-table .table-group-hd .drag-handle { color: var(--text-muted); }
 
-    /* ── Context menu: nested-submenu positioning only (no wui equivalent) ── */
     .ctx-has-sub { position: relative; }
     .ctx-has-sub::after { content: '▸'; position: absolute; right: var(--gap-field); opacity: .5; font-size: 10px; }
     .ctx-sub { display: none; position: absolute; left: 100%; top: -4px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.15); min-width: 150px; padding: var(--gap-icon) 0; z-index: 1001; }
@@ -130,7 +120,6 @@
 </head>
 <body class="app-shell">
 
-  <!-- ── Header ── -->
   <header class="header">
     <a class="header-brand" href="/saves">
       <div class="header-logo">⚙️</div>
@@ -184,7 +173,6 @@
           </div>
         </div>
 
-        <!-- ── Normal mode: split-layout ── -->
         <div id="normal-content" class="split-layout fit">
 
           <!-- Left: PL list -->
@@ -263,7 +251,6 @@
 
         </div>
 
-        <!-- ── Source mode ── -->
         <div id="src-content" style="display:none;">
           <div class="container" style="overflow:visible;">
             <div class="container-body-flush">
@@ -346,7 +333,6 @@
 
   function modName(modID) { return _modNames[modID] || modID; }
 
-  // ── Bootstrap ─────────────────────────────────────────
   const plTable = document.getElementById('pl-table');
   const plTbody = document.getElementById('pl-tbody');
 
@@ -441,7 +427,6 @@
     });
   });
 
-  // ── Production Lines ──────────────────────────────────
   function bulkRowHTML() {
     return `<tr data-wui-bulk-row>
       <td class="col-drag"></td>
@@ -555,9 +540,7 @@
   // Shared warning badge for PLs/groups referencing a mod that is not active
   // for this world. Informational only.
   function modMissingBadge() {
-    // Uses the infocard hover system (infocard.js), not a native title=""
-    // tooltip. cursor:pointer rather than the .infocard-trigger default: the
-    // span sits inside a clickable row.
+    // Uses the infocard hover system (infocard.js), not a native title tooltip.
     return `<span class="infocard-trigger" data-infocard-inline style="color:var(--warn);font-size:var(--text-md);flex-shrink:0;cursor:pointer;">⚠</span><div class="infocard-def" hidden><div class="infocard-section" style="max-width:220px;">${esc(t('factory.pl.mod_missing'))}</div></div>`;
   }
 
@@ -590,7 +573,6 @@
     </tr>`;
   }
 
-  // ── Centralized infocard helpers ─────────────────────
   // These are used wherever items or rates are displayed — the infocard
   // definition is always co-located with its trigger (inline mode).
 
@@ -600,11 +582,7 @@
   };
   const _toPerSec = { s: 1, min: 1/60, t: 20 };
 
-  // labelCls carries styling only; the label clamps itself. The mod trails the
-  // name on the same line rather than under it — an ellipsis, not a marquee,
-  // see .icontext-inline — and withMod drops it where the column can't carry
-  // both (balance). The cell is its own hover trigger, so an ellipsised name
-  // is readable by pointing at it rather than at a separate glyph.
+  // itemHtml renders one item cell: icon, name and (when withMod) the mod on the same line.
   function itemHtml(itemId, itemName, modId, labelCls = '', isFluid = false, withMod = true) {
     const label = `<div class="${esc(labelCls)} cell-hover" style="min-width:0;"${itemId ? ' data-infocard-inline' : ''}>
         ${iconTextHTML(modId, itemId, {
@@ -705,7 +683,6 @@
   initCollapsibleGroups(plTable);
   initDraggableRows(plTable);
 
-  // ── Row reorder ───────────────────────────────────────
   plTable.addEventListener('wui:row-reorder', async e => {
     const { id, afterId, beforeId, toGroupId, afterGroupId, beforeGroupId } = e.detail;
     const pl = _pls.find(p => p.id === id);
@@ -740,7 +717,6 @@
     });
   }
 
-  // ── Group rename / delete ─────────────────────────────
   plTable.addEventListener('wui:group-rename', async e => {
     const { groupId, name, prev } = e.detail;
     const res = await apiFetch('/api/pl-groups/' + groupId, {
@@ -767,7 +743,6 @@
     }
   });
 
-  // ── Table event delegation ─────────────────────────────
   plTbody.addEventListener('click', e => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
@@ -817,7 +792,6 @@
     await reload();
   });
 
-  // ── Check-all ─────────────────────────────────────────
   document.getElementById('check-all').addEventListener('change', e => {
     document.querySelectorAll('.pl-check').forEach(cb => {
       cb.checked = e.target.checked;
@@ -835,7 +809,6 @@
     ca.indeterminate = _selected.size > 0 && _selected.size < all.length;
   }
 
-  // ── Bulk actions ──────────────────────────────────────
   plTable.addEventListener('click', async e => {
     if (!e.target.closest('[data-bulk-delete]')) return;
     if (!_selected.size || !confirm(`${_selected.size} ${t('factory.pl.confirm_delete_bulk')}`)) return;
@@ -843,7 +816,6 @@
     await reload();
   });
 
-  // ── Row click → navigate ──────────────────────────────
   plTable.addEventListener('click', e => {
     if (e.target.closest('[data-wui-bulk-row]')) return;
     if (e.target.closest('.table-group-hd')) return;
@@ -854,14 +826,12 @@
     window.location.href = '/production-lines/' + row.dataset.plid;
   });
 
-  // ── Archived toggle ────────────────────────────────────
   document.getElementById('archived-toggle').addEventListener('click', function() {
     this.classList.toggle('active');
     plTbody.classList.toggle('show-archived');
     _renderPLCount();
   });
 
-  // ── Group name modal helper ────────────────────────────
   function openGroupNameModal(onConfirm) {
     openModal({
       title:        t('factory.pl.new_group_title'),
@@ -878,7 +848,6 @@
     setTimeout(() => document.getElementById('group-name-modal-input')?.focus(), 50);
   }
 
-  // ── New group ──────────────────────────────────────────
   document.getElementById('new-group-btn').addEventListener('click', () => {
     openGroupNameModal(async name => {
       const res = await apiFetch('/api/factories/' + _factoryID + '/pl-groups', {
@@ -896,7 +865,6 @@
     });
   });
 
-  // ── Filter ────────────────────────────────────────────
   document.getElementById('pl-filter').addEventListener('input', e => {
     const q = e.target.value.toLowerCase();
     plTbody.querySelectorAll('tr.table-group-hd').forEach(hd => {
@@ -947,7 +915,6 @@
     });
   })();
 
-  // ── Group submenu builder ─────────────────────────────
   function buildGroupSub(container, callback) {
     container.innerHTML =
       _groups.map(g => `<div class="dropdown-item" data-gid="${esc(g.id)}">${esc(g.name)}</div>`).join('') +
@@ -998,7 +965,6 @@
     _ctxPLID = null;
   }
 
-  // ── PL Actions ────────────────────────────────────────
   async function toggleStatus(id, current) {
     const next = current === 'active' ? 'archived' : 'active';
     await apiFetch('/api/production-lines/' + id + '/status', {
@@ -1038,7 +1004,6 @@
     }
   }
 
-  // ── Balance ───────────────────────────────────────────
   function renderBalance(balance) {
     const tbody = document.getElementById('balance-tbody');
     const sort  = arr => [...(arr ?? [])].sort((a, b) => (a.name || a.item_fluid_id).localeCompare(b.name || b.item_fluid_id));
@@ -1049,7 +1014,6 @@
 
     const dataRow = (e, isSurplus) => {
       const bot = isSurplus && e.is_bottleneck;
-      // On the value, not the cell: .metric sets its own colour otherwise.
       return `<tr>
         <td>${itemHtml(e.item_fluid_id, e.name, e.mod_id, '', e.io_type === 'fluid', false)}</td>
         <td style="text-align:right;white-space:nowrap;">${rateHtml(e.rate_num, e.rate_den, 'min', bot ? 'metric-neg' : null)}</td>
@@ -1104,7 +1068,6 @@
     });
   }
 
-  // ── Source Mode IO ────────────────────────────────────
   let _srcInputs  = [];
   let _srcOutputs = [];
   let _srcSel     = null;
@@ -1220,7 +1183,6 @@
     }
   }
 
-  // ── Shared AC fetcher ─────────────────────────────────
   async function itemAndFluidFetcher(q, offset) {
     const [ir, fr] = await Promise.all([
       apiFetch('/api/items?q=' + encodeURIComponent(q) + '&offset=' + offset),
@@ -1234,7 +1196,6 @@
     };
   }
 
-  // ── Helpers ───────────────────────────────────────────
   function fmtRateFrac(num, den) {
     if (!den || den === 1) return String(num);
     const dec = num / den;
@@ -1246,7 +1207,6 @@
     return [n / g, d / g];
   }
   function gcd(a, b) { return b ? gcd(b, a % b) : a; }
-
 
   init();
 </script>

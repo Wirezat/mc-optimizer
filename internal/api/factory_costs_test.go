@@ -42,11 +42,6 @@ func TestAggregateCostsIsStablyOrdered(t *testing.T) {
 	}
 }
 
-// TestAggregateCostsDropsOverflowingResourceInsteadOfCrashing exercises the
-// int64 overflow guard: this aggregation runs outside the solver's own
-// guarded call path, and plugin numbers are attacker/author-controlled, so a
-// pathological sum must degrade (drop that resource) rather than panic the
-// request or corrupt an unrelated resource's total.
 func TestAggregateCostsDropsOverflowingResourceInsteadOfCrashing(t *testing.T) {
 	groups := [][]plugins.Cost{
 		{{Resource: "eu", Amount: plugins.Rational{Num: math.MaxInt64, Den: 1}}},

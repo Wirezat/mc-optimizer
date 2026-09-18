@@ -2,12 +2,11 @@ package importer
 
 import "testing"
 
-// Any machine or recipe field not claimed by a core column (id, lang_key,
-// ecosystem, implements, slots on a machine; machine, duration_ticks,
-// inputs, outputs, shape on a recipe) must land in ModData verbatim, and a
-// core field must never also leak into it — a plugin reads ModData as the
-// mod's own opaque config and a leaked core field would shadow whatever key
-// the mod author picked.
+// Any machine or recipe field not claimed by a core column (id, lang_key, ecosystem,
+// implements, slots on a machine; machine, duration_ticks, inputs, outputs, shape on a
+// recipe) must land in ModData verbatim, and a core field must never also leak into it — a
+// plugin reads ModData as the mod's own opaque config and a leaked core field would shadow
+// whatever key the mod author picked.
 func TestParseModFile_MachineAndRecipeModData(t *testing.T) {
 	data := []byte(`
 mod_id: test_mod
@@ -68,8 +67,8 @@ recipes:
 	}
 }
 
-// A modfile predating the key field must still import, distinguished only as
-// far as the item pair allows — this is the fallback, not the fix.
+// A modfile predating the key field must still import, distinguished only as far as the
+// item pair allows — this is the fallback, not the fix.
 func TestParseModFile_VillagerTradeKeyFallsBackToItemPair(t *testing.T) {
 	data := []byte(`
 mod_id: test_mod
@@ -94,9 +93,6 @@ villager_trades:
 	}
 }
 
-// An explicit key is used as-is — it is what tells apart offers that would
-// otherwise share the same profession, tier and item pair (the cartographer's
-// explorer maps).
 func TestParseModFile_VillagerTradeExplicitKey(t *testing.T) {
 	data := []byte(`
 mod_id: test_mod
@@ -119,9 +115,7 @@ villager_trades:
 	}
 }
 
-// The second cost slot is optional. Omitting it must leave both the mod and
-// item empty, since that pair — not the count — is what UpsertVillagerTrades
-// checks to decide whether a second slot exists at all.
+// The second cost slot is optional.
 func TestParseModFile_VillagerTradeNoCost2(t *testing.T) {
 	data := []byte(`
 mod_id: test_mod
@@ -147,8 +141,8 @@ villager_trades:
 	}
 }
 
-// A present second slot resolves its ref and defaults its count the same way
-// the first slot does.
+// A present second slot resolves its ref and defaults its count the same way the first slot
+// does.
 func TestParseModFile_VillagerTradeWithCost2(t *testing.T) {
 	data := []byte(`
 mod_id: test_mod
@@ -177,8 +171,8 @@ villager_trades:
 	}
 }
 
-// SourceModID is the mod declaring the offer, always — it is what tells a
-// datapack's redefinition of a vanilla profession apart from vanilla's own.
+// SourceModID is the mod declaring the offer, always — it is what tells a datapack's
+// redefinition of a vanilla profession apart from vanilla's own.
 func TestParseModFile_VillagerTradeSourceModID(t *testing.T) {
 	data := []byte(`
 mod_id: trade_rebalance

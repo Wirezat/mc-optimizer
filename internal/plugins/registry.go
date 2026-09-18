@@ -8,8 +8,7 @@ type entry struct {
 	prog    *Program
 }
 
-// Registry holds exactly one compiled plugin per mod. Safe for concurrent
-// use from multiple goroutines.
+// Registry holds exactly one compiled plugin per mod.
 type Registry struct {
 	mu      sync.RWMutex
 	entries map[string]entry
@@ -20,8 +19,7 @@ func NewRegistry() *Registry {
 	return &Registry{entries: map[string]entry{}}
 }
 
-// Put compiles source and stores it under modID, replacing any existing
-// entry.
+// Put compiles source and stores it under modID, replacing any existing entry.
 func (r *Registry) Put(modID, version, source string) error {
 	prog, err := Compile(modID, source)
 	if err != nil {
@@ -33,8 +31,7 @@ func (r *Registry) Put(modID, version, source string) error {
 	return nil
 }
 
-// Get returns the program for modID, provided it is stored under exactly this
-// version. A version mismatch is a miss.
+// Get returns the program for modID, provided it is stored under exactly this version.
 func (r *Registry) Get(modID, version string) (*Program, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -45,7 +42,7 @@ func (r *Registry) Get(modID, version string) (*Program, bool) {
 	return e.prog, true
 }
 
-// Drop removes modID's program, e.g. when the mod is deleted.
+// Drop removes modID's program, e.g.
 func (r *Registry) Drop(modID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

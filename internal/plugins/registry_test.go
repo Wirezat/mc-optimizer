@@ -81,14 +81,10 @@ func TestRegistryConcurrentEvaluate(t *testing.T) {
 	wg.Wait()
 }
 
-// TestRegistryConcurrentPutGet asserts the registry's own invariant: Put and
-// Get are callable concurrently on the same modID without a data race, and a
-// caller that gets a hit never observes a torn entry - a returned program
-// compiled under a different version than the one it reports matching. Two
-// distinct fixtures (not just two version strings) make that observable: the
-// program itself, once evaluated, reveals which version it was compiled
-// under, so a hit on "1.0.0" can be checked for more than absence of a
-// crash.
+// TestRegistryConcurrentPutGet asserts the registry's own invariant: Put and Get are
+// callable concurrently on the same modID without a data race, and a caller that gets a hit
+// never observes a torn entry - a returned program compiled under a different version than
+// the one it reports matching.
 func TestRegistryConcurrentPutGet(t *testing.T) {
 	srcV1 := `var plugin = {
 		evaluate: function (ctx) {

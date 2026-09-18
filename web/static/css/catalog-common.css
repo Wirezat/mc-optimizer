@@ -1,6 +1,4 @@
-/* Shared catalog table link/toggle styles — used across catalog-items,
-   catalog-fluids, catalog-machines, catalog-trades, catalog-mods.
-   Hoisted from identical per-page copies; keep in sync app-wide by editing here only. */
+/* Shared catalog table link/toggle styles for all catalog pages. */
 
 .row-name-link { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); }
 .row-name-link:hover { color: var(--accent); border-color: var(--accent); }
@@ -11,6 +9,5 @@
 .recipe-count-link { color: var(--text-muted); text-decoration: none; font-size: var(--text-sm); }
 .recipe-count-link:hover { color: var(--accent); }
 
-/* placeholder text for empty inline-editable fields — inline-edit.css has no
-   placeholder mechanism, so this lives here instead. */
+/* Placeholder text for empty inline-editable fields. */
 .field-editable[data-placeholder]:empty::before { content: attr(data-placeholder); color: var(--text-faint); pointer-events: none; }

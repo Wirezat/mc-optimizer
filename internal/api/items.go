@@ -10,8 +10,8 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
-// GetItemRecipesHandler handles GET /api/items/{mod_id}/{item_id}/recipes.
-// Returns all recipes that produce the given item, as recipe cards.
+// GetItemRecipesHandler handles GET /api/items/{mod_id}/{item_id}/recipes. Returns all
+// recipes that produce the given item, as recipe cards.
 func GetItemRecipesHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		modID := r.PathValue("mod_id")
@@ -34,12 +34,7 @@ func GetItemRecipesHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// dedupeByRecipeID keeps the first row per recipe id. GetRecipesForItem and
-// GetRecipesForFluid yield one row per candidate machine so the solver's chain
-// can offer them all, but a catalog page answers "what recipes exist" rather
-// than "which machine to build" — so it collapses back to one card per recipe.
-// The query orders each recipe's own machine first, so the kept row is always
-// that recipe's base machine.
+// dedupeByRecipeID keeps the first row per recipe id.
 func dedupeByRecipeID(rows []*solver.RecipeRow) []*solver.RecipeRow {
 	seen := make(map[string]bool, len(rows))
 	out := make([]*solver.RecipeRow, 0, len(rows))
@@ -53,9 +48,8 @@ func dedupeByRecipeID(rows []*solver.RecipeRow) []*solver.RecipeRow {
 	return out
 }
 
-// buildRecipeCards builds a recipe card per row, applying each row's
-// machine's slot layout (recipecard.ApplySlotLayout). Slots are fetched once
-// per distinct machine.
+// buildRecipeCards builds a recipe card per row, applying each row's machine's slot layout
+// (recipecard.ApplySlotLayout).
 func buildRecipeCards(ctx context.Context, database *db.DB, rows []*solver.RecipeRow) ([]recipecard.Card, error) {
 	type machineKey struct{ modID, machineID string }
 	slotsByMachine := map[machineKey][]*model.MachineSlot{}

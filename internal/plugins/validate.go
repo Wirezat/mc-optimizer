@@ -6,16 +6,13 @@ import (
 	"sort"
 )
 
-// maxPluginMagnitude bounds every Num, Den, and Item.Count value a plugin may
-// return. See handoff section 11 for the choice of math.MaxInt32 and for why it
-// does not by itself make chained arithmetic overflow-safe.
+// maxPluginMagnitude bounds every Num, Den, and Item.Count value a plugin may return.
 const maxPluginMagnitude = math.MaxInt32
 
-// Validate checks a variant list against the plugin contract: exactly one base
-// variant (no installed items), an output set that either matches the recipe's
-// exactly as a multiset or is left empty, well-formed fractions, a strictly
-// positive rate, and output probabilities within [0, 1]. A missing output
-// probability defaults to 1/1 in a copy of Outputs, never the caller's slice.
+// Validate checks a variant list against the plugin contract: exactly one base variant (no
+// installed items), an output set that either matches the recipe's exactly as a multiset or
+// is left empty, well-formed fractions, a strictly positive rate, and output probabilities
+// within [0, 1].
 func Validate(ec EvalContext, vs []Variant) error {
 	if len(vs) == 0 {
 		return fmt.Errorf("plugins: evaluate returned no variants")
@@ -76,8 +73,7 @@ func Validate(ec EvalContext, vs []Variant) error {
 				if err := checkRational("output amount", v.ID, o.Amount, true); err != nil {
 					return err
 				}
-				// A wholly missing probability field extracts as the zero Rational; it counts
-				// as 1/1.
+				// A wholly missing probability field extracts as the zero Rational; it counts as 1/1.
 				if o.Probability.Den == 0 {
 					o.Probability = Rational{Num: 1, Den: 1}
 				}
@@ -108,17 +104,16 @@ func Validate(ec EvalContext, vs []Variant) error {
 		}
 	}
 
-	// At most one: on a blasting recipe every cell carries the red augment, and
-	// both baseVariant implementations fall back on their own.
+	// At most one: on a blasting recipe every cell carries the red augment, and both
+	// baseVariant implementations fall back on their own.
 	if bases > 1 {
 		return fmt.Errorf("plugins: expected at most one base variant with no items, got %d", bases)
 	}
 	return nil
 }
 
-// checkRational rejects a fraction the solver cannot safely compute with: a
-// non-positive denominator, a negative numerator, or either magnitude above
-// maxPluginMagnitude.
+// checkRational rejects a fraction the solver cannot safely compute with: a non-positive
+// denominator, a negative numerator, or either magnitude above maxPluginMagnitude.
 func checkRational(field, variantID string, r Rational, allowZero bool) error {
 	if r.Num == 0 && r.Den == 0 {
 		return fmt.Errorf("plugins: variant %q is missing %s", variantID, field)

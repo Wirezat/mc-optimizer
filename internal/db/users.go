@@ -118,8 +118,8 @@ func (d *DB) SetUserAdmin(ctx context.Context, userID uuid.UUID, isAdmin bool) e
 	return nil
 }
 
-// TransferOwnership atomically moves is_owner from fromID to toID.
-// Returns ErrNotFound if either user does not exist.
+// TransferOwnership atomically moves is_owner from fromID to toID. Returns ErrNotFound if
+// either user does not exist.
 func (d *DB) TransferOwnership(ctx context.Context, fromID, toID uuid.UUID) error {
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {
@@ -145,8 +145,7 @@ func (d *DB) TransferOwnership(ctx context.Context, fromID, toID uuid.UUID) erro
 	return nil
 }
 
-// DeleteUser removes a user by ID. All owned data cascades automatically.
-// Returns ErrNotFound if the user does not exist.
+// DeleteUser removes a user by ID. Returns ErrNotFound if the user does not exist.
 func (d *DB) DeleteUser(ctx context.Context, userID uuid.UUID) error {
 	tag, err := d.Pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
 	if err != nil {
@@ -168,8 +167,8 @@ func (d *DB) HasOwner(ctx context.Context) (bool, error) {
 	return exists, nil
 }
 
-// PromoteToOwnerIfFirst sets is_owner = TRUE and is_admin = TRUE for the given user
-// if no owner exists yet. Returns true if the promotion happened.
+// PromoteToOwnerIfFirst sets is_owner = TRUE and is_admin = TRUE for the given user if no
+// owner exists yet. Returns true if the promotion happened.
 func (d *DB) PromoteToOwnerIfFirst(ctx context.Context, userID uuid.UUID) (bool, error) {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE users SET is_owner = TRUE, is_admin = TRUE

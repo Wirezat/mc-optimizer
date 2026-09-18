@@ -6,8 +6,8 @@ export function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Singular/plural count text. baseKey and baseKey+'_one' must both exist in
-// the locale file (see catalog.items.count/_one for the pattern).
+// Singular/plural count text. baseKey and baseKey+'_one' must both exist in the locale file
+// (see catalog.items.count/_one for the pattern).
 export function tCount(n, baseKey) {
   if (n === 1) return t(baseKey + '_one');
   return t(baseKey).replace('{n}', n);

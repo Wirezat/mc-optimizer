@@ -70,7 +70,8 @@ func RequireAdmin(next http.Handler) http.Handler {
 	})
 }
 
-// userIDFromContext retrieves userID from context; panics if RequireAuth missing (programming error).
+// userIDFromContext retrieves userID from context; panics if RequireAuth missing
+// (programming error).
 func userIDFromContext(ctx context.Context) uuid.UUID {
 	id, ok := ctx.Value(contextKeyUserID).(uuid.UUID)
 	if !ok {
@@ -102,7 +103,8 @@ func isOwnerFromContext(ctx context.Context) bool {
 	return v
 }
 
-// bearerToken extracts raw token from "Authorization: Bearer <token>", empty if absent/malformed.
+// bearerToken extracts raw token from "Authorization: Bearer <token>", empty if
+// absent/malformed.
 func bearerToken(r *http.Request) string {
 	h := r.Header.Get("Authorization")
 	if !strings.HasPrefix(h, "Bearer ") {

@@ -21,7 +21,6 @@
 </head>
 <body class="app-shell">
 
-  <!-- ── Header ── -->
   <header class="header">
     <a class="header-brand" href="/saves">
       <div class="header-logo">⚙️</div>
@@ -82,7 +81,6 @@
     </main>
   </div>
 
-  <!-- ── New Factory Modal ── -->
   <div class="modal-backdrop" data-wui-modal>
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -110,7 +108,6 @@
     </div>
   </div>
 
-  <!-- ── Mods Modal ── -->
   <div class="modal-backdrop" data-wui-modal="mods">
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-header">
@@ -128,9 +125,8 @@
     </div>
   </div>
 
-  <!-- ── Generic confirm modal (mods-confirm) — used for the "deactivating this
-       mod affects existing production lines" prompt. Placed after the Mods
-       modal so it paints on top when both happen to be open. ── -->
+  <!-- Generic confirm modal (mods-confirm), used for the "deactivating this mod affects
+       existing production lines" prompt. -->
   <div class="modal-backdrop" data-wui-modal="mods-confirm">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mods-confirm-title">
       <div class="modal-header">
@@ -209,7 +205,6 @@
 
   document.getElementById('mode-btn').addEventListener('click', () => setSrcMode(!_srcMode));
 
-  // ── Mods modal ─────────────────────────────────────────────────────────────
   document.getElementById('mods-btn').addEventListener('click', openModsModal);
   document.getElementById('mods-save-btn').addEventListener('click', saveMods);
 
@@ -260,7 +255,6 @@
     closeModal('mods');
   }
 
-  // ── Load save metadata ────────────────────────────────────────────────────
   async function loadSave() {
     const res = await apiFetch('/api/saves/' + _saveID);
     if (!res || !res.ok) { window.location.href = '/saves'; return; }
@@ -270,7 +264,6 @@
     document.getElementById('breadcrumb-name').textContent = save.name;
   }
 
-  // ── Load factories ────────────────────────────────────────────────────────
   async function loadFactories() {
     const res = await apiFetch('/api/saves/' + _saveID + '/factories');
     if (!res) return;
@@ -278,7 +271,6 @@
     listView.render(factories);
   }
 
-  // ── Create factory ────────────────────────────────────────────────────────
   function openModal() {
     document.getElementById('factory-name').value = '';
     setSrcMode(false);
@@ -303,7 +295,6 @@
     loadFactories();
   }
 
-  // ── Delete factory ────────────────────────────────────────────────────────
   async function deleteFactory(id, btn = null) {
     if (!confirm(t('save.confirm_delete'))) return;
     if (btn) btn.disabled = true;
@@ -312,7 +303,6 @@
     else if (btn) btn.disabled = false;
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   function fmtPL(n) {
     if (!n) return esc(t('save.pl_count_none'));
     return esc(t('save.pl_count').replace('{n}', n));
@@ -323,7 +313,6 @@
     el.className = 'status-msg ' + cls;
     el.textContent = text;
   }
-
 
   loadSave();
   loadFactories();

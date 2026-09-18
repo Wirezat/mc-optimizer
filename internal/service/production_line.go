@@ -22,30 +22,25 @@ var (
 )
 
 // draftPayload is the JSON structure stored in solver_drafts.result.
-// It bundles the original request alongside the computed result so the
-// confirm step can reconstruct the production line without re-running the solver.
 type draftPayload struct {
 	Request solver.SolveRequest `json:"request"`
 	Result  solver.SolveResult  `json:"result"`
 }
 
 // PLService coordinates solving and confirming production lines.
-// It is the single point of business logic between HTTP handlers and the solver/DB.
 type PLService struct {
 	db           *db.DB
 	autoScaleMax int64
 	variants     solver.VariantSource
 }
 
-// NewPLService creates a PLService with the given database, auto-scale cap and
-// variant source.
+// NewPLService creates a PLService with the given database, auto-scale cap and variant
+// source.
 func NewPLService(database *db.DB, autoScaleMax int64, variants solver.VariantSource) *PLService {
 	return &PLService{db: database, autoScaleMax: autoScaleMax, variants: variants}
 }
 
-// solverFor builds a solver bound to a factory's active mods. The plugin config
-// travels with the request and belongs to the production line, so it is left
-// untouched here.
+// solverFor builds a solver bound to a factory's active mods.
 func (s *PLService) solverFor(ctx context.Context, factoryID uuid.UUID, req *solver.SolveRequest) (*solver.Solver, error) {
 	factory, err := s.db.GetFactory(ctx, factoryID)
 	if err != nil {
@@ -69,7 +64,6 @@ type SolveOutput struct {
 }
 
 // Solve runs the solver with the given request, persists a draft, and returns the result.
-// Stop points and factory state are provided directly by the caller (no server-side merging).
 func (s *PLService) Solve(ctx context.Context, factoryID, userID uuid.UUID, req solver.SolveRequest) (*SolveOutput, error) {
 	GoLog.Infof("solve: target=%s:%s mode=%s rate=%d/%d unit=%s stops=%d",
 		req.TargetItem.ModID, req.TargetItem.ItemID,
@@ -110,9 +104,8 @@ type ConfirmInput struct {
 	DraftID uuid.UUID
 }
 
-// Confirm promotes a solver draft to a live production line.
-// Returns ErrDraftNotFound if the draft is missing or expired.
-// Returns ErrWrongFactory if the draft was created for a different factory.
+// Confirm promotes a solver draft to a live production line. Returns ErrDraftNotFound if
+// the draft is missing or expired.
 func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input ConfirmInput) (*model.ProductionLineDetail, error) {
 	draft, err := s.db.GetSolverDraft(ctx, input.DraftID)
 	if err != nil {
@@ -160,10 +153,8 @@ func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input Conf
 	return s.db.ConfirmSolverDraft(ctx, pl, ios, groups, input.DraftID)
 }
 
-// solveResultToContents converts a solver result into the persistable PLIO and
-// MachineGroup rows. New groups are returned with status "planned", each
-// carrying the plugin config it was solved under so a later change to the
-// save-wide config leaves the line alone. Shared by Confirm and Resolve.
+// solveResultToContents converts a solver result into the persistable PLIO and MachineGroup
+// rows.
 func solveResultToContents(result solver.SolveResult, modConfigs map[string]json.RawMessage) ([]*model.PLIO, []*model.MachineGroup, error) {
 	totalIO := len(result.IOProfile.Inputs) + len(result.IOProfile.Outputs)
 	ios := make([]*model.PLIO, 0, totalIO)
@@ -206,15 +197,13 @@ func solveResultToContents(result solver.SolveResult, modConfigs map[string]json
 			exactDen = 1
 		}
 		groups = append(groups, &model.MachineGroup{
-			MachineModID: mg.MachineMod,
-			MachineID:    mg.MachineID,
-			RecipeID:     recipeID,
-			Count:        int(mg.Count),
-			Status:       "planned",
-			VariantID:    mg.VariantID,
-			ModConfig:    modConfigs[mg.PluginMod],
-			// CurrentVariantID stays unset: nothing is built yet, so the DB
-			// default (the host variant) is the truthful build state.
+			MachineModID:  mg.MachineMod,
+			MachineID:     mg.MachineID,
+			RecipeID:      recipeID,
+			Count:         int(mg.Count),
+			Status:        "planned",
+			VariantID:     mg.VariantID,
+			ModConfig:     modConfigs[mg.PluginMod],
 			ExactCountNum: mg.ExactCount.Num,
 			ExactCountDen: exactDen,
 			Costs:         mg.Costs,
@@ -223,9 +212,9 @@ func solveResultToContents(result solver.SolveResult, modConfigs map[string]json
 	return ios, groups, nil
 }
 
-// Scale resizes a saved line to k times its machines and rates, in place, so
-// status and built counts survive. Returns ErrBuiltCountExceeded when a group
-// would end up smaller than what is already built.
+// Scale resizes a saved line to k times its machines and rates, in place, so status and
+// built counts survive. Returns ErrBuiltCountExceeded when a group would end up smaller
+// than what is already built.
 func (s *PLService) Scale(ctx context.Context, plID uuid.UUID, k solver.Rational) (*model.ProductionLineDetail, error) {
 	if k.Den == 0 || !k.IsPositive() {
 		return nil, fmt.Errorf("service: scale: factor must be positive")

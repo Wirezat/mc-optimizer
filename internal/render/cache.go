@@ -9,16 +9,8 @@ import (
 	"sync"
 )
 
-// Cache renders models on demand and keeps the encoded PNGs for the lifetime of
-// the process, until an import replaces the assets they came from.
-//
-// A render costs a few milliseconds and its inputs — model JSON and textures —
-// only change on import, so caching in memory is enough and keeps the asset tree
-// free of generated files. Each entry is small (a 32px icon is a few hundred
-// bytes) and the set is bounded by how many models the catalog has.
-//
-// Concurrent requests for the same icon wait on one render rather than each
-// doing the work: a page opening thirty pipe icons at once is the normal case.
+// Cache renders models on demand and keeps the encoded PNGs for the lifetime of the
+// process, until an import replaces the assets they came from.
 type Cache struct {
 	loader  *Loader
 	mu      sync.Mutex
@@ -36,8 +28,8 @@ func NewCache(loader *Loader) *Cache {
 	return &Cache{loader: loader, entries: map[string]*entry{}}
 }
 
-// Get returns the PNG for a model at a given size, plus an ETag derived from the
-// bytes so a client can revalidate cheaply.
+// Get returns the PNG for a model at a given size, plus an ETag derived from the bytes so a
+// client can revalidate cheaply.
 func (c *Cache) Get(ref string, size int) (data []byte, etag string, err error) {
 	if err := SanitizeRef(ref); err != nil {
 		return nil, "", err
@@ -55,18 +47,15 @@ func (c *Cache) Get(ref string, size int) (data []byte, etag string, err error) 
 	c.entries[key] = e
 	c.mu.Unlock()
 
-	// Released before anything else can fail. A panic escaping the render would
-	// otherwise leave the entry in the map with its WaitGroup never released,
-	// and every later request for that key would block forever rather than just
-	// this one failing.
+	// Released before anything else can fail.
 	defer func() {
 		if r := recover(); r != nil {
 			e.err = fmt.Errorf("render: %q panicked: %v", ref, r)
 		}
 		e.done.Done()
 		if e.err != nil {
-			// A failure must not be cached: the model may simply not be
-			// imported yet, and the next request should try again.
+			// A failure must not be cached: the model may simply not be imported yet, and the next
+			// request should try again.
 			c.mu.Lock()
 			delete(c.entries, key)
 			c.mu.Unlock()
@@ -91,9 +80,6 @@ func (c *Cache) render(ref string, size int) ([]byte, string, error) {
 }
 
 // Invalidate drops everything, for use after an import replaces assets.
-//
-// A render already in flight keeps its own entry and finishes normally; it
-// simply lands in the discarded map and is re-rendered on the next request.
 func (c *Cache) Invalidate() {
 	c.mu.Lock()
 	c.entries = map[string]*entry{}

@@ -1,6 +1,5 @@
-// Package assets resolves item and fluid texture files, extracted from mod
-// ZIPs into ./assets/, by filename convention. No DB, no cache — every call
-// is a live filesystem check.
+// Package assets resolves item and fluid texture files, extracted from mod ZIPs into
+// ./assets/, by filename convention.
 package assets
 
 import (
@@ -16,15 +15,15 @@ type candidate struct {
 	urlRel  string
 }
 
-// safeSegment reports whether s is safe to use as a single path component:
-// no separator, no "..", not empty.
+// safeSegment reports whether s is safe to use as a single path component: no separator, no
+// "..", not empty.
 func safeSegment(s string) bool {
 	return s != "" && s != ".." && !strings.ContainsAny(s, `/\`)
 }
 
-// ResolveItemTexture returns the public URL path for itemID's icon under modID
-// (both plain path segments, not namespaced refs), or ok=false if neither a
-// texture nor a model exists on disk under assetsDir.
+// ResolveItemTexture returns the public URL path for itemID's icon under modID (both plain
+// path segments, not namespaced refs), or ok=false if neither a texture nor a model exists
+// on disk under assetsDir.
 func ResolveItemTexture(assetsDir, modID, itemID string) (urlPath string, ok bool) {
 	if !safeSegment(modID) || !safeSegment(itemID) {
 		return "", false
@@ -47,9 +46,8 @@ func ResolveItemTexture(assetsDir, modID, itemID string) (urlPath string, ok boo
 	return "", false
 }
 
-// ResolveFluidTexture returns the public URL path for fluidID's still-frame
-// icon under modID, or ok=false if no texture file exists on disk under
-// assetsDir.
+// ResolveFluidTexture returns the public URL path for fluidID's still-frame icon under
+// modID, or ok=false if no texture file exists on disk under assetsDir.
 func ResolveFluidTexture(assetsDir, modID, fluidID string) (urlPath string, ok bool) {
 	if !safeSegment(modID) || !safeSegment(fluidID) {
 		return "", false
@@ -60,13 +58,9 @@ func ResolveFluidTexture(assetsDir, modID, fluidID string) (urlPath string, ok b
 	})
 }
 
-// ResolveMachineTexture returns the public URL path for machineID's icon
-// under modID (block model, blockstate, item model, or generated fallback
-// texture, in that order), or ok=false if none exist on disk under
-// assetsDir. Item models cover machines with no block model (MI's
-// block-entity-rendered casings) via vanilla's generic block/cube parent,
-// no MI-specific rendering needed; only the filename needs a second,
-// "electric_"-prefixed attempt for MI's one naming inconsistency.
+// ResolveMachineTexture returns the public URL path for machineID's icon under modID (block
+// model, blockstate, item model, or generated fallback texture, in that order), or ok=false
+// if none exist on disk under assetsDir.
 func ResolveMachineTexture(assetsDir, modID, machineID string) (urlPath string, ok bool) {
 	if !safeSegment(modID) || !safeSegment(machineID) {
 		return "", false
@@ -92,9 +86,9 @@ func ResolveMachineTexture(assetsDir, modID, machineID string) (urlPath string, 
 // maxParentDepth caps a model's parent chain, mirroring internal/render.
 const maxParentDepth = 8
 
-// generatedParents are the game's built-in flat item models: a chain that
-// ends in one of them describes a sprite, not a shape — nothing for the
-// renderer to draw, the layer0 texture is the icon.
+// generatedParents are the game's built-in flat item models: a chain that ends in one of
+// them describes a sprite, not a shape — nothing for the renderer to draw, the layer0
+// texture is the icon.
 var generatedParents = map[string]bool{
 	"item/generated":    true,
 	"item/handheld":     true,
@@ -102,11 +96,8 @@ var generatedParents = map[string]bool{
 	"builtin/generated": true,
 }
 
-// generatedSprite follows ref's parent chain under assetsDir and, where it
-// ends in a built-in flat item model, returns the public URL of its layer0
-// sprite. ok=false for a shape (or an unreadable chain), which the renderer
-// handles. Textures merge child-over-parent the way the game does, so a base
-// model's layer0 can be overridden by the item.
+// generatedSprite follows ref's parent chain under assetsDir and, where it ends in a
+// built-in flat item model, returns the public URL of its layer0 sprite.
 func generatedSprite(assetsDir, ref string) (urlPath string, ok bool) {
 	textures := map[string]string{}
 	for depth := 0; ref != "" && depth <= maxParentDepth; depth++ {
@@ -138,8 +129,8 @@ func generatedSprite(assetsDir, ref string) (urlPath string, ok bool) {
 	return "", false
 }
 
-// spriteURL turns a texture ref ("mod:item/tools/wrench") into its public
-// URL, ok=false if the file is not on disk.
+// spriteURL turns a texture ref ("mod:item/tools/wrench") into its public URL, ok=false if
+// the file is not on disk.
 func spriteURL(assetsDir, texRef string) (string, bool) {
 	if texRef == "" {
 		return "", false
@@ -153,8 +144,7 @@ func spriteURL(assetsDir, texRef string) (string, bool) {
 	})
 }
 
-// splitRef splits a namespaced ref; the namespace defaults to minecraft, as
-// in the game.
+// splitRef splits a namespaced ref; the namespace defaults to minecraft, as in the game.
 func splitRef(ref string) (modID, rel string) {
 	if i := strings.IndexByte(ref, ':'); i >= 0 {
 		return ref[:i], ref[i+1:]
@@ -162,8 +152,8 @@ func splitRef(ref string) (modID, rel string) {
 	return "minecraft", ref
 }
 
-// safeRel reports whether a slash-separated ref component stays inside the
-// assets tree: no empty segments, no "..", no backslashes.
+// safeRel reports whether a slash-separated ref component stays inside the assets tree: no
+// empty segments, no "..", no backslashes.
 func safeRel(rel string) bool {
 	if rel == "" || strings.ContainsRune(rel, '\\') {
 		return false

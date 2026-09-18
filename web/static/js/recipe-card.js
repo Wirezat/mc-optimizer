@@ -1,9 +1,7 @@
-/* recipe-card.js
-   Renders a recipe's crafting-grid card from the recipe-card JSON shape
-   GET /api/items/{mod}/{item}/recipes and GET /api/fluids/{mod}/{fluid}/recipes
-   return (see internal/recipecard.Card for the exact shape).
-   Used by catalog-items.html and catalog-fluids.html's side panel.
-*/
+/**
+ * Renders a recipe's crafting-grid card from the recipe-card JSON shape.
+ * Input: one Card as returned by GET /api/items|fluids/{mod}/{id}/recipes.
+ */
 import { t, esc } from '/static/js/i18n.js';
 import { lookupCatalog, lookupTag, iconImageHTML, infocardHTML } from '/static/js/catalog-registry.js';
 
@@ -35,9 +33,6 @@ function tagCardGrid(icons, total) {
   return `<div class="infocard-grid" data-cols="${TAG_CARD_COLS}">${cells}</div>${more}`;
 }
 
-// A tag slot accepts any of its members, so showing one of them would claim
-// the recipe needs that particular item. It cycles instead, the way JEI
-// does, and the hover card lays the whole set out at once.
 function tagCell(tagName) {
   const resolved = lookupTag(tagName);
   const icons = resolved?.icons ?? [];
@@ -62,8 +57,8 @@ function tagCell(tagName) {
   };
 }
 
-// count is the bare number drawn in the corner; amount carries the unit and
-// stays in the hover card, where there is room for it.
+// count is the bare number drawn in the corner; amount carries the unit and stays in the hover
+// card, where there is room for it.
 function craftCell({ label, name, ref = '', entry = null,
                      count = '', amount = '', nonConsuming = false, extra = '', style = '' }) {
   const countMark = count ? `<span class="crafting-cell-count">${esc(count)}</span>` : '';
@@ -81,8 +76,8 @@ function craftCell({ label, name, ref = '', entry = null,
     ${infocardHTML(entry, { title: name, subtitle: ref, sections: amtRow + ncRow + extra })}`;
 }
 
-// One recipe-card I/O entry ({item_mod_id,item_id}, {fluid_mod_id,fluid_id}
-// or {tag_name}, plus amount/x/y) → its cell's inline style + craftCell HTML.
+// One recipe-card I/O entry ({item_mod_id,item_id}, {fluid_mod_id,fluid_id} or {tag_name}, plus
+// amount/x/y) → its cell's inline style + craftCell HTML.
 function ioCellHTML(io, style) {
   const isFluid = io.fluid_id != null;
   const count = isFluid ? (io.amount_mb ? String(io.amount_mb) : '')
@@ -101,8 +96,8 @@ function ioCellHTML(io, style) {
   return craftCell({ ...parts, ref, count, amount, nonConsuming: io.non_consuming, style });
 }
 
-// items: recipe-card "inputs"/"outputs"/"fluid_inputs"/"fluid_outputs" arrays
-// (or a concatenation of an item + fluid array, for one combined grid).
+// items: recipe-card "inputs"/"outputs"/"fluid_inputs"/"fluid_outputs" arrays (or a
+// concatenation of an item + fluid array, for one combined grid).
 function ioGrid(items) {
   if (!items.length) return `<div class="crafting-cell empty" style="width:36px;height:36px;"></div>`;
 
@@ -133,12 +128,9 @@ function fmt0(v, suffix) {
 }
 
 /**
- * recipeCardHTML(recipe, machineName) → HTML string
- * recipe: one object from the recipe-card API shape.
- * machineName: pre-resolved display name for recipe.machine_id (callers
- * build this from GET /api/machines — this module has no way to resolve it
- * itself, see Task 4/5's machineNames map), or omitted to fall back to the
- * raw machine_id.
+ * Builds one recipe card.
+ * Input: recipe (one Card object), machineName (display name for recipe.machine_id, optional
+ * — falls back to the raw id). Output: HTML string.
  */
 function recipeCardHTML(recipe, machineName) {
   const machineUrl = `/catalog/machines?mod=${encodeURIComponent(recipe.machine_mod_id)}&machine=${encodeURIComponent(recipe.machine_id)}`;
@@ -158,10 +150,9 @@ function recipeCardHTML(recipe, machineName) {
 }
 
 /**
- * recipeListHTML(recipes, machineNameFor) → HTML string
- * recipes: array from GET /api/items/{mod}/{item}/recipes (or the fluid
- * equivalent). machineNameFor(recipe): optional function returning a
- * display name for one recipe's machine (see recipeCardHTML).
+ * Builds a list of recipe cards.
+ * Input: recipes (Card array), machineNameFor(recipe) (optional, returns a machine display
+ * name). Output: HTML string.
  */
 export function recipeListHTML(recipes, machineNameFor) {
   if (!recipes.length) return `<span class="td-muted" data-i18n="catalog.empty.no_recipes"></span>`;

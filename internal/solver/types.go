@@ -84,16 +84,14 @@ type SolveRequest struct {
 	TagOverrides         map[string]string // tagName → "mod_id:item_id"
 	FactoryState         FactoryState
 	AllowPartialMachines []string // groups that may stand idle, by RateKey
-	// ModConfigs holds each mod's opaque plugin config, keyed by the mod that
-	// owns the plugin (a machine's ecosystem, or its own mod id).
+	// ModConfigs holds each mod's opaque plugin config, keyed by the mod that owns the plugin
+	// (a machine's ecosystem, or its own mod id).
 	ModConfigs map[string]json.RawMessage
-	// Factor is the manual override on the solver's own answer: the line is
-	// this multiple of it. The zero value means x1.
+	// Factor is the manual override on the solver's own answer: the line is this multiple of
+	// it. The zero value means x1.
 	Factor Rational
-	// VariantPins fixes the operating variant of individual machine groups,
-	// keyed by RecipeOptionKey. A pin that names a missing or invalid variant
-	// is ignored, not an error: the config can change under a client that is
-	// still holding an older variant list.
+	// VariantPins fixes the operating variant of individual machine groups, keyed by
+	// RecipeOptionKey.
 	VariantPins map[string]string
 }
 
@@ -107,8 +105,7 @@ type FactoryState struct {
 	ExistingOutputs map[string]Rational
 }
 
-// Warning is a structured, translatable solver warning. Code maps to the i18n key
-// solve.warning.<code>; Params are interpolated into the translated text by the client.
+// Warning is a structured, translatable solver warning.
 type Warning struct {
 	Code   string            `json:"code"`
 	Params map[string]string `json:"params,omitempty"`
@@ -138,20 +135,19 @@ type MachineGroupDraft struct {
 	ExactCount   Rational // fractional machine count before ceiling
 	Utilization  Rational
 	Status       DraftStatus
-	// VariantID, Label and Costs describe the operating configuration chosen for
-	// this group; Variant carries it whole, including any output overrides.
+	// VariantID, Label and Costs describe the operating configuration chosen for this group;
+	// Variant carries it whole, including any output overrides.
 	VariantID string
 	Label     string
-	// PluginMod is the mod whose plugin evaluated this group, so the confirm
-	// step can freeze that mod's config into the row.
+	// PluginMod is the mod whose plugin evaluated this group.
 	PluginMod string
 	Costs     []plugins.Cost
 	Variant   plugins.Variant
-	// VariantOptions lists every runnable variant of this group so a client
-	// can offer the alternatives the automatic pick did not take.
+	// VariantOptions lists every runnable variant of this group so a client can offer the
+	// alternatives the automatic pick did not take.
 	VariantOptions []VariantOption
-	// RateKey names the node this group was computed for, and is the only stable
-	// handle on it: the ladder may swap the group's machine or recipe.
+	// RateKey names the node this group was computed for, and is the only stable handle on it:
+	// the ladder may swap the group's machine or recipe.
 	RateKey string
 	cells   []cell // the matrix the pick was made from, for the AUTO repick
 }
@@ -165,10 +161,8 @@ func (g *MachineGroupDraft) applyCell(c cell) {
 	g.VariantOptions = variantOptionsFor(g.cells, c.machine)
 }
 
-// VariantOption is one selectable operating variant of a machine group, as
-// offered to a client. Only the identity and the plugin's own label - the
-// full variant carries costs and installed items the client does not need to
-// render a picker.
+// VariantOption is one selectable operating variant of a machine group, as offered to a
+// client.
 type VariantOption struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
@@ -187,9 +181,8 @@ type IOEntry struct {
 	IsFactoryProvided bool
 }
 
-// ErrCycleBreakNeeded is returned by Solve when a cycle exists that cannot be
-// resolved automatically. The caller must choose a stop point from CycleNodes
-// and re-submit the request with that item added to StopPoints.
+// ErrCycleBreakNeeded is returned by Solve when a cycle exists that cannot be resolved
+// automatically.
 type ErrCycleBreakNeeded struct {
 	CycleNodes []string // ItemRef.Key() values of stuck nodes
 }

@@ -10,7 +10,6 @@ import (
 )
 
 // ImportRecipe writes a single normalized recipe to the database in one transaction.
-// It auto-creates any unknown mods, items, fluids, and tags referenced by the recipe.
 // Returns imported=true if the recipe was new, false if a duplicate (same content_hash).
 func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (imported bool, err error) {
 	tx, err := d.Pool.Begin(ctx)
@@ -31,9 +30,7 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 		}
 	}
 
-	// 1b. The machine must already be declared (via a mod's own machine list) —
-	// a recipe referencing an undeclared machine is a data error in the mod
-	// archive, not something to paper over with a stub row.
+	// 1b.
 	var machineExists bool
 	if err := tx.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM machine_types WHERE mod_id = $1 AND machine_id = $2)`,
@@ -112,7 +109,7 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 		}
 	}
 
-	// 5. Known content_hash: keep the row and its id, refresh its mod_data.
+	// 5.
 	var existing uuid.UUID
 	err = tx.QueryRow(ctx,
 		`SELECT id FROM recipes WHERE content_hash = $1`, rec.ContentHash,
@@ -139,7 +136,7 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 		return false, fmt.Errorf("db: import recipe: check hash: %w", err)
 	}
 
-	// 6. Insert recipe row.
+	// 6.
 	var recipeID uuid.UUID
 	var shape any
 	if len(rec.Shape) > 0 {
@@ -180,9 +177,7 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 
 	// 8. Insert item outputs.
 	for i, io := range rec.ItemOutputs {
-		// recipe_item_outputs.item_mod_id/item_id are NOT NULL, so a tag-only
-		// output has nowhere to go. parseItemIO produces one whenever a recipe
-		// names a tag on the output side.
+		// parseItemIO produces one whenever a recipe names a tag on the output side.
 		if io.ModID == nil || io.ID == nil {
 			return false, fmt.Errorf("db: import recipe: output %d is a tag, which cannot be produced", i)
 		}
@@ -298,10 +293,8 @@ func upsertTag(ctx context.Context, tx pgx.Tx, name string) (uuid.UUID, error) {
 	return id, nil
 }
 
-// BulkUpsertItems inserts or updates items from a mod definition, each with its
-// own curated max_stack (yaml `max_stack`, default 64). The mod must already
-// exist; items for unknown mods are skipped, as are ids that already exist in
-// the fluids table.
+// BulkUpsertItems inserts or updates items from a mod definition, each with its own curated
+// max_stack (yaml `max_stack`, default 64).
 func (d *DB) BulkUpsertItems(ctx context.Context, modID string, items []model.ItemDef) error {
 	if len(items) == 0 {
 		return nil
@@ -325,8 +318,7 @@ func (d *DB) BulkUpsertItems(ctx context.Context, modID string, items []model.It
 	return nil
 }
 
-// UpsertBlockDrops inserts block drop records. Both block and drop items must exist.
-// Drops for item pairs not in the items table are silently skipped via FK-safe insert.
+// UpsertBlockDrops inserts block drop records.
 func (d *DB) UpsertBlockDrops(ctx context.Context, drops []model.BlockDrop) error {
 	if len(drops) == 0 {
 		return nil
@@ -366,7 +358,6 @@ func (d *DB) UpsertBlockDrops(ctx context.Context, drops []model.BlockDrop) erro
 }
 
 // UpsertVillagerTrades inserts villager trade records.
-// Trades whose cost or result item do not exist in the items table are silently skipped.
 func (d *DB) UpsertVillagerTrades(ctx context.Context, trades []model.VillagerTrade) error {
 	if len(trades) == 0 {
 		return nil
@@ -396,8 +387,8 @@ func (d *DB) UpsertVillagerTrades(ctx context.Context, trades []model.VillagerTr
 		costMods[i] = t.CostModID
 		costItems[i] = t.CostItemID
 		costCounts[i] = t.CostCount
-		// The whole second slot is either present or absent; a partially filled
-		// one would trip the table's own (mod IS NULL) = (item IS NULL) check.
+		// The whole second slot is either present or absent; a partially filled one would trip
+		// the table's own (mod IS NULL) = (item IS NULL) check.
 		if t.Cost2ModID != "" && t.Cost2ItemID != "" {
 			mod, item, count := t.Cost2ModID, t.Cost2ItemID, t.Cost2Count
 			if count < 1 {

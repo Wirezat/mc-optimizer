@@ -10,9 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// PositionStore is implemented by any DB-layer wrapper that supports
-// fractional-index reordering. The three methods cover ownership checking,
-// reading the current key, and writing the new key.
+// PositionStore is implemented by any DB-layer wrapper that supports fractional-index
+// reordering.
 type PositionStore interface {
 	OwnerUserID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetPosition(ctx context.Context, id uuid.UUID) (string, error)
@@ -20,16 +19,6 @@ type PositionStore interface {
 }
 
 // ReorderHandler returns a PATCH handler that moves an entity to a new position.
-//
-// URL param `idParam` names the path variable holding the entity's UUID.
-//
-// Request body:
-//
-//	{ "after_id":  "<uuid>" | null,   // item that will precede ours
-//	  "before_id": "<uuid>" | null }  // item that will follow ours
-//
-// The server looks up the neighbours' positions and computes
-// fracidx.Between(afterPos, beforePos). Only the moved item is updated.
 func ReorderHandler(store PositionStore, idParam string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())
@@ -108,17 +97,8 @@ func (s PLPositionStore) OwnerUserID(ctx context.Context, id uuid.UUID) (uuid.UU
 }
 
 // PLReorderHandler is like ReorderHandler but also accepts after_group_id /
-// before_group_id, which reference pl_groups.position in the unified list
-// space (used when an ungrouped PL is positioned next to a group boundary).
-//
-// Request body:
-//
-//	{ "after_id":       "<uuid>" | null,
-//	  "before_id":      "<uuid>" | null,
-//	  "after_group_id": "<uuid>" | null,
-//	  "before_group_id":"<uuid>" | null }
-//
-// after_id / before_id take priority over their *_group_id counterparts.
+// before_group_id, which reference pl_groups.position in the unified list space (used when
+// an ungrouped PL is positioned next to a group boundary).
 func PLReorderHandler(database *db.DB) http.HandlerFunc {
 	store := PLPositionStore{DB: database}
 	return func(w http.ResponseWriter, r *http.Request) {

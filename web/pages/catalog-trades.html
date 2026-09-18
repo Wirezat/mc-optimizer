@@ -129,17 +129,9 @@
   let allTrades = [];
 
 
-  // Amount has its own column rather than an inline prefix, so quantities line
-  // up down the table instead of shifting with each item name's width. A count
-  // of 1 is spelled out too — an empty cell reads as "unknown", not as "one".
-  // An offer whose price the data does not fix — an enchanted book costs what
-  // the enchantment decides — shows its floor as "11+", never a bare number
-  // that reads as the price.
+  // countCell renders a trade's amount. A variable price shows its floor as "11+".
   function countCell(count, variable = false) {
     const n = String(count ?? 1);
-    // Native title="" ignores the app's own hover delay/styling/touch handling —
-    // this project's infocard is the house rule for hover text (see itemCell's
-    // and the "enchanted" marker's own infocard-trigger below).
     const body = variable
       ? `<span class="trade-count-variable infocard-trigger" data-infocard-inline>` +
         `${esc(t('catalog.trades.count_variable').replace('{n}', n))}</span>` +
@@ -149,9 +141,6 @@
   }
 
   // Some offers charge two different items (emerald + compass -> explorer map).
-  // The second one rides along inside the cost cell rather than claiming its
-  // own pair of columns, which would sit empty for the ~95% of offers that
-  // charge a single item.
   function cost2Cell(tr) {
     if (!tr.cost2_item_id) return '';
     return `<span class="trade-cost2-sep">+</span>` +

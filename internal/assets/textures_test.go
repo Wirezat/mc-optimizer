@@ -330,8 +330,8 @@ func writeText(t *testing.T, root, rel, content string) {
 	}
 }
 
-// A classic flat item model — parent item/generated, sprite in layer0 — is
-// not a shape the renderer can draw; the item is the sprite itself.
+// A classic flat item model — parent item/generated, sprite in layer0 — is not a shape the
+// renderer can draw; the item is the sprite itself.
 func TestResolveItemTexture_GeneratedModelIsItsSprite(t *testing.T) {
 	dir := t.TempDir()
 	writeText(t, dir, "ironfurnaces/models/item/augment_speed.json",
@@ -347,8 +347,8 @@ func TestResolveItemTexture_GeneratedModelIsItsSprite(t *testing.T) {
 	}
 }
 
-// The generated parent may sit further up the chain, behind a mod's own base
-// model, and be spelled with or without the minecraft: namespace.
+// The generated parent may sit further up the chain, behind a mod's own base model, and be
+// spelled with or without the minecraft: namespace.
 func TestResolveItemTexture_GeneratedModelBehindParentChain(t *testing.T) {
 	dir := t.TempDir()
 	writeText(t, dir, "mod/models/item/tool_base.json",
@@ -380,8 +380,8 @@ func TestResolveItemTexture_BlockModelStillRenders(t *testing.T) {
 	}
 }
 
-// A generated model whose sprite is missing on disk has nothing better than
-// the renderer to offer.
+// A generated model whose sprite is missing on disk has nothing better than the renderer to
+// offer.
 func TestResolveItemTexture_GeneratedModelWithoutSpriteStillRenders(t *testing.T) {
 	dir := t.TempDir()
 	writeText(t, dir, "mod/models/item/ghost.json",

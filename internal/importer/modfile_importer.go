@@ -34,7 +34,6 @@ type ModFileResult struct {
 }
 
 // RunModFile imports a single modfile ZIP.
-// The ZIP must contain a mod.yml at its root and optionally an assets/ subtree.
 func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileResult, error) {
 	data, err := os.ReadFile(zipPath)
 	if err != nil {
@@ -70,8 +69,8 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 		return ModFileResult{}, fmt.Errorf("modfile: parse: %w", err)
 	}
 
-	// Plugin validation runs before any DB write below: a broken bundled
-	// plugin must never leave a half-imported mod behind.
+	// Plugin validation runs before any DB write below: a broken bundled plugin must never
+	// leave a half-imported mod behind.
 	bundle, err := findPluginBundle(zr.File)
 	if err != nil {
 		return ModFileResult{}, fmt.Errorf("modfile: %w", err)
@@ -94,8 +93,7 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 		res.Warnings = append(res.Warnings, fmt.Sprintf(format, args...))
 	}
 
-	// 1. Modrinth fetch — fills empty fields from Modrinth if slug is set.
-	// mod_id is used as slug fallback.
+	// 1.
 	slug := def.ModrinthSlug
 	if slug == "" {
 		slug = def.ModID
@@ -232,18 +230,15 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 	}
 	res.VillagerTrades = len(def.VillagerTrades)
 
-	// 11. Extract assets from assets/{mod_id}/textures/** — strip the leading
-	// "assets/" prefix so files land at <assetsDir>/<mod_id>/... instead of
-	// doubling it to <assetsDir>/assets/<mod_id>/... (imp.assetsDir is itself
-	// the "assets" directory).
+	// 11.
 	for _, f := range zr.File {
 		if !strings.HasPrefix(f.Name, "assets/") || f.FileInfo().IsDir() {
 			continue
 		}
 		rel := strings.TrimPrefix(f.Name, "assets/")
 		dst := filepath.Join(imp.assetsDir, rel)
-		// A crafted entry path such as "assets/../../x" escapes the asset tree
-		// once filepath.Join cleans it.
+		// A crafted entry path such as "assets/../../x" escapes the asset tree once filepath.Join
+		// cleans it.
 		if !underDir(imp.assetsDir, dst) {
 			warn("asset %s: path escapes the assets directory, skipped", f.Name)
 			continue
@@ -274,8 +269,7 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 	return res, nil
 }
 
-// underDir reports whether path stays inside dir once both are cleaned, so a
-// zip entry cannot write outside the tree it is supposed to land in.
+// underDir reports whether path stays inside dir once both are cleaned.
 func underDir(dir, path string) bool {
 	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(path))
 	if err != nil {
@@ -285,7 +279,6 @@ func underDir(dir, path string) bool {
 }
 
 // ModRecipeToNormalized converts a ModRecipeDef to the NormalizedRecipe the DB expects.
-// sourceModID is the modfile the recipe was defined in, which may differ from r.MachineModID.
 func ModRecipeToNormalized(r model.ModRecipeDef, sourceModID string) model.NormalizedRecipe {
 	norm := model.NormalizedRecipe{
 		SourceFile:  sourceModID + ".yml",

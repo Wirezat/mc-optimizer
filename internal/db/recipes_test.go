@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// A machine that implements another via machine_interfaces can run that
-// machine's recipes, and both must be offered as separate candidates.
+// A machine that implements another via machine_interfaces can run that machine's recipes,
+// and both must be offered as separate candidates.
 func TestGetRecipesForItemOffersInterfaceMachines(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -51,8 +51,6 @@ func TestGetRecipesForItemOffersInterfaceMachines(t *testing.T) {
 		}
 		t.Fatalf("got %d candidates %v, want 2 (base and its interface implementer)", len(got), seen)
 	}
-	// The base machine must stay first: every existing caller that takes
-	// recipes[0] without an override relies on it.
 	if got[0].MachineID != "base_machine" {
 		t.Errorf("candidates[0] = %q, want \"base_machine\" first", got[0].MachineID)
 	}

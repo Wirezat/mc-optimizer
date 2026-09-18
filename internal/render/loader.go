@@ -13,8 +13,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/assets"
 )
 
-// Loader reads models and textures out of the extracted asset tree
-// (assets/<mod>/...).
+// Loader reads models and textures out of the extracted asset tree (assets/<mod>/...).
 type Loader struct {
 	assetsDir string
 }
@@ -33,9 +32,6 @@ func (l *Loader) ResolveModel(ref string) (*Model, error) {
 }
 
 // LoadScene assembles a drawable scene for one model reference, e.g.
-// "modern_industrialization:block/pipes/item_pipe". Parents are merged the
-// way the game does: a child's textures/elements win, inheriting whatever it
-// doesn't declare itself.
 func (l *Loader) LoadScene(ref string) (*Scene, error) {
 	model, err := l.ResolveModel(ref)
 	if err != nil {
@@ -128,8 +124,8 @@ func mergeModel(parent, child *Model) *Model {
 	return out
 }
 
-// TextureURL resolves ref to its public URL under the asset tree, or
-// ok=false if no such file exists.
+// TextureURL resolves ref to its public URL under the asset tree, or ok=false if no such
+// file exists.
 func (l *Loader) TextureURL(ref string) (url string, ok bool) {
 	if err := SanitizeRef(ref); err != nil {
 		return "", false

@@ -37,8 +37,7 @@ func TestValidatePluginJSAcceptsValidPlugin(t *testing.T) {
 	}
 }
 
-// has_wizard drives whether the mod gets a config button, so it must follow
-// the actual binding, not a substring of the source.
+// has_wizard drives whether the mod gets a config button.
 func TestValidatePluginJSDetectsWizard(t *testing.T) {
 	const evaluate = "evaluate: function () { return [] }"
 	for name, tc := range map[string]struct {

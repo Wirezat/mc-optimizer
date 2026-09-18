@@ -7,8 +7,8 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/fracidx"
 )
 
-// assertBetween fails the test if mid is not strictly between a and b.
-// Empty string means "unbounded": a="" means no lower bound, b="" means no upper bound.
+// assertBetween fails the test if mid is not strictly between a and b. Empty string means
+// "unbounded": a="" means no lower bound, b="" means no upper bound.
 func assertBetween(t *testing.T, label, a, mid, b string) {
 	t.Helper()
 	if a != "" && mid <= a {
@@ -157,8 +157,6 @@ func TestTightGap(t *testing.T) {
 	}
 }
 
-// TestMultiStepAtSameGap stresses the same gap repeatedly — key must grow
-// but always remain valid.
 func TestMultiStepAtSameGap(t *testing.T) {
 	a := "V0001000"
 	b := "V0001001"
@@ -171,11 +169,9 @@ func TestMultiStepAtSameGap(t *testing.T) {
 	t.Logf("final key after 20 same-gap insertions: %q (len=%d)", prev, len(prev))
 }
 
-// TestKeyLengthStaysReasonable checks that repeated end-insertions don't produce
-// unbounded strings.  The algorithm grows at roughly 1 character per 6 appends
-// (the base-62 alphabet exhausts in 6 steps: V→k→s→w→y→z→zV…), so 1000
-// appends yields ≈167 chars.  We verify both a short-run (100 appends → <30)
-// and a long-run (1000 appends → <200) to catch regressions at either scale.
+// TestKeyLengthStaysReasonable checks that repeated end-insertions don't produce unbounded
+// strings. The algorithm grows at roughly 1 character per 6 appends (the base-62 alphabet
+// exhausts in 6 steps: V→k→s→w→y→z→zV…), so 1000 appends yields ≈167 chars.
 func TestKeyLengthStaysReasonable(t *testing.T) {
 	last := fracidx.Initial()
 	for i := range 1000 {
@@ -190,8 +186,8 @@ func TestKeyLengthStaysReasonable(t *testing.T) {
 	t.Logf("key after 1000 appends: %q (len=%d)", last, len(last))
 }
 
-// TestLexicographicConsistency verifies that string comparison order matches
-// the order in which positions were produced.
+// TestLexicographicConsistency verifies that string comparison order matches the order in
+// which positions were produced.
 func TestLexicographicConsistency(t *testing.T) {
 	// Build a list of 200 items via alternating inserts
 	positions := []string{fracidx.Initial()}

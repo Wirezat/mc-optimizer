@@ -10,8 +10,6 @@ import (
 )
 
 // ContentHash computes a stable SHA-256 fingerprint of a normalized recipe.
-// Two recipes with identical machines, EU, duration, and IO (regardless of order)
-// produce the same hash — this is used for idempotent imports.
 func ContentHash(n model.NormalizedRecipe) string {
 	type itemEntry struct {
 		Ref     string `json:"r"` // "mod:id" or "#tag"

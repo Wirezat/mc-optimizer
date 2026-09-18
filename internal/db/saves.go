@@ -49,7 +49,8 @@ func (d *DB) ListSavesByUser(ctx context.Context, userID uuid.UUID) ([]*model.Sa
 	return saves, rows.Err()
 }
 
-// GetSave fetches a save by ID, validates ownership; returns ErrNotFound if missing or unauthorized.
+// GetSave fetches a save by ID, validates ownership; returns ErrNotFound if missing or
+// unauthorized.
 func (d *DB) GetSave(ctx context.Context, id, userID uuid.UUID) (*model.Save, error) {
 	s := &model.Save{}
 	err := d.Pool.QueryRow(ctx,

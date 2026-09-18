@@ -1,6 +1,5 @@
-// Package recipecard renders solver.RecipeRow into the JSON shape the item
-// and fluid recipe-detail endpoints return, for the frontend's crafting-grid
-// card.
+// Package recipecard renders solver.RecipeRow into the JSON shape the item and fluid
+// recipe-detail endpoints return, for the frontend's crafting-grid card.
 package recipecard
 
 import (
@@ -19,9 +18,8 @@ type Card struct {
 	FluidOutputs  []Fluid  `json:"fluid_outputs"`
 }
 
-// Input is a concrete item (item_mod_id+item_id set, tag_name empty) or a
-// tag slot (tag_name set, item_mod_id/item_id empty), never both. X/Y are
-// set only by ApplySlotLayout.
+// Input is a concrete item (item_mod_id+item_id set, tag_name empty) or a tag slot
+// (tag_name set, item_mod_id/item_id empty), never both.
 type Input struct {
 	ItemModID    string  `json:"item_mod_id,omitempty"`
 	ItemID       string  `json:"item_id,omitempty"`
@@ -94,11 +92,8 @@ func Build(r *solver.RecipeRow) Card {
 	return card
 }
 
-// ApplySlotLayout pairs card's inputs/outputs with the owning machine's
-// slots, setting X/Y only when every item on a side (inputs, or outputs)
-// resolves to one. Multiblocks (MI's MultiblockMachines.java, IO's
-// multi_processing_array) have no fixed slot grid and never resolve, always
-// falling back to the frontend's grid layout.
+// ApplySlotLayout pairs card's inputs/outputs with the owning machine's slots, setting X/Y
+// only when every item on a side (inputs, or outputs) resolves to one.
 func ApplySlotLayout(card *Card, slots []*model.MachineSlot) {
 	if itemIn, ok := resolveSlots(slots, "item_input", len(card.Inputs)); ok {
 		if fluidIn, ok := resolveSlots(slots, "fluid_input", len(card.FluidInputs)); ok {
@@ -122,8 +117,7 @@ func ApplySlotLayout(card *Card, slots []*model.MachineSlot) {
 	}
 }
 
-// resolveSlots picks the first n slots of slotType, skipping fuel slots. ok
-// is false if fewer than n exist, or any picked slot has no x/y.
+// resolveSlots picks the first n slots of slotType, skipping fuel slots.
 func resolveSlots(slots []*model.MachineSlot, slotType string, n int) (picked []*model.MachineSlot, ok bool) {
 	if n == 0 {
 		return nil, true

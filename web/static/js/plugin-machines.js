@@ -1,11 +1,8 @@
-// Host-side adapter for a mod's optional `machines` binding: extra chain-table
-// columns and their per-machine text. Every hook call is wrapped per mod; a mod
-// without a binding is simply absent.
+// Host-side adapter for a mod's optional `machines` binding: extra chain-table columns and
+// their per-machine text. Every hook call is wrapped per mod; a mod without a binding is simply
+// absent.
 import { apiFetch } from '/static/ui/js/auth.js'
 
-// /plugin-assets sits behind the same auth as the rest of the app, so a demo
-// (logged-out) page gets 401 here and renders no axes and no columns. That is
-// the correct degradation: without a plugin there is nothing to declare.
 async function loadOne(modID) {
     const res = await apiFetch(`/plugin-assets/${encodeURIComponent(modID)}/plugin.js`)
     if (!res?.ok) return null
@@ -13,12 +10,10 @@ async function loadOne(modID) {
     return plugin?.machines ?? null
 }
 
-// The discover response names a plugin mod for every reached machine, including
-// mods that ship none, so a miss is recorded and never retried.
 const failedMods = new Set()
 
-// loadMachineHooks resolves the `machines` binding for each mod id, skipping
-// every mod that has no plugin, no binding, or a plugin that fails to load.
+// loadMachineHooks resolves the `machines` binding for each mod id, skipping every mod that has
+// no plugin, no binding, or a plugin that fails to load.
 export async function loadMachineHooks(modIDs) {
     const out = new Map()
     const unique = [...new Set(modIDs)].filter(Boolean).filter(m => !failedMods.has(m))
@@ -37,11 +32,8 @@ export async function loadMachineHooks(modIDs) {
     return out
 }
 
-// columnsOf collects every mod's declared chain-table columns, in mod order.
-// Mods that declare the same column id share one column — that is how two
-// plugins name the same thing (MI's tier and a furnace's material) without
-// each getting a half-empty column of its own. mods lists who fills it.
-// One mod's malformed columns list costs only that mod's columns.
+// columnsOf collects every mod's declared chain-table columns, in mod order. Mods that declare
+// the same column id share one column.
 export function columnsOf(hooks) {
     const byID = new Map()
     for (const [modID, m] of hooks) {
@@ -60,8 +52,8 @@ export function columnsOf(hooks) {
     return [...byID.values()]
 }
 
-// cellText asks the plugin that owns a machine for that machine's text in one
-// column. A cell belonging to another mod's column is empty by design.
+// cellText asks the plugin that owns a machine for that machine's text in one column.
+// Returns empty for a cell belonging to another mod's column.
 export function cellText(hooks, pluginModID, machine, columnID) {
     const m = hooks.get(pluginModID)
     if (!m?.cell) return ''

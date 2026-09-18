@@ -9,13 +9,11 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
-// ErrBuiltCountExceeded reports a scale that would leave a group with fewer
-// machines than the world already has standing.
+// ErrBuiltCountExceeded reports a scale that would leave a group with fewer machines than
+// the world already has standing.
 var ErrBuiltCountExceeded = errors.New("scale would drop a group below its built machine count")
 
-// scalePLRows computes what a saved line looks like at k times its size. Rows
-// keep their identity so build state survives; a group that would end up with
-// fewer machines than are already built fails the whole scale.
+// scalePLRows computes what a saved line looks like at k times its size.
 func scalePLRows(rateNum, rateDen int, groups []*model.MachineGroup, ios []*model.PLIO, k solver.Rational) (int, int, []db.ScaledGroup, []db.ScaledIO, error) {
 	rate := solver.NewRational(int64(rateNum), int64(rateDen)).Mul(k)
 	newRateNum, newRateDen, err := rateInts(rate)

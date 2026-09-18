@@ -9,7 +9,6 @@ import (
 )
 
 // decodeJSON decodes JSON from r.Body into v.
-// Writes 400 and returns false on failure; caller must return immediately.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		errBadRequest(w, "invalid JSON")
@@ -19,7 +18,6 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 // Error codes — machine-readable keys sent in every error response.
-// The frontend can display Message directly or key off Code for custom UI.
 const (
 	CodeBadRequest   = "BAD_REQUEST"
 	CodeUnauthorized = "UNAUTHORIZED"
@@ -75,7 +73,6 @@ func errInternal(w http.ResponseWriter, err error) {
 }
 
 // parseUUIDParam parses a named path parameter as a UUID.
-// Writes 400 and returns false on failure.
 func parseUUIDParam(w http.ResponseWriter, r *http.Request, name string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue(name))
 	if err != nil {

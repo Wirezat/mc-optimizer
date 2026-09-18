@@ -5,9 +5,8 @@ import (
 	"testing"
 )
 
-// The mod template is a shipped artifact every plugin author starts from, and
-// nothing else compiles it. Verify it against the real import path so it
-// cannot rot into an example the host would reject on upload.
+// The mod template is a shipped artifact every plugin author starts from, and nothing else
+// compiles it.
 func TestShippedModTemplateIsAValidPlugin(t *testing.T) {
 	const templatePath = "../../web/static/data/mod-template.zip"
 	zr, err := zip.OpenReader(templatePath)
@@ -30,9 +29,8 @@ func TestShippedModTemplateIsAValidPlugin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("plugin.js: %v", err)
 	}
-	// The template documents the wizard contract by implementing it; an author
-	// who deletes the key gets no config button, which is the point of the
-	// structural check.
+	// The template documents the wizard contract by implementing it; an author who deletes the
+	// key gets no config button, which is the point of the structural check.
 	if !hasWizard {
 		t.Error("hasWizard = false, want true — the template's wizard example is gone or malformed")
 	}

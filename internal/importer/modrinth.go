@@ -62,10 +62,10 @@ func modrinthGet(path string, out any) error {
 	return json.Unmarshal(body, out)
 }
 
-// lookupProject tries to find a Modrinth project for modID/displayName.
-// Returns nil if nothing found.
+// lookupProject tries to find a Modrinth project for modID/displayName. Returns nil if
+// nothing found.
 func lookupProject(modID, displayName string) (*modrinthProject, error) {
-	// 1. Direct slug lookup by mod ID
+	// 1.
 	var p modrinthProject
 	if err := modrinthGet("/project/"+url.PathEscape(modID), &p); err != nil {
 		return nil, err
@@ -126,8 +126,6 @@ func teamOwner(teamID string) string {
 }
 
 // FetchModrinthMetadata fetches Modrinth metadata for a single mod without saving.
-// If slugOverride is non-empty it is tried first, then falls back to the normal
-// lookup-by-modID / search-by-displayName strategy.
 func FetchModrinthMetadata(modID, displayName, slugOverride string) (*model.ModMetadata, error) {
 	var proj *modrinthProject
 	var err error

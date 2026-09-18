@@ -28,8 +28,7 @@ type ImporterDB interface {
 type Importer struct {
 	db        ImporterDB
 	assetsDir string
-	// UploadedBy is attributed to any plugin recorded during import. The
-	// caller sets it after New; left empty when no user is identified.
+	// UploadedBy is attributed to any plugin recorded during import.
 	UploadedBy string
 }
 

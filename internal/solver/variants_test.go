@@ -187,11 +187,10 @@ func TestLadderIsOrderIndependent(t *testing.T) {
 
 func TestLadderSkipsInvalid(t *testing.T) {
 	cells := cellsOn("minecraft", "furnace",
-		// "impossible" is far faster than "base": if the skip guard let it
-		// through, it would need strictly fewer machines (1 vs 2), not just
-		// tie with "base". That makes the result independent of list order,
-		// unlike a tie where a disabled guard could still "accidentally"
-		// produce the expected winner depending on which entry comes first.
+		// "impossible" is far faster than "base": if the skip guard let it through, it would need
+		// strictly fewer machines (1 vs 2), not just tie with "base". That makes the result
+		// independent of list order, unlike a tie where a disabled guard could still
+		// "accidentally" produce the expected winner depending on which entry comes first.
 		plugins.Variant{ID: "impossible", Rate: rate(1, 1), Valid: false},
 		plugins.Variant{ID: "base", Rate: rate(1, 20), Valid: true},
 	)
@@ -284,8 +283,8 @@ func TestCalculateMachineGroupsWarnsWhenNoVariantValid(t *testing.T) {
 	}
 }
 
-// TestCalculateMachineGroupsSurvivesPluginError covers spec section 10: a broken
-// plugin degrades its own mod instead of toppling the solve.
+// TestCalculateMachineGroupsSurvivesPluginError covers spec section 10: a broken plugin
+// degrades its own mod instead of toppling the solve.
 func TestCalculateMachineGroupsSurvivesPluginError(t *testing.T) {
 	src := &stubSource{err: errors.New("plugin exploded")}
 	s, g, rv := newVariantTestSolver(t, src)
@@ -302,10 +301,9 @@ func TestCalculateMachineGroupsSurvivesPluginError(t *testing.T) {
 	}
 }
 
-// The raw store/plugin error can be a pgx error carrying host, user and
-// database name (or any other internal detail), and /api/demo/solve serves
-// this result to an unauthenticated caller. The warning may name the failing
-// mod, never repeat the error text.
+// The raw store/plugin error can be a pgx error carrying host, user and database name (or
+// any other internal detail), and /api/demo/solve serves this result to an unauthenticated
+// caller.
 func TestCalculateMachineGroupsPluginFailureWarningOmitsRawError(t *testing.T) {
 	sensitive := "dial tcp 10.0.0.5:5432: connect: connection refused, user=mc_optimizer_admin"
 	src := &stubSource{err: errors.New(sensitive)}
@@ -339,8 +337,8 @@ func TestCalculateMachineGroupsFallsBackWithoutSource(t *testing.T) {
 	if groups[0].VariantID != "default" {
 		t.Errorf("VariantID = %q, want %q", groups[0].VariantID, "default")
 	}
-	// The nominal duration has to survive as a rate, not only as an id: 1/10
-	// recipes per tick needs two furnaces running the 20-tick recipe.
+	// The nominal duration has to survive as a rate, not only as an id: 1/10 recipes per tick
+	// needs two furnaces running the 20-tick recipe.
 	if groups[0].Count != 2 {
 		t.Errorf("Count = %d, want 2", groups[0].Count)
 	}
@@ -349,12 +347,7 @@ func TestCalculateMachineGroupsFallsBackWithoutSource(t *testing.T) {
 	}
 }
 
-// TestCalculateMachineGroupsReportsRateOverflow covers the host-side overflow
-// flank. Both operands sit inside the plugin contract on their own (a
-// denominator of math.MaxInt32 is exactly the bound plugins.Validate allows),
-// but the accumulated recipe rate carries no bound at all: from a numerator of
-// about 2^34 upward the division panics inside rational.go. The solve must
-// report that as an error rather than take the host down.
+// TestCalculateMachineGroupsReportsRateOverflow covers the host-side overflow flank.
 func TestCalculateMachineGroupsReportsRateOverflow(t *testing.T) {
 	src := &stubSource{vs: []plugins.Variant{
 		{ID: "slow", Rate: plugins.Rational{Num: 1, Den: math.MaxInt32}, Valid: true},
@@ -371,8 +364,8 @@ func TestCalculateMachineGroupsReportsRateOverflow(t *testing.T) {
 	}
 }
 
-// solveWithVariants runs a full Solve over the iron-ingot fixture (a 20-tick
-// recipe, iron ore as raw material) at the given target rate in ingots per tick.
+// solveWithVariants runs a full Solve over the iron-ingot fixture (a 20-tick recipe, iron
+// ore as raw material) at the given target rate in ingots per tick.
 func solveWithVariants(t *testing.T, src VariantSource, targetNum, targetDen int64) SolveResult {
 	t.Helper()
 	s := NewSolver(newStub(20), 1000)
@@ -389,10 +382,8 @@ func solveWithVariants(t *testing.T, src VariantSource, targetNum, targetDen int
 	return res
 }
 
-// TestSolveAppliesVariantOutputOverrides covers the fixed-point round: a variant
-// that yields two ingots per craft halves both the machine count and the ore
-// demand. Without the second round the graph would still hold the catalog amount
-// of one ingot per craft and report a full machine plus 1/20 ore per tick.
+// TestSolveAppliesVariantOutputOverrides covers the fixed-point round: a variant that
+// yields two ingots per craft halves both the machine count and the ore demand.
 func TestSolveAppliesVariantOutputOverrides(t *testing.T) {
 	src := &stubSource{vs: []plugins.Variant{
 		{ID: "doubled", Label: "Doubled", Rate: plugins.Rational{Num: 1, Den: 20}, Valid: true,
@@ -421,14 +412,7 @@ func TestSolveAppliesVariantOutputOverrides(t *testing.T) {
 	}
 }
 
-// TestSolveWarnsWhenVariantOutputsOscillate covers the iteration bound. "boosted"
-// wins at the catalog output amount because it needs one machine instead of two;
-// applying its four-per-craft output cuts the rate so far that both variants need
-// one machine, at which point "base" wins on installed items and reverts the
-// amount, which brings "boosted" back. The pair never settles, so the solve stops
-// after MaxVariantIterations and says so. "base" is listed first on purpose: the
-// round that flips back to it is decided by installed items (0 against 1), not by
-// list position, so the oscillation does not ride on the order of this slice.
+// TestSolveWarnsWhenVariantOutputsOscillate covers the iteration bound.
 func TestSolveWarnsWhenVariantOutputsOscillate(t *testing.T) {
 	src := &stubSource{vs: []plugins.Variant{
 		{ID: "base", Rate: plugins.Rational{Num: 1, Den: 20}, Valid: true},
@@ -451,15 +435,9 @@ func TestSolveWarnsWhenVariantOutputsOscillate(t *testing.T) {
 	}
 }
 
-// TestSyncVariantOutputsKeysByNode covers the keying: both nodes run the same
-// recipe row, reached through machine_interfaces, but on different machines, and
-// only the bronze node's variant overrides outputs. Keying by RecipeID alone
-// would leak that override into the electric node — its own primary amount and,
-// worse, its shared iron byproduct edge. The assertions hold in either group
-// order: with RecipeID keying, one order leaves the map without overrides and
-// nothing changes at all, the other bleeds into the electric node.
-//
-// The key is the node's: the ladder may swap the group's machine.
+// TestSyncVariantOutputsKeysByNode covers the keying: both nodes run the same recipe row,
+// reached through machine_interfaces, but on different machines, and only the bronze node's
+// variant overrides outputs.
 func TestSyncVariantOutputsKeysByNode(t *testing.T) {
 	iron := ItemRef{ModID: "mod", ItemID: "iron"}
 	copper := ItemRef{ModID: "mod", ItemID: "copper"}
@@ -498,8 +476,8 @@ func TestSyncVariantOutputsKeysByNode(t *testing.T) {
 	wantRational(t, "electric copper edge", electric.Outputs[1].Amount, 1, 1)
 }
 
-// newByproductStub is the iron-ingot fixture with a second output: 1 iron ore →
-// 1 iron ingot + 1 slag in a 20-tick furnace.
+// newByproductStub is the iron-ingot fixture with a second output: 1 iron ore → 1 iron
+// ingot + 1 slag in a 20-tick furnace.
 func newByproductStub() *stubStore {
 	mc := "minecraft"
 	ore := "iron_ore"
@@ -525,11 +503,8 @@ func newByproductStub() *stubStore {
 	}
 }
 
-// TestSolveKeepsGraphAndGroupsConsistentAtTheIterationCap pins what the result
-// describes once the budget is spent: the byproduct rate is derived from the
-// graph's output amount, so a last override applied after the groups were
-// computed would report slag at a quarter of the rate those groups actually
-// produce. At the cap the drift is only measured, never written.
+// TestSolveKeepsGraphAndGroupsConsistentAtTheIterationCap pins what the result describes
+// once the budget is spent: the byproduct rate is derived from the graph's output amount.
 func TestSolveKeepsGraphAndGroupsConsistentAtTheIterationCap(t *testing.T) {
 	src := &stubSource{vs: []plugins.Variant{
 		{ID: "base", Rate: plugins.Rational{Num: 1, Den: 20}, Valid: true},
@@ -565,10 +540,10 @@ func TestSolveKeepsGraphAndGroupsConsistentAtTheIterationCap(t *testing.T) {
 	wantRational(t, "slag output", slag.Rate, 1, 10)
 }
 
-// ── fixtures for the overflow reproductions and the multi-mod solve ─────────
+// fixtures for the overflow reproductions and the multi-mod solve
 
-// stubRecipe builds a fixture recipe whose inputs and outputs are one unit each;
-// refs are "mod:item" strings.
+// stubRecipe builds a fixture recipe whose inputs and outputs are one unit each; refs are
+// "mod:item" strings.
 func stubRecipe(id, machineMod, machineID string, durationTicks int, inputs, outputs []string) *RecipeRow {
 	r := &RecipeRow{ID: id, MachineMod: machineMod, MachineID: machineID, DurationTicks: durationTicks}
 	for _, ref := range inputs {
@@ -608,8 +583,8 @@ func stubStoreFor(recipes []*RecipeRow, machines ...*MachineSpec) *stubStore {
 	return st
 }
 
-// chainStub is a chain of `stages` recipes: mc:t0 (raw) → mc:t1 → … → mc:tN,
-// every step one unit in, one unit out, on the same 20-tick machine.
+// chainStub is a chain of `stages` recipes: mc:t0 (raw) → mc:t1 → … → mc:tN, every step one
+// unit in, one unit out, on the same 20-tick machine.
 func chainStub(stages int) (*stubStore, ItemRef) {
 	recipes := make([]*RecipeRow, 0, stages)
 	for i := 1; i <= stages; i++ {
@@ -621,9 +596,8 @@ func chainStub(stages int) (*stubStore, ItemRef) {
 	return store, ItemRef{ModID: "mc", ItemID: fmt.Sprintf("t%d", stages)}
 }
 
-// overrideSource answers with a single variant that echoes the recipe's own
-// output refs at the configured amounts: amounts[ref] first, then all, then the
-// catalog amount. rates[recipeID] overrides the default rate per recipe.
+// overrideSource answers with a single variant that echoes the recipe's own output refs at
+// the configured amounts: amounts[ref] first, then all, then the catalog amount.
 type overrideSource struct {
 	rate    plugins.Rational
 	rates   map[string]plugins.Rational
@@ -653,16 +627,11 @@ func (o *overrideSource) Variants(_ context.Context, _ *MachineSpec, r *RecipeRo
 	return []plugins.Variant{v}, nil
 }
 
-// maxPluginRational is the largest magnitude plugins.Validate admits, so every
-// number in the overflow reproductions below is one a conforming plugin may
-// return. None of them is extreme by itself; the chains they feed are.
+// maxPluginRational is the largest magnitude plugins.Validate admits.
 const maxPluginRational = int64(math.MaxInt32)
 
-// TestSolveSurvivesOverflowInRateSolving is reproduction 1: a three-stage chain
-// at a target of one item per tick, every variant overriding its primary output
-// to 1/MaxInt32. The rate is squared at every stage, so SolveDAG (dag.go, the
-// itemRate/OutputAmount division) overflows on the second pass through the
-// fixed-point loop — far outside chooseVariant's local guard.
+// TestSolveSurvivesOverflowInRateSolving is reproduction 1: a three-stage chain at a target
+// of one item per tick, every variant overriding its primary output to 1/MaxInt32.
 func TestSolveSurvivesOverflowInRateSolving(t *testing.T) {
 	tiny := plugins.Rational{Num: 1, Den: maxPluginRational}
 	store, target := chainStub(3)
@@ -683,10 +652,10 @@ func TestSolveSurvivesOverflowInRateSolving(t *testing.T) {
 	}
 }
 
-// TestSolveSurvivesOverflowInIOProfile is reproduction 2: the graph and the
-// machine groups solve cleanly, and the overflow only happens afterwards in
-// ComputeIOProfile, where the byproduct rate is the primary rate divided by a
-// 1/MaxInt32 output and then multiplied by a MaxInt32 byproduct.
+// TestSolveSurvivesOverflowInIOProfile is reproduction 2: the graph and the machine groups
+// solve cleanly, and the overflow only happens afterwards in ComputeIOProfile, where the
+// byproduct rate is the primary rate divided by a 1/MaxInt32 output and then multiplied by
+// a MaxInt32 byproduct.
 func TestSolveSurvivesOverflowInIOProfile(t *testing.T) {
 	s := NewSolver(newByproductStub(), 1000)
 	s.VariantSource = &overrideSource{
@@ -711,11 +680,8 @@ func TestSolveSurvivesOverflowInIOProfile(t *testing.T) {
 	}
 }
 
-// TestSolveSurvivesOverflowInLinearSystem is reproduction 3: the same class on a
-// cyclic graph. The fixture is the solvable reactor cycle — the reactor's surplus
-// of depleted cells is what closes it — and every output is scaled down by the
-// same MaxInt32, which keeps the system solvable but lifts the solution far
-// enough for Gauss-Jordan to overflow while eliminating.
+// TestSolveSurvivesOverflowInLinearSystem is reproduction 3: the same class on a cyclic
+// graph.
 func TestSolveSurvivesOverflowInLinearSystem(t *testing.T) {
 	reactor := stubRecipe("recipe:reactor", "mi", "reactor", 100,
 		[]string{"mi:enriched_uranium", "mi:coolant"}, []string{"mi:depleted_cell"})
@@ -755,10 +721,8 @@ func TestSolveSurvivesOverflowInLinearSystem(t *testing.T) {
 	}
 }
 
-// TestSolveSurvivesOverflowInIntegerScaling covers ScaleToInteger: a legal
-// variant rate of 1000/1 makes the machine counts fractional in thousandths, so
-// the auto-mode LCM lifts every count by 1000 and a large host target overflows
-// at the ExactCount scaling. safeLCMOfFractions only guards the LCM itself.
+// TestSolveSurvivesOverflowInIntegerScaling covers ScaleToInteger: a legal variant rate of
+// 1000/1 makes the machine counts fractional in thousandths.
 func TestSolveSurvivesOverflowInIntegerScaling(t *testing.T) {
 	store, target := chainStub(3)
 	s := NewSolver(store, 1000)
@@ -800,7 +764,7 @@ func (m *modSource) Variants(_ context.Context, machine *MachineSpec, _ *RecipeR
 }
 
 // groupFor looks a draft up by machine instead of by position: CalculateMachineGroups
-// iterates a map, so the slice order is not stable.
+// iterates a map.
 func groupFor(groups []MachineGroupDraft, machineMod, machineID string) *MachineGroupDraft {
 	for i := range groups {
 		if groups[i].MachineMod == machineMod && groups[i].MachineID == machineID {
@@ -810,9 +774,9 @@ func groupFor(groups []MachineGroupDraft, machineMod, machineID string) *Machine
 	return nil
 }
 
-// TestSolveWithTwoModsKeepsVariantsAndCostsApart covers spec section 11: two
-// machines from different mods in one solve, each evaluated by its own plugin
-// under its own config, each keeping its own variant and its own cost resource.
+// TestSolveWithTwoModsKeepsVariantsAndCostsApart covers spec section 11: two machines from
+// different mods in one solve, each evaluated by its own plugin under its own config, each
+// keeping its own variant and its own cost resource.
 func TestSolveWithTwoModsKeepsVariantsAndCostsApart(t *testing.T) {
 	store := stubStoreFor([]*RecipeRow{
 		stubRecipe("recipe:gear", "moda", "assembler", 20, []string{"mc:plate"}, []string{"mc:gear"}),
@@ -822,8 +786,8 @@ func TestSolveWithTwoModsKeepsVariantsAndCostsApart(t *testing.T) {
 		&MachineSpec{ModID: "modb", MachineID: "press"})
 
 	src := &modSource{byMod: map[string][]plugins.Variant{
-		// Each mod's winner beats its sibling on machine count outright (1 against
-		// 2, 2 against 4), so neither result depends on list order.
+		// Each mod's winner beats its sibling on machine count outright (1 against 2, 2 against
+		// 4), so neither result depends on list order.
 		"moda": {
 			{ID: "a-base", Rate: plugins.Rational{Num: 1, Den: 20}, Valid: true},
 			{ID: "a-fast", Rate: plugins.Rational{Num: 1, Den: 5}, Valid: true,
@@ -879,9 +843,8 @@ func TestSolveWithTwoModsKeepsVariantsAndCostsApart(t *testing.T) {
 	}
 }
 
-// TestCalculateMachineGroupsWarnsOncePerFailingMod: one broken plugin covers
-// every group of its mod, so the result must not repeat the same warning per
-// group.
+// TestCalculateMachineGroupsWarnsOncePerFailingMod: one broken plugin covers every group of
+// its mod.
 func TestCalculateMachineGroupsWarnsOncePerFailingMod(t *testing.T) {
 	store, target := chainStub(2)
 	s := NewSolver(store, 1000)
@@ -910,9 +873,9 @@ func TestCalculateMachineGroupsWarnsOncePerFailingMod(t *testing.T) {
 	}
 }
 
-// TestMaxVariantIterationsIsPinned keeps the iteration budget from drifting
-// unnoticed: every other test here measures against the constant, so changing it
-// alone would leave the suite green.
+// TestMaxVariantIterationsIsPinned keeps the iteration budget from drifting unnoticed:
+// every other test here measures against the constant, so changing it alone would leave the
+// suite green.
 func TestMaxVariantIterationsIsPinned(t *testing.T) {
 	if MaxVariantIterations != 4 {
 		t.Errorf("MaxVariantIterations = %d, want 4", MaxVariantIterations)
@@ -926,9 +889,9 @@ func (panicSource) Variants(context.Context, *MachineSpec, *RecipeRow, json.RawM
 	panic("boom")
 }
 
-// TestSolveDoesNotLaunderForeignPanics: Solve's guard covers rational.go's
-// arithmetic, not every panic — a genuine bug must still surface as a crash
-// instead of being reported as an unrepresentable rate.
+// TestSolveDoesNotLaunderForeignPanics: Solve's guard covers rational.go's arithmetic, not
+// every panic — a genuine bug must still surface as a crash instead of being reported as an
+// unrepresentable rate.
 func TestSolveDoesNotLaunderForeignPanics(t *testing.T) {
 	defer func() {
 		r := recover()
@@ -951,9 +914,8 @@ func TestSolveDoesNotLaunderForeignPanics(t *testing.T) {
 	t.Fatalf("Solve returned (err = %v) instead of panicking", err)
 }
 
-// A pinned variant overrides the automatic pick even when it needs more
-// machines - that is the entire point of pinning. Handoff section 3: the
-// dominated upgrade step the solver would never choose has to be reachable.
+// A pinned variant overrides the automatic pick even when it needs more machines - that is
+// the entire point of pinning.
 func TestChooseCellHonoursPin(t *testing.T) {
 	vs := []plugins.Variant{
 		{ID: "base", Rate: plugins.Rational{Num: 1, Den: 2}, Valid: true},
@@ -975,12 +937,6 @@ func TestChooseCellHonoursPin(t *testing.T) {
 	}
 }
 
-// A pin naming a variant that is gone (the config changed under the client,
-// or the plugin no longer emits it) falls back to the automatic pick rather
-// than failing the solve. "worse" is listed first and is not the automatic
-// pick (it needs 2 machines against base's 1): an implementation that
-// mishandles an unmatched pin by defaulting to the first entry, rather than
-// running the real automatic-pick logic, lands on "worse" and fails here.
 func TestChooseCellIgnoresUnknownPin(t *testing.T) {
 	vs := []plugins.Variant{
 		{ID: "worse", Rate: plugins.Rational{Num: 1, Den: 4}, Valid: true},
@@ -998,12 +954,8 @@ func TestChooseCellIgnoresUnknownPin(t *testing.T) {
 	}
 }
 
-// An invalid variant cannot be pinned: it is one the machine cannot run at
-// all, and pinning it would report a machine count for something that never
-// operates. A second valid variant, "fast", is the automatic pick (1 machine
-// against base's 2) and also against "banned" if "banned" were honoured
-// despite being invalid (2 machines, same rate as base) - so both the variant
-// ID and the count distinguish "correctly fell back" from "pinned it anyway".
+// An invalid variant cannot be pinned: it is one the machine cannot run at all, and pinning
+// it would report a machine count for something that never operates.
 func TestChooseCellIgnoresInvalidPin(t *testing.T) {
 	vs := []plugins.Variant{
 		{ID: "base", Rate: plugins.Rational{Num: 1, Den: 4}, Valid: true},
@@ -1022,8 +974,7 @@ func TestChooseCellIgnoresInvalidPin(t *testing.T) {
 	}
 }
 
-// perRecipeSource answers each recipe with its own variant list, so a chain can
-// hold one group that has an upgrade on offer and one that does not.
+// perRecipeSource answers each recipe with its own variant list.
 type perRecipeSource struct {
 	vs map[string][]plugins.Variant
 }
@@ -1035,11 +986,8 @@ func (p *perRecipeSource) Variants(_ context.Context, _ *MachineSpec, r *RecipeR
 	return []plugins.Variant{DefaultVariant(r)}, nil
 }
 
-// In AUTO mode the first variant pick sees the unscaled request rate, where
-// every group is a fraction of one machine and no upgrade can pay off. Once the
-// chain is scaled to whole machines (7 and 3 here) the pick must be repeated at
-// the real rate: the 7-machine group collapses to 1 fast machine, the group
-// without an upgrade stays as it was.
+// In AUTO mode the first variant pick sees the unscaled request rate, where every group is
+// a fraction of one machine and no upgrade can pay off.
 func TestSolveAutoRepicksVariantsAfterScaling(t *testing.T) {
 	store, target := chainStub(2)
 	src := &perRecipeSource{vs: map[string][]plugins.Variant{

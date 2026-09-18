@@ -2,9 +2,8 @@ package solver
 
 import "testing"
 
-// Scaling a line by a whole number is what turns a part-loaded group into a
-// full one: 1½ machines' worth of work needs 2 machines at 75%, twice that
-// needs exactly 3 at 100%.
+// Scaling a line by a whole number is what turns a part-loaded group into a full one: 1½
+// machines' worth of work needs 2 machines at 75%, twice that needs exactly 3 at 100%.
 func TestScaleCount_WholeFactorFillsAPartialGroup(t *testing.T) {
 	exact, count, util := ScaleCount(NewRational(3, 2), RationalFromInt(2))
 
@@ -19,8 +18,8 @@ func TestScaleCount_WholeFactorFillsAPartialGroup(t *testing.T) {
 	}
 }
 
-// A fully loaded group stays fully loaded — the point of scaling by a whole
-// number is that it preserves the base solution's utilisation.
+// A fully loaded group stays fully loaded — the point of scaling by a whole number is that
+// it preserves the base solution's utilisation.
 func TestScaleCount_WholeFactorKeepsFullGroupsFull(t *testing.T) {
 	_, count, util := ScaleCount(RationalFromInt(4), RationalFromInt(3))
 
@@ -32,9 +31,9 @@ func TestScaleCount_WholeFactorKeepsFullGroupsFull(t *testing.T) {
 	}
 }
 
-// A fractional factor is allowed and may leave idle capacity, the same way a
-// partial group does today: 2 × 1.5 = 3 exact, 4 × 1.5 = 6 exact, but
-// 1 × 1.5 needs a second machine that only runs three quarters of the time.
+// A fractional factor is allowed and may leave idle capacity, the same way a partial group
+// does today: 2 × 1.5 = 3 exact, 4 × 1.5 = 6 exact, but 1 × 1.5 needs a second machine that
+// only runs three quarters of the time.
 func TestScaleCount_FractionalFactorLeavesIdleCapacity(t *testing.T) {
 	exact, count, util := ScaleCount(RationalFromInt(1), NewRational(3, 2))
 
@@ -49,8 +48,8 @@ func TestScaleCount_FractionalFactorLeavesIdleCapacity(t *testing.T) {
 	}
 }
 
-// Scaling down is scaling too, but a group never drops below one machine —
-// zero machines would silently delete the step from the line.
+// Scaling down is scaling too, but a group never drops below one machine — zero machines
+// would silently delete the step from the line.
 func TestScaleCount_NeverGoesBelowOneMachine(t *testing.T) {
 	_, count, _ := ScaleCount(RationalFromInt(1), NewRational(1, 4))
 
@@ -59,8 +58,8 @@ func TestScaleCount_NeverGoesBelowOneMachine(t *testing.T) {
 	}
 }
 
-// Scaling a solved line multiplies what it produces and consumes, and lets a
-// part-loaded group fill up.
+// Scaling a solved line multiplies what it produces and consumes, and lets a part-loaded
+// group fill up.
 func TestScaleResult(t *testing.T) {
 	item := ItemRef{ModID: "minecraft", ItemID: "copper_ingot"}
 	result := SolveResult{

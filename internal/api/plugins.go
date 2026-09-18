@@ -9,13 +9,11 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/db"
 )
 
-// maxModConfigBytes bounds a mod config body. The host never reads the blob,
-// so only its size is its business.
+// maxModConfigBytes bounds a mod config body.
 const maxModConfigBytes = 1 << 20
 
-// PluginAssetHandler serves a mod's plugin source to the browser, which
-// evaluates it with the same one-file convention goja uses server-side.
-// GET /plugin-assets/{mod_id}/plugin.js
+// PluginAssetHandler serves a mod's plugin source to the browser, which evaluates it with
+// the same one-file convention goja uses server-side. GET /plugin-assets/{mod_id}/plugin.js
 func PluginAssetHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p, err := database.GetModPlugin(r.Context(), r.PathValue("mod_id"))
@@ -28,8 +26,8 @@ func PluginAssetHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		// A re-import replaces the source at the same URL, and a stale wizard
-		// would write a config the current plugin cannot read.
+		// A re-import replaces the source at the same URL, and a stale wizard would write a
+		// config the current plugin cannot read.
 		w.Header().Set("Cache-Control", "no-cache")
 		if _, err := io.WriteString(w, p.Source); err != nil {
 			return
@@ -37,9 +35,8 @@ func PluginAssetHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// GetSaveModConfigDefaultsHandler returns every mod's seed config for a save,
-// keyed by mod id. The solve page uses it to start a fresh chain.
-// GET /api/saves/{save_id}/mod-config-defaults
+// GetSaveModConfigDefaultsHandler returns every mod's seed config for a save, keyed by mod
+// id. GET /api/saves/{save_id}/mod-config-defaults
 func GetSaveModConfigDefaultsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		saveID, ok := parseUUIDParam(w, r, "save_id")
@@ -58,10 +55,8 @@ func GetSaveModConfigDefaultsHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// SetSaveModConfigDefaultHandler stores one mod's seed config for a save. The
-// body is checked for being valid JSON and nothing else; it never reaches an
-// already-confirmed line, which carries its own frozen copy.
-// PUT /api/saves/{save_id}/mod-config-defaults/{mod_id}
+// SetSaveModConfigDefaultHandler stores one mod's seed config for a save. PUT
+// /api/saves/{save_id}/mod-config-defaults/{mod_id}
 func SetSaveModConfigDefaultHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		saveID, ok := parseUUIDParam(w, r, "save_id")

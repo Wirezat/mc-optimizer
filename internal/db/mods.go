@@ -19,7 +19,6 @@ func strPtrOr(s string) *string {
 }
 
 // LookupItemNames resolves en_us display names for a batch of items/fluids.
-// Returns a map[itemKey → name]; items without a translation are omitted.
 func (d *DB) LookupItemNames(ctx context.Context, items []solver.ItemRef) (map[string]string, error) {
 	type cand struct {
 		langKey, itemKey string
@@ -93,9 +92,8 @@ func (d *DB) LookupItemNames(ctx context.Context, items []solver.ItemRef) (map[s
 	return result, nil
 }
 
-// LookupMachineNames resolves display names for a set of (modID, machineID) pairs.
-// The name is resolved from the modfile's lang_key at import time and stored on the row.
-// Returns a map[modID+":"+machineID → name].
+// LookupMachineNames resolves display names for a set of (modID, machineID) pairs. Returns
+// a map[modID+":"+machineID → name].
 func (d *DB) LookupMachineNames(ctx context.Context, machines []solver.MachineRef) (map[string]string, error) {
 	if len(machines) == 0 {
 		return map[string]string{}, nil
@@ -127,11 +125,8 @@ func (d *DB) LookupMachineNames(ctx context.Context, machines []solver.MachineRe
 	return result, rows.Err()
 }
 
-// LookupMachinePluginMods resolves, for a set of (modID, machineID) pairs, the
-// mod whose plugin evaluates that machine: its ecosystem, or its own mod when
-// no ecosystem is set. The SQL mirrors solver.PluginMod, so the browser and
-// the solver agree on which plugin owns a machine. Vanilla machines are left
-// out: the host evaluates those itself and no plugin exists to load.
+// LookupMachinePluginMods resolves, for a set of (modID, machineID) pairs, the mod whose
+// plugin evaluates that machine: its ecosystem, or its own mod when no ecosystem is set.
 // Returns a map[modID+":"+machineID → pluginModID].
 func (d *DB) LookupMachinePluginMods(ctx context.Context, machines []solver.MachineRef) (map[string]string, error) {
 	if len(machines) == 0 {
@@ -202,9 +197,7 @@ func (d *DB) ListMods(ctx context.Context) ([]*model.Mod, error) {
 	return mods, nil
 }
 
-// UpdateModFull overwrites all editable fields for a mod. Caller must be an admin.
-// Every field but name is overwritten unconditionally, including to NULL; name falls
-// back to its current value via COALESCE when nil.
+// UpdateModFull overwrites all editable fields for a mod.
 func (d *DB) UpdateModFull(ctx context.Context, modID string, u model.ModUpdate) error {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE mods SET
@@ -232,7 +225,7 @@ func (d *DB) UpdateModFull(ctx context.Context, modID string, u model.ModUpdate)
 	return nil
 }
 
-// UpdateMachineType updates the display name of a machine type. Caller must be an admin (enforced at API layer).
+// UpdateMachineType updates the display name of a machine type.
 func (d *DB) UpdateMachineType(ctx context.Context, modID, machineID string, name *string) error {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE machine_types
@@ -248,7 +241,7 @@ func (d *DB) UpdateMachineType(ctx context.Context, modID, machineID string, nam
 	return nil
 }
 
-// DeleteMod removes a mod (and cascades). Caller must be an admin (enforced at API layer).
+// DeleteMod removes a mod (and cascades).
 func (d *DB) DeleteMod(ctx context.Context, modID string) error {
 	tag, err := d.Pool.Exec(ctx, `
 		DELETE FROM mods WHERE mod_id = $1
@@ -303,12 +296,11 @@ func (d *DB) ListItemsByMod(ctx context.Context, modID string) ([]*model.Item, e
 	return items, nil
 }
 
-// ListItemsProducedBy returns every item that appears as an output of a
-// recipe matching (modID, machineID), same filter shape as
-// ListRecipesCatalog: machineID set narrows to that exact machine (plus
-// anything that implements it via machine_interfaces); machineID empty
-// narrows to recipes the mod itself added (source_mod_id); both empty
-// returns nothing (callers only call this with at least one set).
+// ListItemsProducedBy returns every item that appears as an output of a recipe matching
+// (modID, machineID), same filter shape as ListRecipesCatalog: machineID set narrows to
+// that exact machine (plus anything that implements it via machine_interfaces); machineID
+// empty narrows to recipes the mod itself added (source_mod_id); both empty returns nothing
+// (callers only call this with at least one set).
 func (d *DB) ListItemsProducedBy(ctx context.Context, modID, machineID string) ([]*model.Item, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT DISTINCT i.mod_id, i.item_id,
@@ -357,8 +349,8 @@ func (d *DB) ListItemsProducedBy(ctx context.Context, modID, machineID string) (
 	return items, rows.Err()
 }
 
-// ListFluidsProducedBy is ListItemsProducedBy's fluid mirror — same
-// (modID, machineID) filter shape, joining recipe_fluid_outputs instead.
+// ListFluidsProducedBy is ListItemsProducedBy's fluid mirror — same (modID, machineID)
+// filter shape, joining recipe_fluid_outputs instead.
 func (d *DB) ListFluidsProducedBy(ctx context.Context, modID, machineID string) ([]*model.Fluid, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT mod_id, fluid_id, fname FROM (
@@ -413,7 +405,6 @@ func (d *DB) ListFluidsProducedBy(ctx context.Context, modID, machineID string) 
 }
 
 // SearchItems returns up to 50 items matching query q across all mods, ordered by name.
-// offset is used for pagination (ring-buffer / infinite scroll on the frontend).
 func (d *DB) SearchItems(ctx context.Context, q string, offset int) ([]*model.Item, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT i.mod_id, i.item_id,
@@ -455,9 +446,8 @@ func (d *DB) SearchItems(ctx context.Context, q string, offset int) ([]*model.It
 	return items, nil
 }
 
-// ListAllItems returns all items across all mods with translated names, ordered by mod then name.
-// Used by catalog pages (no pagination limit) and the Solve target-item picker.
-// saveID, if non-nil, restricts results to items whose mod is active for that save —
+// ListAllItems returns all items across all mods with translated names, ordered by mod then
+// name. saveID, if non-nil, restricts results to items whose mod is active for that save —
 // nil means unfiltered (catalog pages, demo mode).
 func (d *DB) ListAllItems(ctx context.Context, saveID *uuid.UUID) ([]*model.Item, error) {
 	rows, err := d.Pool.Query(ctx, `
@@ -492,9 +482,9 @@ func (d *DB) ListAllItems(ctx context.Context, saveID *uuid.UUID) ([]*model.Item
 	return items, rows.Err()
 }
 
-// ListAllFluids returns all fluids across all mods with translated names, ordered by mod then name.
-// saveID, if non-nil, restricts results to fluids whose mod is active for that save —
-// nil means unfiltered (catalog pages, demo mode).
+// ListAllFluids returns all fluids across all mods with translated names, ordered by mod
+// then name. saveID, if non-nil, restricts results to fluids whose mod is active for that
+// save — nil means unfiltered (catalog pages, demo mode).
 func (d *DB) ListAllFluids(ctx context.Context, saveID *uuid.UUID) ([]*model.Fluid, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT mod_id, fluid_id, name FROM (
@@ -566,7 +556,6 @@ func (d *DB) ListFluidsByMod(ctx context.Context, modID string) ([]*model.Fluid,
 }
 
 // SearchFluids returns up to 50 fluids matching query q across all mods, ordered by name.
-// offset is used for pagination (ring-buffer / infinite scroll on the frontend).
 func (d *DB) SearchFluids(ctx context.Context, q string, offset int) ([]*model.Fluid, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT mod_id, fluid_id, name FROM (
@@ -604,9 +593,9 @@ func (d *DB) SearchFluids(ctx context.Context, q string, offset int) ([]*model.F
 	return fluids, nil
 }
 
-// ListTagMembers returns every item each tag stands for, ordered so a tag's
-// members always come back in the same sequence — the UI cycles through them,
-// and a cycle that reshuffled per request would be unreadable.
+// ListTagMembers returns every item each tag stands for, ordered so a tag's members always
+// come back in the same sequence — the UI cycles through them, and a cycle that reshuffled
+// per request would be unreadable.
 func (d *DB) ListTagMembers(ctx context.Context) ([]model.TagMember, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT t.name, m.item_mod_id, m.item_id
@@ -629,7 +618,8 @@ func (d *DB) ListTagMembers(ctx context.Context) ([]model.TagMember, error) {
 	return members, rows.Err()
 }
 
-// ListAllMachines returns all machine types across all mods, ordered by mod_id then machine_id.
+// ListAllMachines returns all machine types across all mods, ordered by mod_id then
+// machine_id.
 func (d *DB) ListAllMachines(ctx context.Context) ([]*model.MachineType, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT mt.mod_id, mt.machine_id,
@@ -653,11 +643,8 @@ func (d *DB) ListAllMachines(ctx context.Context) ([]*model.MachineType, error) 
 	return machines, rows.Err()
 }
 
-// ListAllMachinesGrouped returns all machine types across all mods, with
-// tier-variant machines folded into their base machine's Variants (see
-// groupMachines). TextureURL is left nil; callers attach it via
-// assets.ResolveMachineTexture, same as attachItemTextures/attachFluidTextures
-// do for items/fluids.
+// ListAllMachinesGrouped returns all machine types across all mods, with tier-variant
+// machines folded into their base machine's Variants (see groupMachines).
 func (d *DB) ListAllMachinesGrouped(ctx context.Context) ([]*model.MachineType, error) {
 	all, err := d.ListAllMachines(ctx)
 	if err != nil {
@@ -685,11 +672,10 @@ func (d *DB) ListAllMachinesGrouped(ctx context.Context) ([]*model.MachineType, 
 	return groupMachines(all, interfaces), nil
 }
 
-// groupMachines folds each single-base implementer into its base's Variants
-// (alphabetical by Name, RecipeCount summed). A machine with zero or more
-// than one base edge stays its own top-level row — more than one means a
-// genuinely multi-purpose machine, not a tier variant of anything. Output is
-// sorted by ModID then MachineID.
+// groupMachines folds each single-base implementer into its base's Variants (alphabetical
+// by Name, RecipeCount summed). A machine with zero or more than one base edge stays its
+// own top-level row — more than one means a genuinely multi-purpose machine, not a tier
+// variant of anything.
 func groupMachines(all []*model.MachineType, interfaces []MachineInterface) []*model.MachineType {
 	type key struct{ mod, machine string }
 	basesOf := map[key][]key{} // implementer -> every base it implements
@@ -832,7 +818,6 @@ func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*
 }
 
 func (d *DB) hydrateRecipeIO(ctx context.Context, rec *model.Recipe) error {
-	// Item inputs — COALESCE all nullable text columns to '' to avoid NULL scan issues.
 	rows, err := d.Pool.Query(ctx, `
 		SELECT rii.id::text, rii.recipe_id::text,
 		       COALESCE(rii.item_mod_id, ''), COALESCE(rii.item_id, ''),
@@ -981,7 +966,6 @@ type MachineInterface struct {
 }
 
 // AddMachineInterface adds an "A implements B" relationship.
-// Caller must be an admin (enforced at API layer).
 func (d *DB) AddMachineInterface(ctx context.Context, modID, machineID, baseModID, baseMachineID string) error {
 	_, err := d.Pool.Exec(ctx, `
 		INSERT INTO machine_interfaces (machine_mod_id, machine_id, base_mod_id, base_machine_id)
@@ -1022,8 +1006,8 @@ func (d *DB) ListMachineSlots(ctx context.Context, modID, machineID string) ([]*
 	return slots, rows.Err()
 }
 
-// ListVillagerTrades returns all villager trades with resolved item names.
-// Optionally filtered by profession and/or tier (zero value = no filter).
+// ListVillagerTrades returns all villager trades with resolved item names. Optionally
+// filtered by profession and/or tier (zero value = no filter).
 func (d *DB) ListVillagerTrades(ctx context.Context, profession string, tier int) ([]*model.VillagerTradeView, error) {
 	q := `
 		SELECT vt.id, vt.source_mod_id,

@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// ListProductionLinesByFactory returns all production lines for a factory, including archived ones.
-// Results are ordered by group position then by the line's own position within its group.
+// ListProductionLinesByFactory returns all production lines for a factory, including
+// archived ones.
 func (d *DB) ListProductionLinesByFactory(ctx context.Context, factoryID uuid.UUID) ([]*model.ProductionLine, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT pl.id, pl.factory_id, pl.parent_pl_id,
@@ -124,9 +124,8 @@ func (d *DB) SetPLPosition(ctx context.Context, id uuid.UUID, position string) e
 	return nil
 }
 
-// GetLastPLPosition returns the lexicographically highest position among production
-// lines in the given factory+group scope, or "" if none exist.
-// Pass groupID=nil to query the ungrouped lines.
+// GetLastPLPosition returns the lexicographically highest position among production lines
+// in the given factory+group scope, or "" if none exist.
 func (d *DB) GetLastPLPosition(ctx context.Context, factoryID uuid.UUID, groupID *uuid.UUID) (string, error) {
 	var pos string
 	var err error
@@ -152,8 +151,8 @@ func (d *DB) GetLastPLPosition(ctx context.Context, factoryID uuid.UUID, groupID
 	return pos, nil
 }
 
-// MovePLToGroup moves a production line to a different group and updates its
-// position atomically. Pass groupID=nil to ungroup the line.
+// MovePLToGroup moves a production line to a different group and updates its position
+// atomically.
 func (d *DB) MovePLToGroup(ctx context.Context, plID uuid.UUID, groupID *uuid.UUID, position string) error {
 	tag, err := d.Pool.Exec(ctx,
 		`UPDATE production_lines SET pl_group_id = $2, position = $3 WHERE id = $1`,
@@ -168,8 +167,8 @@ func (d *DB) MovePLToGroup(ctx context.Context, plID uuid.UUID, groupID *uuid.UU
 	return nil
 }
 
-// ProductionLineOwnerUserID resolves the user_id that owns a production line
-// via the chain production_lines → factories → saves.
+// ProductionLineOwnerUserID resolves the user_id that owns a production line via the chain
+// production_lines → factories → saves.
 func (d *DB) ProductionLineOwnerUserID(ctx context.Context, plID uuid.UUID) (uuid.UUID, error) {
 	var userID uuid.UUID
 	err := d.Pool.QueryRow(ctx, `
@@ -293,12 +292,12 @@ func (d *DB) ListActiveIOByFactory(ctx context.Context, factoryID uuid.UUID) ([]
 	return result, rows.Err()
 }
 
-// defaultVariantID is the id of the host's built-in variant, used for a group
-// whose machine's mod ships no plugin.
+// defaultVariantID is the id of the host's built-in variant, used for a group whose
+// machine's mod ships no plugin.
 const defaultVariantID = "default"
 
-// variantID falls back to the host default so the NOT NULL column never sees
-// an empty id from a caller that did not set one.
+// variantID falls back to the host default so the NOT NULL column never sees an empty id
+// from a caller that did not set one.
 func variantID(id string) string {
 	if id == "" {
 		return defaultVariantID
@@ -306,8 +305,8 @@ func variantID(id string) string {
 	return id
 }
 
-// groupModConfig returns the group's config override, or an empty object,
-// which means the save-wide config applies.
+// groupModConfig returns the group's config override, or an empty object, which means the
+// save-wide config applies.
 func groupModConfig(mg *model.MachineGroup) []byte {
 	if len(mg.ModConfig) == 0 {
 		return []byte("{}")
@@ -387,9 +386,8 @@ func (d *DB) UpdateMachineGroupStatus(ctx context.Context, id uuid.UUID, status 
 	return nil
 }
 
-// UpdateMachineGroupBuildState sets how many of a group's target machine count
-// are actually standing in-game. The built variant is tracked separately, see
-// UpdateMachineGroupCurrentVariant.
+// UpdateMachineGroupBuildState sets how many of a group's target machine count are actually
+// standing in-game.
 func (d *DB) UpdateMachineGroupBuildState(ctx context.Context, id uuid.UUID, builtCount int) error {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE machine_groups
@@ -405,8 +403,8 @@ func (d *DB) UpdateMachineGroupBuildState(ctx context.Context, id uuid.UUID, bui
 	return nil
 }
 
-// UpdateMachineGroupCurrentVariant records which operating variant the group's
-// machines are actually built to in-game.
+// UpdateMachineGroupCurrentVariant records which operating variant the group's machines are
+// actually built to in-game.
 func (d *DB) UpdateMachineGroupCurrentVariant(ctx context.Context, id uuid.UUID, variantID string) error {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE machine_groups
@@ -428,9 +426,9 @@ func (d *DB) MachineGroupOwnerUserID(ctx context.Context, groupID uuid.UUID) (uu
 	return userID, err
 }
 
-// MachineGroupScope resolves the owning user and the save a machine group
-// belongs to, via the chain machine_groups → production_lines → factories →
-// saves. Returns ErrNotFound if the group does not exist.
+// MachineGroupScope resolves the owning user and the save a machine group belongs to, via
+// the chain machine_groups → production_lines → factories → saves. Returns ErrNotFound if
+// the group does not exist.
 func (d *DB) MachineGroupScope(ctx context.Context, groupID uuid.UUID) (userID, saveID uuid.UUID, err error) {
 	err = d.Pool.QueryRow(ctx, `
 		SELECT s.user_id, s.id
@@ -449,9 +447,8 @@ func (d *DB) MachineGroupScope(ctx context.Context, groupID uuid.UUID) (userID, 
 	return userID, saveID, nil
 }
 
-// UpdateMachineGroupVariant sets the variant a group targets together with the
-// machine count that variant needs. built_count is clamped to the new count so
-// the column's CHECK holds when a faster variant shrinks the group.
+// UpdateMachineGroupVariant sets the variant a group targets together with the machine
+// count that variant needs.
 func (d *DB) UpdateMachineGroupVariant(ctx context.Context, id uuid.UUID, variantID string, count int, exactNum, exactDen int64) error {
 	tag, err := d.Pool.Exec(ctx, `
 		UPDATE machine_groups
@@ -485,9 +482,9 @@ func (d *DB) MarkAllPlannedAsBuilt(ctx context.Context, plID uuid.UUID) (int64, 
 	return tag.RowsAffected(), nil
 }
 
-// ConfirmSolverDraft persists a solved production line in a single transaction:
-// creates the ProductionLine, all PLIO entries, all MachineGroups, and deletes
-// the consumed solver draft. IDs are assigned here; callers leave them as zero.
+// ConfirmSolverDraft persists a solved production line in a single transaction: creates the
+// ProductionLine, all PLIO entries, all MachineGroups, and deletes the consumed solver
+// draft.
 func (d *DB) ConfirmSolverDraft(
 	ctx context.Context,
 	pl *model.ProductionLine,
@@ -568,8 +565,8 @@ func (d *DB) ConfirmSolverDraft(
 	}, nil
 }
 
-// GetPLSolveRequest returns the stored solver request JSON for a production line.
-// Returns ErrNotFound if the line is missing; returns nil bytes if no request was stored.
+// GetPLSolveRequest returns the stored solver request JSON for a production line. Returns
+// ErrNotFound if the line is missing; returns nil bytes if no request was stored.
 func (d *DB) GetPLSolveRequest(ctx context.Context, plID uuid.UUID) ([]byte, error) {
 	var raw []byte
 	err := d.Pool.QueryRow(ctx, `SELECT solve_request FROM production_lines WHERE id = $1`, plID).Scan(&raw)
@@ -583,9 +580,8 @@ func (d *DB) GetPLSolveRequest(ctx context.Context, plID uuid.UUID) ([]byte, err
 }
 
 // ReplaceProductionLineContents re-solves a production line in place: it updates the line's
-// rate/time-unit/mode and replaces all machine groups and IO entries in a single transaction.
-// The line's id, position, and status are preserved. New groups are inserted as given
-// (caller sets status, typically "planned"). Returns the updated detail.
+// rate/time-unit/mode and replaces all machine groups and IO entries in a single
+// transaction. Returns the updated detail.
 func (d *DB) ReplaceProductionLineContents(
 	ctx context.Context,
 	plID uuid.UUID,
@@ -666,15 +662,13 @@ func (d *DB) ReplaceProductionLineContents(
 }
 
 // EstimateCurrentRateFraction returns the fraction (0..1) of a production line's target
-// output achievable with the groups' current build state — the minimum over machine
-// groups of builtCount×speed/exactCount, since a chain's output is limited by its
-// slowest link. speed is the built variant's rate relative to the target variant's,
-// keyed by group id; a missing entry counts as 1.
+// output achievable with the groups' current build state — the minimum over machine groups
+// of builtCount×speed/exactCount, since a chain's output is limited by its slowest link.
 func EstimateCurrentRateFraction(groups []*model.MachineGroup, speed map[uuid.UUID]float64) float64 {
 	frac := 1.0
 	for _, mg := range groups {
-		// The lossless fractional machine count is the true requirement; fall back to
-		// the rounded count when it is unset.
+		// The lossless fractional machine count is the true requirement; fall back to the rounded
+		// count when it is unset.
 		exact := float64(mg.Count)
 		if mg.ExactCountDen > 0 && mg.ExactCountNum > 0 {
 			exact = float64(mg.ExactCountNum) / float64(mg.ExactCountDen)
@@ -708,8 +702,8 @@ type ScaledIO struct {
 	RateNum, RateDen int
 }
 
-// ApplyPLScale resizes a line in place: the rows keep their identity, so
-// status and built counts survive, unlike ReplacePLContents.
+// ApplyPLScale resizes a line in place: the rows keep their identity, so status and built
+// counts survive, unlike ReplacePLContents.
 func (d *DB) ApplyPLScale(ctx context.Context, plID uuid.UUID, rateNum, rateDen int, groups []ScaledGroup, ios []ScaledIO) error {
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {

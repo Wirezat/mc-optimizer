@@ -10,13 +10,13 @@ import (
 	"github.com/dop251/goja"
 )
 
-// Nested arrays in Variant costs/outputs/items can each force huge
-// allocations; extractVariants bounds each with its own length check and
-// reads elements by index (never via Symbol.iterator) to prevent that.
+// Nested arrays in Variant costs/outputs/items can each force huge allocations;
+// extractVariants bounds each with its own length check and reads elements by index (never
+// via Symbol.iterator) to prevent that.
 
-// TestExtractRejectsOversizedNestedArrayWithoutAllocating asserts that a
-// huge nested outputs array is rejected by its own length check before any
-// per-element allocation, using a sparse array to isolate the check's cost.
+// TestExtractRejectsOversizedNestedArrayWithoutAllocating asserts that a huge nested
+// outputs array is rejected by its own length check before any per-element allocation,
+// using a sparse array to isolate the check's cost.
 func TestExtractRejectsOversizedNestedArrayWithoutAllocating(t *testing.T) {
 	prog, err := Compile("testmod", `var plugin = {
 		evaluate: function (ctx) {
@@ -51,9 +51,9 @@ func TestExtractRejectsOversizedNestedArrayWithoutAllocating(t *testing.T) {
 	t.Logf("oversized nested array rejection: err=%v allocated=%d bytes", err, delta)
 }
 
-// TestExtractRejects256VariantsWithLargeCosts asserts the same bound holds
-// inside the outer loop: 256 variants (at the outer limit) each carrying an
-// oversized costs array must be rejected without allocating for any.
+// TestExtractRejects256VariantsWithLargeCosts asserts the same bound holds inside the outer
+// loop: 256 variants (at the outer limit) each carrying an oversized costs array must be
+// rejected without allocating for any.
 func TestExtractRejects256VariantsWithLargeCosts(t *testing.T) {
 	prog, err := Compile("testmod", `var plugin = {
 		evaluate: function (ctx) {
@@ -85,8 +85,8 @@ func TestExtractRejects256VariantsWithLargeCosts(t *testing.T) {
 	if err == nil {
 		t.Fatal("want error for 256 variants each with an oversized costs array, got nil")
 	}
-	// Building 256 outer objects costs real allocation; the ceiling sits
-	// well clear of exporting 256 x 200000 costs elements (1.64 GB).
+	// Building 256 outer objects costs real allocation; the ceiling sits well clear of
+	// exporting 256 x 200000 costs elements (1.64 GB).
 	const ceiling = 4 << 20 // 4 MiB
 	if delta > ceiling {
 		t.Fatalf("rejecting 256 oversized-costs variants allocated %d bytes, want under %d", delta, ceiling)
@@ -94,11 +94,10 @@ func TestExtractRejects256VariantsWithLargeCosts(t *testing.T) {
 	t.Logf("256-variants-large-costs rejection: err=%v allocated=%d bytes", err, delta)
 }
 
-// TestExtractIgnoresOverriddenSymbolIterator asserts that a genuine return
-// array (ClassName() == "Array", a real, small length) whose Symbol.iterator
-// has been overridden to yield unlimited elements is still read correctly:
-// extractVariants reads elements strictly by index (arr.Get("0"), ...),
-// which never invokes the iterator protocol.
+// TestExtractIgnoresOverriddenSymbolIterator asserts that a genuine return array
+// (ClassName() == "Array", a real, small length) whose Symbol.iterator has been overridden
+// to yield unlimited elements is still read correctly: extractVariants reads elements
+// strictly by index (arr.Get("0"), ...), which never invokes the iterator protocol.
 func TestExtractIgnoresOverriddenSymbolIterator(t *testing.T) {
 	prog, err := Compile("testmod", `var plugin = {
 		evaluate: function (ctx) {
@@ -132,10 +131,9 @@ func TestExtractIgnoresOverriddenSymbolIterator(t *testing.T) {
 	}
 }
 
-// TestExtractRejectsWrongFieldType asserts that a field present with the
-// wrong JS type is an error, never a silently-defaulted zero value: rate
-// must be an object with numeric num/den, and a string in its place must
-// not become a zero Rational.
+// TestExtractRejectsWrongFieldType asserts that a field present with the wrong JS type is
+// an error, never a silently-defaulted zero value: rate must be an object with numeric
+// num/den, and a string in its place must not become a zero Rational.
 func TestExtractRejectsWrongFieldType(t *testing.T) {
 	prog, err := Compile("testmod", `var plugin = {
 		evaluate: function (ctx) {
@@ -154,11 +152,11 @@ func TestExtractRejectsWrongFieldType(t *testing.T) {
 	}
 }
 
-// Extracted strings must be length-bounded, and readInt must reject
-// non-exact integers instead of truncating or saturating.
+// Extracted strings must be length-bounded, and readInt must reject non-exact integers
+// instead of truncating or saturating.
 
-// evaluateVariantFields compiles a plugin returning a single variant whose
-// body is the given JS object literal fields, and evaluates it once.
+// evaluateVariantFields compiles a plugin returning a single variant whose body is the
+// given JS object literal fields, and evaluates it once.
 func evaluateVariantFields(t *testing.T, fields string) ([]Variant, error) {
 	t.Helper()
 	prog, err := Compile("testmod", `var plugin = { evaluate: function (ctx) { return [{ `+fields+` }]; } }`)
@@ -168,11 +166,8 @@ func evaluateVariantFields(t *testing.T, fields string) ([]Variant, error) {
 	return prog.Evaluate(context.Background(), sampleContext())
 }
 
-// TestExtractRejectsOversizedStringWithoutCopying asserts that a single
-// oversized string is rejected on its UTF-16 length before any UTF-8 copy
-// is made. goja rebuilds a fresh UTF-8 copy on every String() call; at the
-// 256-variant / 64-element caps, 49664 reads of a 100000-character string
-// could allocate 9.18 GB, with copying on the Go side beyond interrupt reach.
+// TestExtractRejectsOversizedStringWithoutCopying asserts that a single oversized string is
+// rejected on its UTF-16 length before any UTF-8 copy is made.
 func TestExtractRejectsOversizedStringWithoutCopying(t *testing.T) {
 	prog, err := Compile("testmod", `var plugin = {
 		evaluate: function (ctx) {
@@ -210,14 +205,14 @@ func TestExtractRejectsOversizedStringWithoutCopying(t *testing.T) {
 	if err == nil {
 		t.Fatal("want error for a 100000-character string in costs[].resource, got nil")
 	}
-	// Naming the per-string cap specifically: the total byte budget would
-	// also stop this fixture eventually, after copying a few megabytes, so
-	// only this assertion pins down that the length was rejected up front.
+	// Naming the per-string cap specifically: the total byte budget would also stop this
+	// fixture eventually, after copying a few megabytes, so only this assertion pins down that
+	// the length was rejected up front.
 	if !strings.Contains(err.Error(), "characters long, limit is") {
 		t.Fatalf("got %v, want the per-string length cap to be what rejects this", err)
 	}
-	// Ceiling calibrated against the 9.18 GB without the length check;
-	// legitimate allocation (64x64 costs + 200 KB string) is a few MB.
+	// Ceiling calibrated against the 9.18 GB without the length check; legitimate allocation
+	// (64x64 costs + 200 KB string) is a few MB.
 	const ceiling = 64 << 20
 	if delta > ceiling {
 		t.Fatalf("rejecting a 100000-character string allocated %d bytes, want under %d (the string may be getting copied before its length is checked)", delta, ceiling)
@@ -227,13 +222,9 @@ func TestExtractRejectsOversizedStringWithoutCopying(t *testing.T) {
 	}
 }
 
-// TestExtractRejectsTotalStringBudget asserts the second half of the same
-// bound: strings that each pass the per-string cap must still not add up
-// without limit across one evaluate call. Every string here is 200
-// characters (under maxStringLen=256), but 256 variants x 64 costs is
-// 16384 of them, about 9.8 MB of UTF-8 - past maxStringBytes. Both the
-// variant count and the costs count sit exactly at their documented caps,
-// so nothing but the byte budget can reject this.
+// TestExtractRejectsTotalStringBudget asserts the second half of the same bound: strings
+// that each pass the per-string cap must still not add up without limit across one evaluate
+// call.
 func TestExtractRejectsTotalStringBudget(t *testing.T) {
 	prog, err := Compile("testmod", `var plugin = {
 		evaluate: function (ctx) {
@@ -266,13 +257,8 @@ func TestExtractRejectsTotalStringBudget(t *testing.T) {
 	t.Logf("string-budget rejection: err=%v", err)
 }
 
-// TestExtractRejectsNonIntegerNumbers asserts that every number feeding a
-// Rational or an Item count is an exact, finite integer within int64 range.
-// goja's ToInteger() silently truncates a fraction, maps NaN to 0 and
-// saturates +/-Infinity and out-of-range values to the int64 extremes, so
-// an honest arithmetic slip such as num: total/duration would silently
-// become a zero rate with err == nil, and per spec section 5.4 that result
-// is cached in Postgres, outliving the restart.
+// TestExtractRejectsNonIntegerNumbers asserts that every number feeding a Rational or an
+// Item count is an exact, finite integer within int64 range.
 func TestExtractRejectsNonIntegerNumbers(t *testing.T) {
 	base := `id: "v", label: "", costs: [], outputs: [], items: [], valid: true, `
 	rejected := []struct{ name, fields string }{
@@ -302,19 +288,13 @@ func TestExtractRejectsNonIntegerNumbers(t *testing.T) {
 	}
 }
 
-// minimalVariantFields is the field set every case below adds a rate to: an
-// otherwise-empty, otherwise-valid single variant.
 const minimalVariantFields = `id: "v", label: "", costs: [], outputs: [], items: [], valid: true, `
 
-// TestExtractAcceptsExactIntegers asserts extractVariants' own exactness
-// rule directly, bypassing Evaluate/Validate: any exact int64 - fractional,
-// negative, zero, or large but still exact - is a fine number at the
-// extraction layer, whatever the plugin contract separately makes of a zero
-// or oversized rate (see TestValidateRejectsZeroRate and
-// TestValidateRejectsOversizedMagnitude in validate_test.go). All four cases
-// go through extractVariants the same way, so this file uses one convention
-// throughout for testing extraction rather than mixing a full-pipeline path
-// with a direct one.
+// TestExtractAcceptsExactIntegers asserts extractVariants' own exactness rule directly,
+// bypassing Evaluate/Validate: any exact int64 - fractional, negative, zero, or large but
+// still exact - is a fine number at the extraction layer, whatever the plugin contract
+// separately makes of a zero or oversized rate (see TestValidateRejectsZeroRate and
+// TestValidateRejectsOversizedMagnitude in validate_test.go).
 func TestExtractAcceptsExactIntegers(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -344,10 +324,8 @@ func TestExtractAcceptsExactIntegers(t *testing.T) {
 	}
 }
 
-// TestExtractRejectsZeroDenominator asserts that a present rational with a
-// zero denominator is a validation error here. It currently flows through
-// without consequence, but becomes an integer divide by zero - a panic
-// outside guard()'s reach - as soon as the solver computes with it.
+// TestExtractRejectsZeroDenominator asserts that a present rational with a zero denominator
+// is a validation error here.
 func TestExtractRejectsZeroDenominator(t *testing.T) {
 	base := `id: "v", label: "", costs: [], outputs: [], items: [], valid: true, `
 	cases := []struct{ name, fields string }{

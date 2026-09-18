@@ -1,9 +1,9 @@
 import { init as _wuiInit } from '/static/ui/js/header.js';
 import { getLang, setLang, t } from './i18n.js';
 
-// The asset server's own item paths — flat sprites straight from a mod's
-// textures, blocks through the renderer. A missing one clears its src and
-// leaves the empty box an unknown item's icon gets.
+// The asset server's own item paths — flat sprites straight from a mod's textures, blocks
+// through the renderer. A missing one clears its src and leaves the empty box an unknown item's
+// icon gets.
 const sprite = (path) =>
   `<img src="/assets/${path}.png" alt="" loading="lazy" decoding="async" onerror="this.removeAttribute('src')">`;
 

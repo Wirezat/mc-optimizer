@@ -3,7 +3,6 @@ package importer
 import "math"
 
 // ProbToRational converts a float64 probability to an exact integer rational (num/den).
-// Tries denominators up to 10 000 for an exact match; falls back to rounding.
 func ProbToRational(p float64) (num, den int) {
 	if p <= 0 {
 		return 0, 1

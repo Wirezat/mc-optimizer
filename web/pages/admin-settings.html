@@ -14,7 +14,6 @@
     })();
   </script>
   <style>
-    /* ── Setting row (checkbox + label) ───────────────────────────────────── */
     .setting-row {
       display: flex;
       align-items: center;
@@ -43,7 +42,6 @@
       accent-color: var(--accent);
     }
 
-    /* ── Admin checkbox ───────────────────────────────────────────────────── */
     .admin-cb {
       width: 15px;
       height: 15px;
@@ -52,15 +50,12 @@
     }
     .admin-cb:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* ── Status msg — always reserves layout space (unlike wui's
-       display:none default) so the settings panels don't jump when a
-       message appears. */
+    /* Status msg: always reserves layout space. */
     .status-msg { min-height: 1.2em; display: block; }
   </style>
 </head>
 <body class="app-shell">
 
-  <!-- ── Header ── -->
   <header class="header">
     <a class="header-brand" href="/saves">
       <div class="header-logo">⚙️</div>
@@ -355,7 +350,6 @@
     el.textContent = msg;
     el.className = 'status-msg' + (type ? ' ' + type : '');
   }
-
 
   init();
 </script>

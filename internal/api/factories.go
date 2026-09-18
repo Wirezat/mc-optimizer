@@ -39,7 +39,6 @@ type factoryBalance struct {
 }
 
 // computeBalance aggregates all active IO entries into a factory balance.
-// Rates from different time units are normalized to per-minute.
 func computeBalance(ios []db.PLIOWithUnit) factoryBalance {
 	type key struct {
 		modID, itemFluidID, ioType string
@@ -51,8 +50,6 @@ func computeBalance(ios []db.PLIOWithUnit) factoryBalance {
 
 	addRate := func(m map[key]rat, k key, rateNum, rateDen int, timeUnit string) {
 		// Convert to per-minute: multiply rate by (1200 / ticks_per_unit).
-		// ticks/unit: t=1, s=20, min=1200, h=72000
-		// per_min = rate * (1200 / tpu) = (rate_num * 1200) / (rate_den * tpu)
 		var tpu int64
 		switch timeUnit {
 		case "t":
@@ -64,7 +61,7 @@ func computeBalance(ios []db.PLIOWithUnit) factoryBalance {
 		default: // "min"
 			tpu = 1200
 		}
-		// rate_per_min = (rateNum * 1200) / (rateDen * tpu)  — already in /min when tpu==1200
+		// rate_per_min = (rateNum * 1200) / (rateDen * tpu) — already in /min when tpu==1200
 		newNum := int64(rateNum) * 1200
 		newDen := int64(rateDen) * tpu
 		g := gcd64(absInt64(newNum), absInt64(newDen))
@@ -149,7 +146,8 @@ func absInt64(n int64) int64 {
 	return n
 }
 
-// enrichBalanceNames looks up display names for all entries in a factoryBalance and sets Name.
+// enrichBalanceNames looks up display names for all entries in a factoryBalance and sets
+// Name.
 func enrichBalanceNames(ctx context.Context, database *db.DB, balance *factoryBalance) error {
 	collect := func(entries []balanceEntry) []solver.ItemRef {
 		refs := make([]solver.ItemRef, len(entries))
@@ -285,8 +283,8 @@ func GetFactoryHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// UpdateFactoryHandler handles PATCH /api/factories/{factory_id}.
-// Accepts optional fields: name (string), src (bool).
+// UpdateFactoryHandler handles PATCH /api/factories/{factory_id}. Accepts optional fields:
+// name (string), src (bool).
 func UpdateFactoryHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())
@@ -384,8 +382,7 @@ func requireFactoryOwner(r *http.Request, w http.ResponseWriter, database *db.DB
 	return nil
 }
 
-// aggregateCosts sums costs per resource across groups, sorted alphabetically
-// by resource. A resource whose running sum overflows int64 is dropped.
+// aggregateCosts sums costs per resource across groups, sorted alphabetically by resource.
 func aggregateCosts(groups [][]plugins.Cost) []plugins.Cost {
 	sums := map[string]solver.Rational{}
 	dropped := map[string]bool{}
@@ -412,8 +409,7 @@ func aggregateCosts(groups [][]plugins.Cost) []plugins.Cost {
 	return out
 }
 
-// addCostSafely adds amount into sums[resource]. An overflowing resource is
-// removed from sums and marked dropped.
+// addCostSafely adds amount into sums[resource].
 func addCostSafely(sums map[string]solver.Rational, dropped map[string]bool, resource string, amount solver.Rational) {
 	var err error
 	func() {
@@ -431,9 +427,6 @@ func addCostSafely(sums map[string]solver.Rational, dropped map[string]bool, res
 	}
 }
 
-// scaleCosts multiplies one machine's per-tick costs by its group's machine
-// count, guarding overflow the same way aggregateCosts does: an overflowing
-// resource is dropped rather than shown wrong.
 func scaleCosts(costs []plugins.Cost, count int) []plugins.Cost {
 	if count <= 0 || len(costs) == 0 {
 		return nil
@@ -453,8 +446,8 @@ func scaleCosts(costs []plugins.Cost, count int) []plugins.Cost {
 	return out
 }
 
-// scaleCostSafely multiplies a cost amount by count, turning a rate-arithmetic
-// panic into an error.
+// scaleCostSafely multiplies a cost amount by count, turning a rate-arithmetic panic into
+// an error.
 func scaleCostSafely(amount plugins.Rational, count int) (result plugins.Rational, err error) {
 	defer solver.GuardRateArithmetic(&err)
 	scaled := solver.NewRational(amount.Num, amount.Den).Mul(solver.RationalFromInt(int64(count)))

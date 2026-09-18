@@ -8,9 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetSaveModConfigDefaults returns the per-mod seed configs of a save, keyed by
-// mod id. A save that has none yields an empty map, which every plugin reads as
-// its own defaults.
+// GetSaveModConfigDefaults returns the per-mod seed configs of a save, keyed by mod id.
 func (d *DB) GetSaveModConfigDefaults(ctx context.Context, saveID uuid.UUID) (map[string]json.RawMessage, error) {
 	rows, err := d.Pool.Query(ctx,
 		`SELECT mod_id, config FROM save_mod_config_defaults WHERE save_id = $1`, saveID)
@@ -31,8 +29,8 @@ func (d *DB) GetSaveModConfigDefaults(ctx context.Context, saveID uuid.UUID) (ma
 	return out, rows.Err()
 }
 
-// SetSaveModConfigDefault stores one mod's seed config for a save, replacing any
-// previous one. An empty config is stored as the empty object.
+// SetSaveModConfigDefault stores one mod's seed config for a save, replacing any previous
+// one.
 func (d *DB) SetSaveModConfigDefault(ctx context.Context, saveID uuid.UUID, modID string, cfg json.RawMessage) error {
 	if len(cfg) == 0 {
 		cfg = json.RawMessage(`{}`)

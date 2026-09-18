@@ -8,7 +8,6 @@ import (
 )
 
 // RecipeStore is the data-access interface required by the solver.
-// db.DB satisfies this interface implicitly.
 type RecipeStore interface {
 	GetRecipesForItem(ctx context.Context, modID, itemID string) ([]*RecipeRow, error)
 	GetRecipesForFluid(ctx context.Context, modID, fluidID string) ([]*RecipeRow, error)
@@ -23,8 +22,8 @@ type Solver struct {
 	DB           RecipeStore
 	AutoScaleMax int64
 	ActiveMods   map[string]bool
-	// VariantSource evaluates the operating variants of a (machine, recipe)
-	// pair. Nil means every machine runs at its nominal recipe duration.
+	// VariantSource evaluates the operating variants of a (machine, recipe) pair. Nil means
+	// every machine runs at its nominal recipe duration.
 	VariantSource VariantSource
 }
 
@@ -37,10 +36,6 @@ func NewSolver(store RecipeStore, autoScaleMax int64) *Solver {
 }
 
 // Solve computes the optimal machine groups for a production line request.
-// The whole body runs under guardRateArithmetic: a variant's output overrides
-// become operands of every rate computation that follows, so the guard spans
-// the DAG walk, the linear system, the machine counts, the integer scaling and
-// the IO profile.
 func (s *Solver) Solve(ctx context.Context, req SolveRequest) (res SolveResult, err error) {
 	defer guardRateArithmetic(&err)
 	return s.solve(ctx, req)
@@ -68,11 +63,8 @@ func (s *Solver) solve(ctx context.Context, req SolveRequest) (SolveResult, erro
 	var warnings []Warning
 	_, hadCycles := DetectCycles(g)
 
-	// A chosen variant may override the recipe's output amounts, which changes the
-	// rates, which can change which variant wins. Iterate to a fixed point;
-	// MaxVariantIterations bounds a pair of variants that keep displacing each
-	// other. The graph, the rates and the groups always describe the same state
-	// when the loop ends, so the last round is never applied unchecked.
+	// A chosen variant may override the recipe's output amounts, which changes the rates,
+	// which can change which variant wins.
 	baseline := captureOutputBaseline(g)
 	var rv RateVector
 	var groups []MachineGroupDraft
@@ -123,8 +115,8 @@ func (s *Solver) solve(ctx context.Context, req SolveRequest) (SolveResult, erro
 			}
 			rv.ItemRates = scaled
 		}
-		// Sync rv.ItemRates with actualRatePerTick: ScaleToInteger may apply GCD reduction
-		// that lowers actualRatePerTick below the k-scaled value. Bring all rates in line so
+		// Sync rv.ItemRates with actualRatePerTick: ScaleToInteger may apply GCD reduction that
+		// lowers actualRatePerTick below the k-scaled value. Bring all rates in line so
 		// ComputeIOProfile reflects true production rates, not the pre-GCD target rates.
 		if rootRate, ok := rv.ItemRates[req.TargetItem.Key()]; ok && !rootRate.IsZero() {
 			if rootRate.Num != actualRatePerTick.Num || rootRate.Den != actualRatePerTick.Den {
@@ -151,9 +143,9 @@ func (s *Solver) solve(ctx context.Context, req SolveRequest) (SolveResult, erro
 	return res, nil
 }
 
-// solveRates computes the rate vector for the graph as it currently stands,
-// walking the DAG or solving the linear system depending on hadCycles. Returns
-// *ErrCycleBreakNeeded when a cycle needs a user-chosen stop point.
+// solveRates computes the rate vector for the graph as it currently stands, walking the DAG
+// or solving the linear system depending on hadCycles. Returns *ErrCycleBreakNeeded when a
+// cycle needs a user-chosen stop point.
 func (s *Solver) solveRates(g *RecipeGraph, targetRate Rational, hadCycles bool, root ItemRef) (RateVector, error) {
 	if !hadCycles {
 		rv, err := SolveDAG(g, targetRate)

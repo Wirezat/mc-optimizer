@@ -12,9 +12,9 @@ import (
 
 func strp(s string) *string { return &s }
 
-// UpsertMachineType must persist both ecosystem and mod_data, not just the
-// name — a plugin reads mod_data to know how the machine behaves, and
-// ecosystem to know which mod's plugin evaluates it.
+// UpsertMachineType must persist both ecosystem and mod_data, not just the name — a plugin
+// reads mod_data to know how the machine behaves, and ecosystem to know which mod's plugin
+// evaluates it.
 func TestUpsertMachineType_StoresEcosystemAndModData(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -50,10 +50,10 @@ func TestUpsertMachineType_StoresEcosystemAndModData(t *testing.T) {
 	}
 }
 
-// A re-upsert with no mod-specific fields must reset mod_data to a valid
-// empty JSONB object, not leave the previous call's data behind — a table
-// DEFAULT only covers a first insert, so this has to go through the update
-// path to actually exercise the Go-side encoding of a nil map.
+// A re-upsert with no mod-specific fields must reset mod_data to a valid empty JSONB
+// object, not leave the previous call's data behind — a table DEFAULT only covers a first
+// insert, so this has to go through the update path to actually exercise the Go-side
+// encoding of a nil map.
 func TestUpsertMachineType_NilModDataResetsToEmptyObjectOnUpdate(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -83,10 +83,9 @@ func TestUpsertMachineType_NilModDataResetsToEmptyObjectOnUpdate(t *testing.T) {
 	}
 }
 
-// ImportRecipe must persist mod_data on the recipe row, and must keep a
-// fluid output's ref in the fluid columns (not the item columns) — a naive
-// "mod:id" ref string would still write without error but land nowhere a
-// plugin or the solver looks for a fluid.
+// ImportRecipe must persist mod_data on the recipe row, and must keep a fluid output's ref
+// in the fluid columns (not the item columns) — a naive "mod:id" ref string would still
+// write without error but land nowhere a plugin or the solver looks for a fluid.
 func TestImportRecipe_StoresModDataAndFluidOutput(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -146,9 +145,8 @@ func TestImportRecipe_StoresModDataAndFluidOutput(t *testing.T) {
 		t.Errorf("fluid output = %s:%s, want testmod:molten_iron", fluidModID, fluidID)
 	}
 
-	// The fluid must not have been written to the item output table under a
-	// naive "mod:id" ref — that would silently miss both the solver and any
-	// plugin looking for it as a fluid.
+	// The fluid must not have been written to the item output table under a naive "mod:id" ref
+	// — that would silently miss both the solver and any plugin looking for it as a fluid.
 	var itemLeakCount int
 	if err := d.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM recipe_item_outputs WHERE recipe_id = $1 AND item_id = 'molten_iron'`, recipeID,
@@ -160,14 +158,13 @@ func TestImportRecipe_StoresModDataAndFluidOutput(t *testing.T) {
 	}
 }
 
-// A recipe referencing a machine no mod ever declared must be rejected, not
-// silently backed by an auto-created stub row (which would have no mod_data
-// and so silently drop costs from the solve).
+// A recipe referencing a machine no mod ever declared must be rejected, not silently backed
+// by an auto-created stub row (which would have no mod_data and so silently drop costs from
+// the solve).
 func TestImportRecipe_RejectsUndeclaredMachine(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
 	seedMod(t, d, "testmod")
-	// Deliberately not calling seedMachineType: "ghost_machine" is never declared.
 
 	rec := model.NormalizedRecipe{
 		ModID:       "testmod",
@@ -212,8 +209,8 @@ func TestImportRecipe_RejectsUndeclaredMachine(t *testing.T) {
 	}
 }
 
-// A re-import under a known content_hash keeps the row and its id, and
-// refreshes its mod_data.
+// A re-import under a known content_hash keeps the row and its id, and refreshes its
+// mod_data.
 func TestImportRecipe_RefreshesModDataOnContentHashHit(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
@@ -290,9 +287,8 @@ func TestImportRecipe_RefreshesModDataOnContentHashHit(t *testing.T) {
 	}
 }
 
-// recipe_item_outputs stores item_mod_id/item_id NOT NULL, and parseItemIO
-// leaves both nil when a recipe names a tag. Such an output must be reported,
-// not dereferenced.
+// recipe_item_outputs stores item_mod_id/item_id NOT NULL, and parseItemIO leaves both nil
+// when a recipe names a tag.
 func TestImportRecipe_RejectsTagOnlyItemOutput(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()

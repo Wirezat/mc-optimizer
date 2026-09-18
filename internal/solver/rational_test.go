@@ -94,8 +94,8 @@ func TestRateArithmeticErrorClassifies(t *testing.T) {
 	}
 }
 
-// The exported wrapper keeps the same classification: rate arithmetic becomes
-// an error, anything else stays a panic.
+// The exported wrapper keeps the same classification: rate arithmetic becomes an error,
+// anything else stays a panic.
 func TestGuardRateArithmeticClassifiesOnlyRateArithmetic(t *testing.T) {
 	t.Run("overflow becomes an error", func(t *testing.T) {
 		var err error

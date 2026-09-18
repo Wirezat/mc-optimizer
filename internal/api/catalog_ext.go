@@ -9,10 +9,6 @@ import (
 )
 
 // ListTagMembersHandler returns every tag's members, grouped by tag name.
-//
-// Grouped rather than a flat list because that is the shape the caller needs:
-// a recipe slot holding a tag has to show what the tag stands for, and the
-// client already has every item's texture from the catalog.
 func ListTagMembersHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		members, err := database.ListTagMembers(r.Context())

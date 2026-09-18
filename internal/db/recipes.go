@@ -10,12 +10,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// GetRecipesForItem returns every (recipe, machine) candidate that outputs this
-// item: the recipe's own machine, plus each machine that implements it via
-// machine_interfaces. One recipe therefore yields several rows, distinguished
-// by machine - solver.RecipeOptionKey is what tells them apart. Within a recipe
-// the machine that owns it sorts first, so a caller taking the first row still
-// gets the base machine.
+// GetRecipesForItem returns every (recipe, machine) candidate that outputs this item: the
+// recipe's own machine, plus each machine that implements it via machine_interfaces.
 func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([]*solver.RecipeRow, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT id, machine_mod_id, machine_id, duration_ticks, mod_data
@@ -47,12 +43,8 @@ func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([
 	return d.scanRecipeRows(ctx, rows, "get recipes for item")
 }
 
-// GetRecipesForFluid returns every (recipe, machine) candidate that outputs this
-// fluid: the recipe's own machine, plus each machine that implements it via
-// machine_interfaces. One recipe therefore yields several rows, distinguished
-// by machine - solver.RecipeOptionKey is what tells them apart. Within a recipe
-// the machine that owns it sorts first, so a caller taking the first row still
-// gets the base machine.
+// GetRecipesForFluid returns every (recipe, machine) candidate that outputs this fluid: the
+// recipe's own machine, plus each machine that implements it via machine_interfaces.
 func (d *DB) GetRecipesForFluid(ctx context.Context, fluidModID, fluidID string) ([]*solver.RecipeRow, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT id, machine_mod_id, machine_id, duration_ticks, mod_data
@@ -127,8 +119,8 @@ func (d *DB) GetRecipe(ctx context.Context, recipeID string) (*solver.RecipeRow,
 	return r, nil
 }
 
-// GetMachinesForRecipe returns every machine that can run this recipe, the one
-// that owns it first, then each machine implementing it via machine_interfaces.
+// GetMachinesForRecipe returns every machine that can run this recipe, the one that owns it
+// first, then each machine implementing it via machine_interfaces.
 func (d *DB) GetMachinesForRecipe(ctx context.Context, recipeID string) ([]solver.MachineRef, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT machine_mod_id, machine_id FROM (
@@ -184,7 +176,8 @@ func (d *DB) GetMachineType(ctx context.Context, modID, machineID string) (*solv
 	return m, nil
 }
 
-// GetTagMembers returns all concrete items that satisfy the given tag, ordered by mod_id, item_id.
+// GetTagMembers returns all concrete items that satisfy the given tag, ordered by mod_id,
+// item_id.
 func (d *DB) GetTagMembers(ctx context.Context, tagName string) ([]solver.ItemRef, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT tm.item_mod_id, tm.item_id
@@ -210,7 +203,6 @@ func (d *DB) GetTagMembers(ctx context.Context, tagName string) ([]solver.ItemRe
 
 // loadRecipeIO loads all item and fluid inputs/outputs for r into its slice fields.
 func (d *DB) loadRecipeIO(ctx context.Context, r *solver.RecipeRow) error {
-	// Item Inputs — LEFT JOIN tags; COALESCE nullables to '' to avoid pgx NULL scan issues.
 	rows, err := d.Pool.Query(ctx, `
 		SELECT COALESCE(rii.item_mod_id, ''), COALESCE(rii.item_id, ''),
 		       COALESCE(rii.tag_id::text, ''), COALESCE(t.name, ''),

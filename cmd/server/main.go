@@ -63,8 +63,8 @@ func run() error {
 	defer database.Close()
 	GoLog.Infof("Database: %s", maskPassword(dbURL))
 
-	// ── Background cleanup ticker ─────────────────────────────────────────
-	// Purges expired tokens and solver_drafts.
+	// Background cleanup ticker   Purges expired
+	// tokens and solver_drafts.
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
@@ -84,8 +84,8 @@ func run() error {
 		}
 	}()
 
-	// One compiled program per mod, shared by every request; the resolver
-	// compiles into it lazily on the first cache miss for that mod.
+	// One compiled program per mod, shared by every request; the resolver compiles into it
+	// lazily on the first cache miss for that mod.
 	pluginRegistry := plugins.NewRegistry()
 	variantResolver := service.NewVariantResolver(database, pluginRegistry)
 
@@ -173,8 +173,8 @@ func run() error {
 	mux.Handle("GET /api/tag-members", protected(api.ListTagMembersHandler(database)))
 	mux.Handle("GET /api/trades", protected(api.ListVillagerTradesHandler(database)))
 
-	// Renders block models to icons on demand and caches the result; the import
-	// handler drops the cache.
+	// Renders block models to icons on demand and caches the result; the import handler drops
+	// the cache.
 	renderCache := render.NewCache(render.NewLoader("assets"))
 
 	mux.Handle("POST /api/import/modfile", adminOnly(api.ImportModFileHandler(database, "assets", renderCache)))
@@ -203,8 +203,6 @@ func run() error {
 	// Frontend pages — clean URLs without .html extension
 	page := func(file string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			// A page names the module and stylesheet URLs the browser then
-			// fetches, so a stale one drags a whole stale deploy in behind it.
 			// ServeFile still answers an unchanged file with a 304.
 			w.Header().Set("Cache-Control", "no-cache")
 			http.ServeFile(w, r, "web/pages/"+file)
@@ -227,29 +225,19 @@ func run() error {
 	mux.HandleFunc("GET /admin/mods", page("admin-mods.html"))
 
 	// Static assets and fallback.
-	//
-	// None of these URLs carry a content hash, so a file's URL stays the same
-	// when the file changes. Without an explicit policy a browser falls back to
-	// heuristic freshness and happily serves the previous deploy's JS — which it
-	// did, repeatedly. Everything below therefore revalidates; the file servers
-	// answer an unchanged file with a 304 off Last-Modified, so revalidation is
-	// cheap and correctness does not depend on guessing a lifetime.
 	staticFS := http.FileServer(http.Dir("web/static"))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "locales/") {
-			// Translations are read on every page load and must never lag a
-			// deploy, not even by one conditional request.
+			// Translations are read on every page load and must never lag a deploy, not even by one
+			// conditional request.
 			w.Header().Set("Cache-Control", "no-store")
 		} else {
 			w.Header().Set("Cache-Control", "no-cache")
 		}
 		staticFS.ServeHTTP(w, r)
 	})))
-	// Textures and models change only on import, but a re-import replaces them
-	// at the same URL. A short lifetime keeps a page full of icons from
-	// revalidating each one while bounding how long a stale icon can survive.
-	// Rendered model icons, registered before the plain asset tree so the more
-	// specific prefix wins. Nothing is written to disk — see internal/render.
+	// Textures and models change only on import, but a re-import replaces them at the same
+	// URL.
 	mux.Handle("GET /assets/render/", api.RenderModelHandler(renderCache))
 	assetFS := http.FileServer(http.Dir("assets"))
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -257,8 +245,6 @@ func run() error {
 		assetFS.ServeHTTP(w, r)
 	})))
 	mux.Handle("GET /{$}", http.RedirectHandler("/login", http.StatusFound))
-	// Pages are the entry point to everything above; a stale one pulls in stale
-	// module URLs, so it revalidates too.
 	pagesFS := http.FileServer(http.Dir("web/pages"))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
@@ -302,8 +288,8 @@ func run() error {
 	return nil
 }
 
-// healthHandler responds with the current server time.
-// GET /api/health → 200 {"status":"ok","time":"..."}
+// healthHandler responds with the current server time. GET /api/health → 200
+// {"status":"ok","time":"..."}
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	type response struct {
 		Status string `json:"status"`
@@ -320,7 +306,6 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // maskPassword redacts the password in a Postgres DSN for safe logging.
-// Falls back to the raw URL if parsing fails.
 func maskPassword(dsn string) string {
 	u, err := url.Parse(dsn)
 	if err != nil {

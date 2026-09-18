@@ -15,8 +15,8 @@ type stubStore struct {
 	interfaces map[string][]MachineRef // recipe id → machine_interfaces implementers
 }
 
-// GetRecipesForItem mirrors the real query: one row per (recipe, machine), the
-// recipe's own machine first, then the machine_interfaces implementers.
+// GetRecipesForItem mirrors the real query: one row per (recipe, machine), the recipe's own
+// machine first, then the machine_interfaces implementers.
 func (s *stubStore) GetRecipesForItem(_ context.Context, modID, itemID string) ([]*RecipeRow, error) {
 	var out []*RecipeRow
 	for _, r := range s.byItem[modID+":"+itemID] {
@@ -88,8 +88,8 @@ func newStub(durationTicks int) *stubStore {
 	}
 }
 
-// calcGroup runs CalculateMachineGroups for the iron-ingot fixture at the given
-// recipe rate (recipes per tick) and returns the single group it produces.
+// calcGroup runs CalculateMachineGroups for the iron-ingot fixture at the given recipe rate
+// (recipes per tick) and returns the single group it produces.
 func calcGroup(t *testing.T, durationTicks int, recipeRate Rational) MachineGroupDraft {
 	t.Helper()
 	s := NewSolver(newStub(durationTicks), 1000)
@@ -112,9 +112,9 @@ func calcGroup(t *testing.T, durationTicks int, recipeRate Rational) MachineGrou
 	return groups[0]
 }
 
-// newVariantTestSolver builds a solver over the iron-ingot fixture (a 20-tick
-// recipe on a furnace) with the given variant source, plus the matching graph and
-// a rate vector demanding 1/10 recipes per tick.
+// newVariantTestSolver builds a solver over the iron-ingot fixture (a 20-tick recipe on a
+// furnace) with the given variant source, plus the matching graph and a rate vector
+// demanding 1/10 recipes per tick.
 func newVariantTestSolver(t *testing.T, src VariantSource) (*Solver, *RecipeGraph, RateVector) {
 	t.Helper()
 	s := NewSolver(newStub(20), 1000)
@@ -140,8 +140,7 @@ func wantRational(t *testing.T, label string, r Rational, num, den int64) {
 
 // TestCalculateMachineGroups_fractionalCount covers the ceiling and the utilisation the
 // rewrite computes: 1/60 recipes per tick on a 90-tick recipe needs 3/2 machines, so two
-// machines stand and each runs at 3/4 load. A count that merely truncated, or a
-// utilisation left at 1, would both fail here.
+// machines stand and each runs at 3/4 load.
 func TestCalculateMachineGroups_fractionalCount(t *testing.T) {
 	g := calcGroup(t, 90, NewRational(1, 60))
 
@@ -153,9 +152,6 @@ func TestCalculateMachineGroups_fractionalCount(t *testing.T) {
 }
 
 // TestCalculateMachineGroups_zeroDurationClampsToOneTick covers max(DurationTicks, 1).
-// A recipe row with duration 0 must be costed as a single tick: at 1/4 recipes per tick
-// that is 1/4 of a machine. Without the clamp ExactCount would collapse to 0 and the
-// utilisation would report an idle machine as fully loaded.
 func TestCalculateMachineGroups_zeroDurationClampsToOneTick(t *testing.T) {
 	g := calcGroup(t, 0, NewRational(1, 4))
 
@@ -188,11 +184,7 @@ func TestRateVector_itemRates(t *testing.T) {
 	}
 }
 
-// A recipe's own machine must be pinnable. Machines reached through
-// machine_interfaces share the recipe row, so picking "run this on the Coke
-// Oven" and picking "run this on the Pyrolyse Oven" have to be equally
-// binding — otherwise an implementer silently takes over every recipe it can
-// also run.
+// A recipe's own machine must be pinnable.
 func TestCalculateMachineGroups_PinsTheRecipesOwnMachine(t *testing.T) {
 	stub := newStub(200)
 	// A second machine runs the same recipe and is the one the ladder favours.
@@ -243,8 +235,8 @@ func TestCalculateMachineGroups_PinsTheRecipesOwnMachine(t *testing.T) {
 	}
 }
 
-// Choosing a recipe without naming a machine leaves the machine to the
-// solver: the override is the bare recipe id.
+// Choosing a recipe without naming a machine leaves the machine to the solver: the override
+// is the bare recipe id.
 func TestCalculateMachineGroups_BareRecipeOverrideLeavesTheMachineOpen(t *testing.T) {
 	stub := newStub(200)
 	stub.interfaces = map[string][]MachineRef{

@@ -3,7 +3,6 @@ package solver
 import "encoding/json"
 
 // RecipeRow is the lean recipe representation exchanged between the DB and solver.
-// Only the fields needed for rate calculations are present.
 type RecipeRow struct {
 	ID            string
 	MachineMod    string
@@ -42,17 +41,14 @@ type MachineSpec struct {
 	ModID     string
 	MachineID string
 	Name      string
-	// Ecosystem names the mod_id whose plugin evaluates this machine.
-	// Empty means the machine's own ModID.
+	// Ecosystem names the mod_id whose plugin evaluates this machine. Empty means the
+	// machine's own ModID.
 	Ecosystem string
 	// ModData is the machine's opaque mod_data.
 	ModData json.RawMessage
 }
 
-// filterByActiveMods keeps only rows whose own MachineMod is active. Filtering is
-// per candidate machine, not per recipe: a recipe with several machine candidates
-// (base plus machine_interfaces implementers) survives if ANY candidate's mod is
-// active, even when the base machine's mod is not.
+// filterByActiveMods keeps only rows whose own MachineMod is active.
 func filterByActiveMods(recipes []*RecipeRow, activeMods map[string]bool) []*RecipeRow {
 	if activeMods == nil {
 		return recipes

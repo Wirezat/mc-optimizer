@@ -43,7 +43,6 @@
 </head>
 <body class="app-shell">
 
-  <!-- ── Header ── -->
   <header class="header">
     <a class="header-brand" href="/saves">
       <div class="header-logo">⚙️</div>
@@ -132,8 +131,6 @@
 
   let allMods = [];
 
-
-  // ── Save helper ──────────────────────────────────────────────────────────
   async function saveMod(mod) {
     const body = {
       name:          mod.name,
@@ -155,7 +152,6 @@
     return res?.ok ?? false;
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
   function renderMods() {
     const q = searchEl.value.trim().toLowerCase();
     const mods = q
@@ -324,7 +320,6 @@
     if (ok) refreshExpandView(modID);
   }
 
-  // ── Inline field editing (expand body) ──────────────────────────────────
   function attachFieldEditing(container) {
     // Fetch button
     container.querySelectorAll('.mod-fetch-btn').forEach(btn => {
@@ -333,9 +328,7 @@
       btn.addEventListener('click', () => doFetch(btn));
     });
 
-    // Description — multiline contenteditable. Kept hand-rolled: inline-edit.js
-    // always commits on Enter (no newline support), which would break multi-line
-    // editing of a free-text description. See task-5-report.md.
+    // Description — multiline contenteditable, hand-rolled rather than inline-edit.js.
     container.querySelectorAll('.mod-description.field-editable').forEach(el => {
       if (el.dataset.fieldReady) return;
       el.dataset.fieldReady = '1';
@@ -469,8 +462,6 @@
     get('machines-' + modID, counts?.machines, 'catalog.mods.detail.machines');
     get('recipes-'  + modID, counts ? '…' : null, 'catalog.mods.detail.recipes');
   }
-
-  // ── Events ──────────────────────────────────────────────────────────────
 
   // Table expand
   document.addEventListener('click', async e => {

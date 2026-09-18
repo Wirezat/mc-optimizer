@@ -20,8 +20,8 @@ func writeBlockstateFixture(t *testing.T, root, rel, json string) {
 	}
 }
 
-// The common case: a block with no properties has exactly one variant, keyed
-// by the empty string, and it always wins.
+// The common case: a block with no properties has exactly one variant, keyed by the empty
+// string, and it always wins.
 func TestResolveBlockState_NoPropertiesVariant(t *testing.T) {
 	dir := t.TempDir()
 	writeBlockstateFixture(t, dir, "mod/blockstates/plain_block.json",
@@ -37,8 +37,8 @@ func TestResolveBlockState_NoPropertiesVariant(t *testing.T) {
 	}
 }
 
-// With no world state to match, several keyed variants pick the
-// alphabetically-first — deterministic, not necessarily the "natural" one.
+// With no world state to match, several keyed variants pick the alphabetically-first —
+// deterministic, not necessarily the "natural" one.
 func TestResolveBlockState_MultipleVariantsPicksFirstKey(t *testing.T) {
 	dir := t.TempDir()
 	writeBlockstateFixture(t, dir, "mod/blockstates/stairs.json",
@@ -57,8 +57,8 @@ func TestResolveBlockState_MultipleVariantsPicksFirstKey(t *testing.T) {
 	}
 }
 
-// Vanilla allows a list of equally-valid options for random visual variety;
-// only the first is deterministic enough for an icon.
+// Vanilla allows a list of equally-valid options for random visual variety; only the first
+// is deterministic enough for an icon.
 func TestResolveBlockState_VariantListTakesFirst(t *testing.T) {
 	dir := t.TempDir()
 	writeBlockstateFixture(t, dir, "mod/blockstates/grass.json",
@@ -146,8 +146,8 @@ func TestResolveBlockState_NoVariants(t *testing.T) {
 	}
 }
 
-// End-to-end: a block-item that ships no models/item/<id>.json still
-// resolves through its blockstate, only at the top of the chain.
+// End-to-end: a block-item that ships no models/item/<id>.json still resolves through its
+// blockstate, only at the top of the chain.
 func TestLoadScene_FallsBackToBlockState(t *testing.T) {
 	dir := t.TempDir()
 	writeBlockstateFixture(t, dir, "mod/blockstates/plain_block.json",
@@ -168,12 +168,12 @@ func TestLoadScene_FallsBackToBlockState(t *testing.T) {
 	}
 }
 
-// A `parent` reference is content a mod wrote, never a block ID — the
-// blockstate fallback must not silently substitute a match for it.
+// A `parent` reference is content a mod wrote, never a block ID — the blockstate fallback
+// must not silently substitute a match for it.
 func TestLoadScene_ParentDoesNotFallBackToBlockState(t *testing.T) {
 	dir := t.TempDir()
-	// A blockstate that happens to share a name with the missing parent must
-	// be ignored: only depth 0 may use it.
+	// A blockstate that happens to share a name with the missing parent must be ignored: only
+	// depth 0 may use it.
 	writeBlockstateFixture(t, dir, "mod/blockstates/missing_parent.json",
 		`{"variants":{"":{"model":"mod:block/plain_block"}}}`)
 	writeFixtureFile(t, dir, "mod/models/item/child.json",
@@ -196,9 +196,7 @@ func writeFixtureFile(t *testing.T, root, rel, content string) {
 	}
 }
 
-// writeFixturePNG writes a real, decodable 1x1 PNG — LoadTexture decodes the
-// file, so a placeholder string like the asset-resolution fixtures use won't
-// do here.
+// writeFixturePNG writes a real, decodable 1x1 PNG — LoadTexture decodes the file.
 func writeFixturePNG(t *testing.T, root, rel string) {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))

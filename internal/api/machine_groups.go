@@ -13,8 +13,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// UpdateMachineGroupStatusHandler sets the status, build state and built
-// variant of a single machine group.
+// UpdateMachineGroupStatusHandler sets the status, build state and built variant of a
+// single machine group.
 func UpdateMachineGroupStatusHandler(database *db.DB, variants solver.VariantSource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := userIDFromContext(r.Context())
@@ -113,8 +113,8 @@ func UpdateMachineGroupStatusHandler(database *db.DB, variants solver.VariantSou
 	}
 }
 
-// variantView flattens a variant for a client, resolving item display names
-// through names (keyed by item ref; a miss keeps the ref).
+// variantView flattens a variant for a client, resolving item display names through names
+// (keyed by item ref; a miss keeps the ref).
 func variantView(v plugins.Variant, names map[string]string) model.VariantView {
 	items := make([]model.VariantItem, 0, len(v.Items))
 	for _, it := range v.Items {
@@ -127,8 +127,7 @@ func variantView(v plugins.Variant, names map[string]string) model.VariantView {
 	return model.VariantView{ID: v.ID, Label: v.Label, Items: items}
 }
 
-// baseVariant is the runnable variant with nothing installed, which is what a
-// group whose current_variant_id resolves to nothing is built to.
+// baseVariant is the runnable variant with nothing installed.
 func baseVariant(vs []plugins.Variant) (plugins.Variant, bool) {
 	for _, v := range vs {
 		if len(v.Items) == 0 && v.Valid {
@@ -138,10 +137,9 @@ func baseVariant(vs []plugins.Variant) (plugins.Variant, bool) {
 	return plugins.Variant{}, false
 }
 
-// enrichGroupVariants fills each group's Variant, CurrentVariant and
-// VariantOptions from its plugin and returns the built variant's speed
-// relative to the target's, keyed by group id, for the current-rate estimate.
-// A group whose plugin fails is left bare and logged.
+// enrichGroupVariants fills each group's Variant, CurrentVariant and VariantOptions from
+// its plugin and returns the built variant's speed relative to the target's, keyed by group
+// id, for the current-rate estimate.
 func enrichGroupVariants(r *http.Request, database *db.DB, variants solver.VariantSource, mgs []*model.MachineGroup) map[uuid.UUID]float64 {
 	speed := make(map[uuid.UUID]float64, len(mgs))
 	perGroup := make([][]plugins.Variant, len(mgs))
@@ -203,8 +201,8 @@ func itemRefFromKey(key string) solver.ItemRef {
 	return solver.ItemRef{ModID: mod, ItemID: id, IsFluid: isFluid}
 }
 
-// groupVariants evaluates the variants available to a machine group, under the
-// config frozen into the group when its production line was confirmed.
+// groupVariants evaluates the variants available to a machine group, under the config
+// frozen into the group when its production line was confirmed.
 func groupVariants(r *http.Request, database *db.DB, variants solver.VariantSource, mg *model.MachineGroup) ([]plugins.Variant, error) {
 	machine, err := database.GetMachineType(r.Context(), mg.MachineModID, mg.MachineID)
 	if err != nil {

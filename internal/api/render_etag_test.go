@@ -2,8 +2,8 @@ package api
 
 import "testing"
 
-// If-None-Match is a comma-separated list, and a substring test would turn any
-// header that merely contains the tag into a spurious 304.
+// If-None-Match is a comma-separated list, and a substring test would turn any header that
+// merely contains the tag into a spurious 304.
 func TestETagMatches(t *testing.T) {
 	const tag = `"abc123"`
 	for _, tc := range []struct {

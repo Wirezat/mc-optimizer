@@ -36,10 +36,10 @@ func GetActiveModsHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// CheckActiveModDependentsHandler returns the production lines that would be
-// affected if the given mod IDs were deactivated for this save — the client
-// calls this with the set of mods being newly unchecked, before actually
-// saving, to decide whether to show a confirmation prompt.
+// CheckActiveModDependentsHandler returns the production lines that would be affected if
+// the given mod IDs were deactivated for this save — the client calls this with the set of
+// mods being newly unchecked, before actually saving, to decide whether to show a
+// confirmation prompt.
 func CheckActiveModDependentsHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		saveID, ok := parseUUIDParam(w, r, "save_id")

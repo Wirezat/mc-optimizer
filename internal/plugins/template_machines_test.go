@@ -37,10 +37,8 @@ func templatePluginSource(t *testing.T) string {
 	return ""
 }
 
-// The template is what every plugin author copies, so it has to demonstrate the
-// current contract rather than a past one. It went stale once already: it
-// described the config as save-wide after the config had become per production
-// line, and it never showed the machines binding at all.
+// It went stale once already: it described the config as save-wide after the config had
+// become per production line, and it never showed the machines binding at all.
 func TestShippedTemplateTeachesTheCurrentContract(t *testing.T) {
 	src := templatePluginSource(t)
 
@@ -68,8 +66,6 @@ func TestShippedTemplateTeachesTheCurrentContract(t *testing.T) {
 		t.Error("template still teaches machines.resolve; the solver picks the machine")
 	}
 
-	// The cells compete on the ladder, so an author has to see what their
-	// numbers compete on and which lever is theirs alone.
 	for _, want := range []string{"fewest machines", "highest utilisation", "rank"} {
 		if !strings.Contains(src, want) {
 			t.Errorf("template does not mention %q", want)

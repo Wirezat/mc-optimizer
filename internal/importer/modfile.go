@@ -47,8 +47,8 @@ type rawModFile struct {
 		ID         string   `yaml:"id"`
 		LangKey    string   `yaml:"lang_key"`
 		Implements []string `yaml:"implements"`
-		// Ecosystem names which plugin evaluates this machine; empty means
-		// the machine's own mod_id.
+		// Ecosystem names which plugin evaluates this machine; empty means the machine's own
+		// mod_id.
 		Ecosystem string `yaml:"ecosystem"`
 		Slots     []struct {
 			Index int     `yaml:"index"`
@@ -57,8 +57,7 @@ type rawModFile struct {
 			Y     *int16  `yaml:"y"`
 			Label *string `yaml:"label"`
 		} `yaml:"slots"`
-		// ModData collects every key not claimed by a field above, so a
-		// plugin can define arbitrary mod-specific machine fields.
+		// ModData collects every key not claimed by a field above.
 		ModData map[string]any `yaml:",inline"`
 	} `yaml:"machines"`
 
@@ -68,8 +67,7 @@ type rawModFile struct {
 		Inputs        rawIO    `yaml:"inputs"`
 		Outputs       rawIO    `yaml:"outputs"`
 		Shape         []string `yaml:"shape"`
-		// ModData collects every key not claimed by a field above, so a
-		// plugin can define arbitrary mod-specific recipe fields.
+		// ModData collects every key not claimed by a field above.
 		ModData map[string]any `yaml:",inline"`
 	} `yaml:"recipes"`
 
@@ -84,8 +82,7 @@ type rawModFile struct {
 	} `yaml:"block_drops"`
 
 	VillagerTrades []struct {
-		// key identifies the offer within this mod. Profession + tier + item
-		// pair does not: several offers can share all three.
+		// key identifies the offer within this mod.
 		Key        string `yaml:"key"`
 		Profession string `yaml:"profession"`
 		Tier       int    `yaml:"tier"`
@@ -103,8 +100,7 @@ type rawModFile struct {
 			Count int    `yaml:"count"`
 		} `yaml:"result"`
 		ResultModified bool `yaml:"result_modified"`
-		// The data does not fix the price — an enchanted book's cost is derived
-		// at runtime. What cost carries is then a floor, not the price.
+		// The data does not fix the price — an enchanted book's cost is derived at runtime.
 		CostVariable bool `yaml:"cost_variable"`
 		MaxUses      *int `yaml:"max_uses"`
 		XP           *int `yaml:"xp"`
@@ -128,8 +124,7 @@ type rawIO struct {
 	} `yaml:"fluids"`
 }
 
-// ParseModFile parses YAML bytes into a ModDef. Returns an error if mod_id is
-// the sentinel or otherwise invalid. Sentinel entries within lists are silently dropped.
+// ParseModFile parses YAML bytes into a ModDef.
 func ParseModFile(data []byte) (*model.ModDef, error) {
 	var raw rawModFile
 	if err := yaml.Unmarshal(data, &raw); err != nil {
@@ -173,8 +168,7 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 		})
 	}
 
-	// Fluids. id can be "mod:fluid" — a modfile can catalog another mod's fluid
-	// (e.g. MI listing vanilla lava/water) to attach texture/name info to it.
+	// Fluids.
 	for _, r := range raw.Fluids {
 		if isSentinel(r.ID) {
 			continue
@@ -360,8 +354,6 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 		if resultCount == 0 {
 			resultCount = 1
 		}
-		// Older modfiles predate the key; fall back to the item pair so they
-		// still import, just without distinguishing same-pair offers.
 		key := r.Key
 		if key == "" {
 			key = costItemID + ">" + resultItemID

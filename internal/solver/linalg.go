@@ -10,16 +10,16 @@ var (
 	ErrUnderDetermined = errors.New("underdetermined system: infinite solutions")
 )
 
-// ErrNegativeRate reports a recipe the linear system can only satisfy by
-// running it backwards. A property of the recipe chain, not a server fault.
+// ErrNegativeRate reports a recipe the linear system can only satisfy by running it
+// backwards.
 type ErrNegativeRate struct{ RecipeID string }
 
 func (e *ErrNegativeRate) Error() string {
 	return fmt.Sprintf("solver: recipe %s has negative rate — check recipe chain", e.RecipeID)
 }
 
-// BuildStoichiometryMatrix creates the stoichiometry matrix S (items × recipes) from the recipe graph.
-// Returns S, the list of items, and the list of recipe IDs.
+// BuildStoichiometryMatrix creates the stoichiometry matrix S (items × recipes) from the
+// recipe graph. Returns S, the list of items, and the list of recipe IDs.
 func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ItemRef, []string) {
 	itemIdx, recipeIdx := map[string]int{}, map[string]int{}
 	var items []ItemRef
@@ -79,8 +79,8 @@ func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ItemRef, []string
 	return S, items, recipeIDs
 }
 
-// GaussJordanRational performs Gauss‑Jordan elimination on the augmented matrix [S|b] over rationals.
-// Returns a solution vector x or an error (ErrNoSolution, ErrUnderDetermined).
+// GaussJordanRational performs Gauss‑Jordan elimination on the augmented matrix [S|b] over
+// rationals. Returns a solution vector x or an error (ErrNoSolution, ErrUnderDetermined).
 func GaussJordanRational(S [][]Rational, b []Rational) ([]Rational, error) {
 	m := len(S)
 	if m == 0 {
@@ -145,8 +145,8 @@ func GaussJordanRational(S [][]Rational, b []Rational) ([]Rational, error) {
 	return r, nil
 }
 
-// SolveLinearSystem solves the stoichiometry matrix for the recipe graph given a target rate per tick.
-// Returns a RateVector mapping recipe IDs and item keys to rational rates.
+// SolveLinearSystem solves the stoichiometry matrix for the recipe graph given a target
+// rate per tick. Returns a RateVector mapping recipe IDs and item keys to rational rates.
 func SolveLinearSystem(g *RecipeGraph, targetRatePerTick Rational) (RateVector, error) {
 	S, items, recipeIDs := BuildStoichiometryMatrix(g)
 	if len(recipeIDs) == 0 {

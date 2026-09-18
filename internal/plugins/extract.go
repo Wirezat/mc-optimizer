@@ -9,9 +9,8 @@ import (
 	"github.com/dop251/goja"
 )
 
-// reflectTypeBool and reflectTypeInt64 are the Go types goja.Value.ExportType()
-// reports for a JS boolean and for goja's internal integer representation of a
-// JS number.
+// reflectTypeBool and reflectTypeInt64 are the Go types goja.Value.ExportType() reports for
+// a JS boolean and for goja's internal integer representation of a JS number.
 var (
 	reflectTypeBool  = reflect.TypeOf(false)
 	reflectTypeInt64 = reflect.TypeOf(int64(0))
@@ -21,34 +20,29 @@ var (
 const maxNestedItems = 64
 
 // maxStringLen bounds a single extracted string, counted in UTF-16 code units.
-// Every string this package reads is an identifier or a short label.
 const maxStringLen = 256
 
-// maxStringBytes bounds the total UTF-8 bytes extractVariants converts in one
-// evaluate call, so that many individually-legal strings cannot add up.
 const maxStringBytes = 4 << 20
 
-// maxInt64Float is 2^63 as a float64: the smallest float64 strictly greater
-// than math.MaxInt64, which is itself not representable as a float64. Any
-// float at or above it is outside int64 range.
+// maxInt64Float is 2^63 as a float64: the smallest float64 strictly greater than
+// math.MaxInt64, which is itself not representable as a float64.
 const maxInt64Float = float64(1 << 63)
 
-// jsClassArray is the ECMAScript [[Class]] tag goja reports via
-// (*Object).ClassName() for a genuine Array.
+// jsClassArray is the ECMAScript [[Class]] tag goja reports via (*Object).ClassName() for a
+// genuine Array.
 const jsClassArray = "Array"
 
-// extractor holds the per-call state of one extraction: the mod being
-// extracted, for error messages, and the string byte budget left for the
-// rest of this evaluate call (see maxStringBytes).
+// extractor holds the per-call state of one extraction: the mod being extracted, for error
+// messages, and the string byte budget left for the rest of this evaluate call (see
+// maxStringBytes).
 type extractor struct {
 	modID       string
 	stringBytes int
 }
 
-// extractVariants converts a plugin's evaluate() return value into Variants by
-// walking the expected shape by hand: every level gets its own class check, its
-// own length cap, and reads its elements strictly by index. Strings and numbers
-// are bounded and validated per field by readString and readInt.
+// extractVariants converts a plugin's evaluate() return value into Variants by walking the
+// expected shape by hand: every level gets its own class check, its own length cap, and
+// reads its elements strictly by index.
 func extractVariants(modID string, res goja.Value) ([]Variant, error) {
 	ex := &extractor{modID: modID, stringBytes: maxStringBytes}
 	elems, err := ex.readArray(res, maxVariants, "evaluate must return an array", "variants")
@@ -66,9 +60,9 @@ func extractVariants(modID string, res goja.Value) ([]Variant, error) {
 	return out, nil
 }
 
-// extractVariant reads the Variant fields off a single array element.
-// A field that is absent (undefined) becomes its zero value; a field that
-// is present but the wrong JS type is an error, never a silent default.
+// extractVariant reads the Variant fields off a single array element. A field that is
+// absent (undefined) becomes its zero value; a field that is present but the wrong JS type
+// is an error, never a silent default.
 func (ex *extractor) extractVariant(what string, v goja.Value) (Variant, error) {
 	obj, isObj := v.(*goja.Object)
 	if !isObj {
@@ -114,8 +108,8 @@ func (ex *extractor) extractVariant(what string, v goja.Value) (Variant, error) 
 	}, nil
 }
 
-// extractList reads a bounded, optional array field (costs, outputs or items)
-// and converts each element with elemFn. A missing field yields a nil slice.
+// extractList reads a bounded, optional array field (costs, outputs or items) and converts
+// each element with elemFn.
 func extractList[T any](ex *extractor, what string, v goja.Value, elemFn func(*extractor, string, *goja.Object) (T, error)) ([]T, error) {
 	if v == nil || goja.IsUndefined(v) {
 		return nil, nil
@@ -179,10 +173,8 @@ func (ex *extractor) extractItem(what string, obj *goja.Object) (Item, error) {
 	return Item{Ref: ref, Count: int(count)}, nil
 }
 
-// readArray validates that v is a genuine JS array (ClassName() == "Array") of
-// at most max elements and returns its elements read one at a time by index.
-// notArrayMsg and label name what v is supposed to be, for the two error
-// shapes this can produce.
+// readArray validates that v is a genuine JS array (ClassName() == "Array") of at most max
+// elements and returns its elements read one at a time by index.
 func (ex *extractor) readArray(v goja.Value, max int, notArrayMsg, label string) ([]goja.Value, error) {
 	obj, isObj := v.(*goja.Object)
 	if !isObj || obj.ClassName() != jsClassArray {
@@ -206,9 +198,7 @@ func (ex *extractor) readArray(v goja.Value, max int, notArrayMsg, label string)
 	return elems, nil
 }
 
-// readString reads a string field off obj. A missing field is "", nil; one that
-// is not a JS string, is longer than maxStringLen, or pushes this call past
-// maxStringBytes is an error. Both limits are checked before converting.
+// readString reads a string field off obj.
 func (ex *extractor) readString(what string, obj *goja.Object, field string) (string, error) {
 	v := obj.Get(field)
 	if v == nil || goja.IsUndefined(v) {
@@ -229,8 +219,7 @@ func (ex *extractor) readString(what string, obj *goja.Object, field string) (st
 	return out, nil
 }
 
-// readBool reads a boolean field off obj. A missing field is false, nil; a
-// field present but not a JS boolean is an error.
+// readBool reads a boolean field off obj.
 func (ex *extractor) readBool(what string, obj *goja.Object, field string) (bool, error) {
 	v := obj.Get(field)
 	if v == nil || goja.IsUndefined(v) {
@@ -242,10 +231,7 @@ func (ex *extractor) readBool(what string, obj *goja.Object, field string) (bool
 	return v.ToBoolean(), nil
 }
 
-// readInt reads a numeric field off obj as an exact integer. A missing field
-// is 0, nil; a field that is not a JS number, or is a number that is not a
-// finite whole value within int64 range, is an error naming the field and the
-// value seen. The checks run on the float, before conversion.
+// readInt reads a numeric field off obj as an exact integer.
 func (ex *extractor) readInt(what string, obj *goja.Object, field string) (int64, error) {
 	v := obj.Get(field)
 	if v == nil || goja.IsUndefined(v) {
@@ -265,9 +251,7 @@ func (ex *extractor) readInt(what string, obj *goja.Object, field string) (int64
 	return int64(f), nil
 }
 
-// readRational reads a {num, den} field off obj as a Rational. A missing field
-// is the zero Rational; a den of 0 is rejected here rather than left to the
-// solver.
+// readRational reads a {num, den} field off obj as a Rational.
 func (ex *extractor) readRational(what string, obj *goja.Object, field string) (Rational, error) {
 	v := obj.Get(field)
 	if v == nil || goja.IsUndefined(v) {

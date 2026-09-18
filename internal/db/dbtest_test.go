@@ -8,8 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// testDB opens a pool against DATABASE_URL and skips the test if that
-// variable is unset, so the suite runs clean on a machine without a DB.
+// testDB opens a pool against DATABASE_URL and skips the test if that variable is unset.
 func testDB(t *testing.T) *DB {
 	t.Helper()
 	dsn := os.Getenv("DATABASE_URL")
@@ -24,8 +23,8 @@ func testDB(t *testing.T) *DB {
 	return d
 }
 
-// seedMod inserts a minimal row into mods and removes it (and anything that
-// cascades from it) via t.Cleanup.
+// seedMod inserts a minimal row into mods and removes it (and anything that cascades from
+// it) via t.Cleanup.
 func seedMod(t *testing.T, d *DB, modID string) {
 	t.Helper()
 	ctx := context.Background()
@@ -39,8 +38,8 @@ func seedMod(t *testing.T, d *DB, modID string) {
 	})
 }
 
-// seedMachineType inserts a minimal row into machine_types (mod must already
-// exist) and removes it via t.Cleanup.
+// seedMachineType inserts a minimal row into machine_types (mod must already exist) and
+// removes it via t.Cleanup.
 func seedMachineType(t *testing.T, d *DB, modID, machineID string) {
 	t.Helper()
 	ctx := context.Background()
@@ -58,8 +57,8 @@ func seedMachineType(t *testing.T, d *DB, modID, machineID string) {
 	})
 }
 
-// seedRecipe inserts a minimal row into recipes for an existing machine type
-// and removes it via t.Cleanup. Returns the generated recipe ID.
+// seedRecipe inserts a minimal row into recipes for an existing machine type and removes it
+// via t.Cleanup. Returns the generated recipe ID.
 func seedRecipe(t *testing.T, d *DB, machineModID, machineID, sourceModID string) uuid.UUID {
 	t.Helper()
 	ctx := context.Background()
@@ -79,8 +78,7 @@ func seedRecipe(t *testing.T, d *DB, machineModID, machineID, sourceModID string
 	return recipeID
 }
 
-// seedSave inserts a save owned by an existing user and removes it via
-// t.Cleanup. Skips the test if the dev DB has no user to attach it to.
+// seedSave inserts a save owned by an existing user and removes it via t.Cleanup.
 func seedSave(t *testing.T, d *DB) uuid.UUID {
 	t.Helper()
 	ctx := context.Background()
@@ -102,8 +100,7 @@ func seedSave(t *testing.T, d *DB) uuid.UUID {
 	return saveID
 }
 
-// seedFactory inserts a factory into an existing save. It is removed with the
-// save's cleanup, which cascades.
+// seedFactory inserts a factory into an existing save.
 func seedFactory(t *testing.T, d *DB, saveID uuid.UUID) uuid.UUID {
 	t.Helper()
 	var factoryID uuid.UUID
@@ -115,8 +112,7 @@ func seedFactory(t *testing.T, d *DB, saveID uuid.UUID) uuid.UUID {
 	return factoryID
 }
 
-// seedProductionLine inserts a minimal production line into an existing
-// factory. It is removed with the save's cleanup, which cascades.
+// seedProductionLine inserts a minimal production line into an existing factory.
 func seedProductionLine(t *testing.T, d *DB, factoryID uuid.UUID) uuid.UUID {
 	t.Helper()
 	var plID uuid.UUID

@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// solidTexture is a flat 16x16 texture, so a test asserts on geometry and
-// shading rather than on texture content.
 func solidTexture(r, g, b uint8) *Texture {
 	t := &Texture{W: 16, H: 16, Cells: 1, Pix: make([]uint8, 16*16*4)}
 	for i := 0; i < 16*16; i++ {
@@ -28,8 +26,8 @@ func fullCube() *Scene {
 	}
 	textures := map[string]TextureRef{}
 	decoded := map[string]*Texture{}
-	// A distinct primary per direction, so which face landed where is visible
-	// from the pixel colour alone.
+	// A distinct primary per direction, so which face landed where is visible from the pixel
+	// colour alone.
 	colors := map[string][3]uint8{
 		"up": {255, 255, 255}, "down": {64, 64, 64},
 		"north": {255, 0, 0}, "south": {0, 255, 0},
@@ -54,9 +52,7 @@ func at(img *image.RGBA, x, y int) (r, g, b, a uint8) {
 	return img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3]
 }
 
-// The gui transform's whole purpose is a specific three-quarter view. If the
-// rotation order or handedness drifts, the wrong faces show and every icon is
-// silently wrong, so pin down which faces are visible and where.
+// The gui transform's whole purpose is a specific three-quarter view.
 func TestRenderCubeShowsGuiFaces(t *testing.T) {
 	img := Render(fullCube(), 32)
 
@@ -100,12 +96,8 @@ func TestRenderCubeShowsGuiFaces(t *testing.T) {
 	}
 }
 
-// Pins the silhouette a full cube produces, which encodes the gui scale and
-// rotation together. The numbers are not arbitrary: at scale 0.625 the rotated
-// cube reaches |y| = 0.866*0.3125 + 0.354*0.625 = 0.492 of the half-frame, so it
-// runs the full height and leaves a one-pixel margin left and right — a block in
-// a vanilla inventory slot fills it the same way. The reference Python
-// implementation this was ported from yields exactly these bounds.
+// Pins the silhouette a full cube produces, which encodes the gui scale and rotation
+// together.
 func TestRenderCubeSilhouette(t *testing.T) {
 	const size = 32
 	img := Render(fullCube(), size)
@@ -129,9 +121,6 @@ func TestRenderCubeSilhouette(t *testing.T) {
 }
 
 // image.RGBA is alpha-premultiplied and png.Encode divides the colour back out.
-// Store a plain average and every partially covered edge pixel comes out of the
-// encoder brightened and hue-shifted — grey pipes grew green fringes. Encoding
-// and decoding has to give back the colour that was drawn.
 func TestRenderEdgePixelsSurvivePNGRoundTrip(t *testing.T) {
 	img := Render(fullCube(), 32)
 
@@ -144,8 +133,8 @@ func TestRenderEdgePixelsSurvivePNGRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The cube is white, red and yellow only; nothing green or cyan may appear.
-	// Those are what an un-premultiply of a too-bright edge pixel produces.
+	// The cube is white, red and yellow only; nothing green or cyan may appear. Those are what
+	// an un-premultiply of a too-bright edge pixel produces.
 	bounds := decoded.Bounds()
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
@@ -165,8 +154,7 @@ func TestRenderEdgePixelsSurvivePNGRoundTrip(t *testing.T) {
 	}
 }
 
-// A tint only applies where the face asks for one. Getting this backwards would
-// colour every icon, or none of the ones that need it.
+// A tint only applies where the face asks for one.
 func TestRenderTintAppliesOnlyToTintedFaces(t *testing.T) {
 	tint := uint32(0xFF0000)
 	zero := 0
@@ -200,8 +188,7 @@ func TestRenderTintAppliesOnlyToTintedFaces(t *testing.T) {
 	}
 }
 
-// Fluid textures are vertical animation strips. Only the first cell is the icon
-// the game shows; sampling the whole sheet squeezes 32 frames into the box.
+// Fluid textures are vertical animation strips.
 func TestTextureAtReadsFirstFrameOnly(t *testing.T) {
 	// Two frames: first all red, second all blue.
 	tex := &Texture{W: 16, H: 32, Cells: 2, Pix: make([]uint8, 16*32*4)}
@@ -223,8 +210,6 @@ func TestTextureAtReadsFirstFrameOnly(t *testing.T) {
 	}
 }
 
-// Renders are cached and served by URL, so the same input must give the same
-// bytes — otherwise every request busts the cache.
 func TestRenderIsDeterministic(t *testing.T) {
 	a := Render(fullCube(), 32)
 	b := Render(fullCube(), 32)
@@ -235,8 +220,6 @@ func TestRenderIsDeterministic(t *testing.T) {
 	}
 }
 
-// A chain of texture references has to resolve, and a broken one must fail
-// rather than loop.
 func TestResolveTexture(t *testing.T) {
 	m := &Model{Textures: map[string]TextureRef{
 		"side": "#all",

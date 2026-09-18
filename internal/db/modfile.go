@@ -8,8 +8,8 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/model"
 )
 
-// marshalModData JSON-encodes a mod's opaque extra fields for a mod_data
-// JSONB column, treating a nil/empty map as an explicit empty object.
+// marshalModData JSON-encodes a mod's opaque extra fields for a mod_data JSONB column,
+// treating a nil/empty map as an explicit empty object.
 func marshalModData(m map[string]any) ([]byte, error) {
 	if len(m) == 0 {
 		return []byte("{}"), nil
@@ -17,8 +17,7 @@ func marshalModData(m map[string]any) ([]byte, error) {
 	return json.Marshal(m)
 }
 
-// UpsertMod inserts or updates a mod record. Fields that are empty strings are
-// not overwritten (DO UPDATE only touches non-empty values).
+// UpsertMod inserts or updates a mod record.
 func (d *DB) UpsertMod(ctx context.Context, m model.ModDef) error {
 	_, err := d.Pool.Exec(ctx, `
 		INSERT INTO mods (mod_id, name, description, author, license,
@@ -47,7 +46,7 @@ func (d *DB) UpsertMod(ctx context.Context, m model.ModDef) error {
 	return err
 }
 
-// UpsertFluids inserts fluid records for a mod. Existing fluids are left unchanged.
+// UpsertFluids inserts fluid records for a mod.
 func (d *DB) UpsertFluids(ctx context.Context, modID string, fluidIDs []string) error {
 	if len(fluidIDs) == 0 {
 		return nil
@@ -107,10 +106,8 @@ func (d *DB) UpsertMachineSlots(ctx context.Context, slots []model.MachineSlotDe
 	return nil
 }
 
-// UpsertDirectTagMembers replaces a tag's members with the given list (already
-// resolved mod_id:item_id pairs). Replacing rather than adding is what makes a
-// reimport that drops a member actually drop it; the whole tag is rewritten in
-// one transaction so a failing member leaves the previous membership intact.
+// UpsertDirectTagMembers replaces a tag's members with the given list (already resolved
+// mod_id:item_id pairs).
 func (d *DB) UpsertDirectTagMembers(ctx context.Context, tagName string, members []string) error {
 	if len(members) == 0 {
 		return nil

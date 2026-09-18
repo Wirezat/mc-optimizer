@@ -38,7 +38,6 @@ func ListUsersHandler(database *db.DB) http.HandlerFunc {
 }
 
 // UpdateUserHandler handles PATCH /api/admin/users/{user_id}.
-// Allows admins to change username or admin status; Owner account is immutable.
 func UpdateUserHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := parseUUIDParam(w, r, "user_id")
@@ -111,7 +110,6 @@ func UpdateUserHandler(database *db.DB) http.HandlerFunc {
 }
 
 // DeleteUserHandler handles DELETE /api/admin/users/{user_id}.
-// Owner and the calling user cannot be deleted.
 func DeleteUserHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := parseUUIDParam(w, r, "user_id")
@@ -149,7 +147,6 @@ func DeleteUserHandler(database *db.DB) http.HandlerFunc {
 }
 
 // TransferOwnershipHandler handles PUT /api/admin/users/{user_id}/owner.
-// Only the current owner may call this. Atomically transfers ownership to the target user.
 func TransferOwnershipHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		toID, ok := parseUUIDParam(w, r, "user_id")

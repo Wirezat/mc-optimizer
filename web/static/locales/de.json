@@ -206,6 +206,7 @@
   "factory.pl.activate": "Aktivieren",
   "factory.pl.archive": "Archivieren",
   "factory.pl.col.mode": "Modus",
+  "factory.pl.col.progress": "Gebaut",
   "factory.pl.col.rate": "Rate",
   "factory.pl.col.status": "Status",
   "factory.pl.col.target": "Ziel",

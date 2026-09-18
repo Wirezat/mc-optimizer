@@ -97,3 +97,28 @@ html.dark {
 .mod-check-row:hover { background: var(--bg-hover); }
 .mod-check-name { flex: 1; font-size: var(--text-base); }
 .mod-check-count { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
+
+/* ── Measured values, and a line's progress against its target ────────────── */
+.metric {
+    font-family: var(--font-mono);
+    font-weight: var(--weight-semibold);
+    color: var(--text);
+}
+.metric-unit {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--text-faint);
+}
+
+.progress-cell {
+    --progress-cell-track-width: 56px;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-icon);
+}
+.progress-cell .wui-progress-track { width: var(--progress-cell-track-width); flex: 0 0 auto; }
+.progress-cell-text { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+
+/* State last, so it outranks the type rules above without a compound selector. */
+.metric-neg { color: var(--danger); }
+.metric-warn { color: var(--warn); }

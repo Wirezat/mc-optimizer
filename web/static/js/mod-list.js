@@ -68,14 +68,14 @@ function rowsHTML(m, rowID, deletable) {
              data-mod-delete="${esc(m.mod_id)}" title="${esc(t('common.delete'))}">✕</button></td>`
         : '';
     const recipes = m.recipe_count
-        ? `<a class="recipe-count-link" href="/catalog/items?producedByMod=${encodeURIComponent(m.mod_id)}">${m.recipe_count}</a>`
+        ? `<a class="recipe-count-link metric" href="/catalog/items?producedByMod=${encodeURIComponent(m.mod_id)}">${m.recipe_count}</a>`
         : '<span class="td-muted">—</span>';
 
     return `<tr class="mod-row" data-expand="${esc(rowID)}">
         <td><span class="table-expand-trigger">▸</span></td>
         <td>${esc(m.name || m.mod_id)}</td>
         <td class="td-mono td-muted">${esc(m.mod_id)}</td>
-        <td class="td-num">${m.item_count}</td>
+        <td class="td-num"><span class="metric">${m.item_count}</span></td>
         <td class="td-num">${recipes}</td>
         ${del}
       </tr>

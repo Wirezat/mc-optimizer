@@ -209,7 +209,7 @@
       gap: var(--gap-control); padding: 3px 0; font-size: var(--text-sm);
     }
     .io-sublabel { font-size: 10px; color: var(--text-faint); font-style: italic; font-family: var(--font-mono); }
-    .io-rate { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); flex-shrink: 0; }
+    .io-rate { flex-shrink: 0; white-space: nowrap; }
 
     /* ── Info banner ──────────────────────────────────────────────────────── */
     .info-banner {
@@ -1396,7 +1396,7 @@
             ${ioItemHTML(e)}
             ${sublabel ? `<div class="io-sublabel">${esc(sublabel)}</div>` : ''}
           </div>
-          <div class="io-rate">${fmtR(e.Rate)} /${e.TimeUnit||unit}</div>
+          <div class="io-rate"><span class="metric">${fmtR(e.Rate)}</span><span class="metric-unit"> /${e.TimeUnit||unit}</span></div>
         </div>`;
       }).join('');
     }
@@ -1404,7 +1404,7 @@
       io += `<div class="io-section-label" style="margin-top:${inputs.length?'var(--gap-control)':'0'}">${t('solve.outputs')}</div>`;
       io += outputs.map(e => `<div class="io-row">
         <div style="flex:1;min-width:0;">${ioItemHTML(e)}</div>
-        <div class="io-rate">${fmtR(e.Rate)} /${e.TimeUnit||unit}</div>
+        <div class="io-rate"><span class="metric">${fmtR(e.Rate)}</span><span class="metric-unit"> /${e.TimeUnit||unit}</span></div>
       </div>`).join('');
     }
     ioEl.innerHTML = io || `<span style="color:var(--text-faint);font-size:var(--text-sm);">—</span>`;

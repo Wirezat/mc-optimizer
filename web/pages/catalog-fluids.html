@@ -228,7 +228,7 @@
       const hdRow = document.createElement('tr');
       hdRow.className = 'table-group-hd collapsed';
       hdRow.dataset.modId = modId;
-      hdRow.innerHTML = `<td colspan="2"><span class="group-hd-arrow"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="td-muted" style="font-size:var(--text-xs);margin-left:6px;">${fluids.length}</span></td>`;
+      hdRow.innerHTML = `<td colspan="2"><span class="group-hd-arrow"></span><a href="/catalog/mods" class="catalog-link">${esc(modName)}</a><span class="metric-unit" style="margin-left:6px;">${fluids.length}</span></td>`;
       hdBody.appendChild(hdRow);
 
       const rowsBody = document.createElement('tbody');

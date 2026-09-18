@@ -20,6 +20,7 @@
     #pl-table .col-check   { width: 36px; }
     #pl-table .col-warn    { width: 28px; }
     #pl-table .col-rate    { width: 90px; }
+    #pl-table .col-progress { width: 108px; }
     #pl-table .col-actions { width: 96px; }
     #pl-table td, #pl-table th { padding: var(--gap-item) var(--gap-card); }
     #pl-table .col-drag,
@@ -44,7 +45,7 @@
 
 
     /* ── Rate cell ────────────────────────────────────────────────────────── */
-    .pl-rate-val { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+    .pl-rate-val { white-space: nowrap; }
 
     /* ── Tri-state status button ──────────────────────────────────────────── */
     .pl-tri-btn {
@@ -162,7 +163,7 @@
         </div>
 
         <!-- ── Normal mode: split-layout ── -->
-        <div id="normal-content" class="split-layout">
+        <div id="normal-content" class="split-layout fit">
 
           <!-- Left: PL list -->
           <div class="main-panel">
@@ -187,6 +188,7 @@
                     <col class="col-warn" />
                     <col />
                     <col class="col-rate" />
+                    <col class="col-progress" />
                     <col class="col-actions" />
                   </colgroup>
                   <thead>
@@ -196,11 +198,12 @@
                       <th class="col-warn"></th>
                       <th data-i18n="factory.pl.col.target"></th>
                       <th data-i18n="factory.pl.col.rate"></th>
+                      <th class="col-progress" data-i18n="factory.pl.col.progress"></th>
                       <th class="col-actions"></th>
                     </tr>
                   </thead>
                   <tbody id="pl-tbody">
-                    <tr><td colspan="6" class="td-faint" style="padding:var(--gap-control) var(--pad-cell);" data-i18n="common.loading"></td></tr>
+                    <tr><td colspan="7" class="td-faint" style="padding:var(--gap-control) var(--pad-cell);" data-i18n="common.loading"></td></tr>
                   </tbody>
                 </table>
               </div>
@@ -436,7 +439,7 @@
 
     if (!_pls || _pls.length === 0) {
       plTbody.innerHTML = bulkRowHTML() +
-        Array(5).fill('<tr><td colspan="6" style="height:2.2rem;"></td></tr>').join('');
+        Array(5).fill('<tr><td colspan="7" style="height:2.2rem;"></td></tr>').join('');
       bulkRowCtl = initBulkRow(plTable);
       plTbody.querySelector('[data-bulk-count]').dataset.bulkCountTpl = '{n} ' + t('factory.pl.selected');
       bulkRowCtl.refresh();
@@ -475,7 +478,7 @@
           <td class="col-drag"><span class="drag-handle" title="${esc(t('factory.pl.drag_group'))}">⠿</span></td>
           <td class="col-check"></td>
           <td class="col-warn">${groupModWarn}</td>
-          <td colspan="3">
+          <td colspan="4">
             <div class="group-hd-inner">
               <span class="group-hd-arrow"></span>
               <span class="group-hd-name">${esc(g.name)}</span>
@@ -486,14 +489,14 @@
           </td>
         </tr>`;
         for (const pl of pls) html += plRow(pl, g.id);
-        html += `<tr class="row-spacer"><td colspan="6"></td></tr>`;
+        html += `<tr class="row-spacer"><td colspan="7"></td></tr>`;
       } else {
         html += plRow(entry.pl);
       }
     }
 
     // End-zone: always-visible drop target for "ungrouped at end of list"
-    html += `<tr class="wui-drop-zone-end" data-wui-drop-zone-end><td colspan="6"></td></tr>`;
+    html += `<tr class="wui-drop-zone-end" data-wui-drop-zone-end><td colspan="7"></td></tr>`;
 
     plTbody.innerHTML = html;
     document.getElementById('check-all').checked = false;
@@ -534,7 +537,8 @@
       <td class="col-check"><input type="checkbox" class="pl-check${chkCls}" data-id="${esc(pl.id)}" title="${esc(t('common.select_all'))}" /></td>
       <td class="col-warn">${pl.mod_missing ? modMissingBadge() : ''}</td>
       <td>${itemHtml(pl.target_item_id, pl.target_item_name, pl.target_mod_id, 'td-muted', pl.target_is_fluid)}</td>
-      <td>${rateHtml(pl.rate_num, pl.rate_den, pl.time_unit, 'pl-rate-val')}${costsRollupHtml(pl)}${currentRateRollupHtml(pl)}</td>
+      <td>${rateHtml(pl.rate_num, pl.rate_den, pl.time_unit, 'pl-rate-val')}${costsRollupHtml(pl)}</td>
+      <td class="col-progress">${progressHtml(pl)}</td>
       <td class="col-actions">
         <button class="pl-tri-btn btn-icon-color ${esc(triCls[pl.status] || 'inbau')}" data-plid="${esc(pl.id)}" data-action="triAdvance" data-status="${esc(pl.status)}" title="${esc(triTip[pl.status] || '')}">
           <span class="tri-cur">${triCur[pl.status] || '⚒'}</span>
@@ -595,13 +599,19 @@
   // Compact build-state rollup for the PL list row: a warn-colored "current"
   // rate line while the line isn't fully built yet (see production-line.html's
   // per-group build state for where the value comes from).
-  function currentRateRollupHtml(pl) {
+  // How far the built machines carry this line towards its target.
+  function progressHtml(pl) {
     const rate    = pl.rate_den ? pl.rate_num / pl.rate_den : 0;
     const curRate = pl.current_rate || 0;
-    if (pl.status !== 'active' || curRate >= rate - 1e-9) return '';
-    const shortRate = Math.round(curRate * 100) / 100;
-    const cur = esc(t('production_line.row.current'));
-    return `<div style="font-size:var(--text-xs);white-space:nowrap;color:var(--warn);" title="${cur}">${shortRate} /${esc(pl.time_unit)}</div>`;
+    if (pl.status !== 'active' || !rate) return '';
+    const done = curRate >= rate - 1e-9;
+    const pct  = Math.max(0, Math.min(100, Math.round((curRate / rate) * 100)));
+    const text = done ? '100%' : `${pct}%`;
+    const title = done ? '' : ` title="${esc(t('production_line.row.current'))}: ${Math.round(curRate * 100) / 100} /${esc(pl.time_unit)}"`;
+    return `<div class="progress-cell"${title}>
+      <div class="wui-progress-track"><div class="wui-progress-fill" style="width:${pct}%"></div></div>
+      <span class="progress-cell-text${done ? '' : ' metric-warn'}">${text}</span>
+    </div>`;
   }
 
   function rateHtml(num, den, unit, extraClass = null) {
@@ -613,8 +623,8 @@
       { key: '/tick', val: unit === 't'   ? fmtRateFrac(num, den) : _fmtN(perSec / 20) },
       { key: '/hr',   val: _fmtN(perSec * 3600) },
     ];
-    const valCls = extraClass ? ` class="${esc(extraClass)}"` : '';
-    return `<span${valCls}>${esc(fmtRateFrac(num, den))} /${esc(unit)}</span>
+    const valCls = esc(['metric', extraClass].filter(Boolean).join(' '));
+    return `<span class="${valCls}">${esc(fmtRateFrac(num, den))}</span><span class="metric-unit"> /${esc(unit)}</span>
     ${_TRIGGER}<div class="infocard-def" hidden>
       <div class="infocard-section" data-label="Rate">
         ${rows.map(r => `<div class="infocard-row"><span class="infocard-key">${r.key}</span><span class="infocard-val">${esc(r.val)}</span></div>`).join('')}
@@ -967,11 +977,11 @@
       `<tr><td colspan="2" class="td-faint" style="padding:var(--gap-control) var(--pad-cell);">—</td></tr>`;
 
     const dataRow = (e, isSurplus) => {
-      const bot     = isSurplus && e.is_bottleneck;
-      const rateCls = bot ? ' style="color:var(--danger);font-weight:600;"' : '';
+      const bot = isSurplus && e.is_bottleneck;
+      // On the value, not the cell: .metric sets its own colour otherwise.
       return `<tr>
         <td>${itemHtml(e.item_fluid_id, e.name, e.mod_id, '', e.io_type === 'fluid')}</td>
-        <td style="text-align:right;white-space:nowrap;"${rateCls}>${rateHtml(e.rate_num, e.rate_den, 'min', null)}</td>
+        <td style="text-align:right;white-space:nowrap;">${rateHtml(e.rate_num, e.rate_den, 'min', bot ? 'metric-neg' : null)}</td>
       </tr>`;
     };
 

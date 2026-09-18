@@ -181,7 +181,7 @@
           </div>` : esc(m.name)}</td>
         <td class="td-mono td-muted">${esc(m.mod_id)}</td>
         <td>${m.recipe_count
-          ? `<a href="${esc(recipesUrl)}" class="recipe-count-link">${m.recipe_count}</a>`
+          ? `<a href="${esc(recipesUrl)}" class="recipe-count-link metric">${m.recipe_count}</a>`
           : `<span class="td-muted">—</span>`}</td>
       </tr>
       <tr class="table-expand-row" id="mod-${esc(m.mod_id)}">

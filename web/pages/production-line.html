@@ -141,7 +141,7 @@
         </div>
 
         <!-- ── Split layout ── -->
-        <div class="split-layout">
+        <div class="split-layout fit">
 
           <!-- ── main-panel: Meta + Machine Groups ── -->
           <div class="main-panel" style="display:flex;flex-direction:column;gap:var(--gap-container);">
@@ -303,15 +303,16 @@
   // Key/value row for the Detail-Grid meta block. The "current" value (from the
   // real build state) renders muted in parens next to the target — only while
   // the line is incomplete; once fully built it matches the target anyway.
-  function statPair(label, targetVal, currentVal, showCurrent) {
+  function statPair(label, targetVal, targetUnit, currentVal, showCurrent) {
     return `<div class="detail-row">
       <span class="detail-key">${esc(label)}</span>
-      <span class="detail-val">${esc(targetVal)}${showCurrent ? ` <span style="color:var(--text-faint)">(${esc(currentVal)})</span>` : ''}</span>
+      <span class="detail-val"><span class="metric">${esc(targetVal)}</span><span class="metric-unit"> /${esc(targetUnit)}</span>` +
+      `${showCurrent ? ` <span class="metric-unit metric-warn">(${esc(currentVal)})</span>` : ''}</span>
     </div>`;
   }
 
   function renderMeta() {
-    const rate       = fmtFrac(_pl.rate_num, _pl.rate_den) + ' /' + _pl.time_unit;
+    const rate       = fmtFrac(_pl.rate_num, _pl.rate_den);
     const targetName = _pl.target_item_name || (_pl.target_item_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()));
     const incomplete = _pl.status === 'active' && !isLineComplete();
     const curRate    = fmtNum(_pl.current_rate || 0) + ' /' + _pl.time_unit;
@@ -324,7 +325,7 @@
         <span class="detail-key">${esc(t('production_line.meta.mode'))}</span>
         <span class="detail-val">${esc(_pl.optimize_mode.toUpperCase())}</span>
       </div>
-      ${statPair(t('common.rate'), rate, curRate, incomplete)}
+      ${statPair(t('common.rate'), rate, _pl.time_unit, curRate, incomplete)}
     `;
     initHiDPIRender(document.getElementById('pl-meta'));
   }
@@ -498,7 +499,8 @@
   }
 
   function ioRow(e, isPrimary) {
-    const rate = fmtFrac(e.rate_num, e.rate_den) + ' /' + (_pl.time_unit || 't');
+    const rate = fmtFrac(e.rate_num, e.rate_den);
+    const unit = _pl.time_unit || 't';
     // Same fallback as targetName above: a name-less id reads as words.
     const name  = e.name || e.item_fluid_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     const label = iconTextHTML(e.mod_id, e.item_fluid_id, {
@@ -510,7 +512,7 @@
     const star = isPrimary ? `<span style="color:var(--accent);font-weight:var(--weight-semibold)">★</span> ` : '';
     return `<div class="detail-row">
       <span class="detail-key" style="color:var(--text)">${star}${label}</span>
-      <span class="detail-val">${esc(rate)}</span>
+      <span class="detail-val"><span class="metric">${esc(rate)}</span><span class="metric-unit"> /${esc(unit)}</span></span>
     </div>`;
   }
 

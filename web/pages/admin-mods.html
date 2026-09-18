@@ -23,10 +23,6 @@
       border-top: 1px solid var(--border);
     }
 
-    /* Upload and output each keep their own height instead of the taller one
-       stretching the other. */
-    .split-layout { align-items: flex-start; }
-
     /* ── Drop zone (page-specific: wui has no disabled modifier) ───────────── */
     #drop-zone.disabled { opacity: 0.4; pointer-events: none; }
 
@@ -94,7 +90,7 @@
           </div>
         </div>
 
-        <div class="split-layout">
+        <div class="split-layout fit">
           <div class="main-panel">
 
             <!-- Upload -->

@@ -189,6 +189,7 @@
       { key: 'pl',   label: t('save.pl_col'),
         render: (_, row) => row.src ? esc(t('save.src_meta')) : esc(fmtPL(row.pl_count)) },
     ],
+    rowHref: (row) => '/factories/' + row.id,
     getId: (row) => row.id,
     onDelete: (id, btn) => deleteFactory(id, btn),
   });

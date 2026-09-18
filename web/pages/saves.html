@@ -145,6 +145,7 @@
       { key: 'created',   label: t('common.created_at'),
         render: (_, row) => esc(fmtDate(row.created_at)) },
     ],
+    rowHref: (row) => '/saves/' + row.id,
     getId: (row) => row.id,
     onDelete: (id, btn) => deleteSave(id, btn),
   });

@@ -17,6 +17,7 @@
        storageKey:  'view:save-factories',
        renderTile:  (f) => `<a class="tile" href="/factories/${esc(f.id)}">...</a>`,
        tableCols:   [ { key: 'name', label: t('common.name'), ... }, ... ],
+       rowHref:     (row) => `/factories/${row.id}`,
        getId:       (row) => row.id,
        onDelete:    (id, btn) => deleteFactory(id, btn),
      })
@@ -35,6 +36,7 @@ export function createListView({
   storageKey,
   renderTile,
   tableCols,
+  rowHref,
   getId,
   onDelete,
 }) {
@@ -81,6 +83,7 @@ export function createListView({
     const table = renderTable(document.createElement('div'), {
       cols: tableCols,
       rows: items,
+      rowHref,
       onAction: (row) => onDelete(getId(row)),
       actionLabel: '🗑',
     });

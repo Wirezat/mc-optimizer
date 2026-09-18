@@ -15,9 +15,10 @@
 import { apiFetch } from '/static/ui/js/auth.js';
 import { esc, t }   from '/static/js/i18n.js';
 
-const _entries = new Map();   // key → { modID, id, isFluid, name, textureUrl, animation }
-const _tags    = new Map();   // tag name → { total, icons: [entry] }
-let   _loaded  = null;        // in-flight or settled load promise
+const _entries  = new Map();  // key → { modID, id, isFluid, name, textureUrl, animation }
+const _machines = new Map();  // "mod:machine" → same entry shape
+const _tags     = new Map();  // tag name → { total, icons: [entry] }
+let   _loaded   = null;       // in-flight or settled load promise
 
 const keyFor = (modID, id, isFluid) => `${isFluid ? 'fluid:' : ''}${modID}:${id}`;
 
@@ -87,7 +88,8 @@ export function loadCatalog({ saveIDParam = '' } = {}) {
         fetchJSON('/api/items?all=true'  + saveIDParam, []),
         fetchJSON('/api/fluids?all=true' + saveIDParam, []),
         fetchJSON('/api/tag-members', {}),
-    ]).then(([items, fluids, tagMembers]) => {
+        fetchJSON('/api/machines', []),
+    ]).then(([items, fluids, tagMembers, machines]) => {
         for (const it of items ?? []) {
             _entries.set(keyFor(it.mod_id, it.item_id, false), {
                 modID:      it.mod_id,
@@ -106,6 +108,17 @@ export function loadCatalog({ saveIDParam = '' } = {}) {
                 name:       fl.name || fl.fluid_id,
                 textureUrl: fl.texture_url ?? null,
                 animation:  fl.animation ?? null,
+            });
+        }
+        // Their own index, not items — see machineIconTextHTML.
+        for (const m of machines ?? []) {
+            _machines.set(`${m.mod_id}:${m.machine_id}`, {
+                modID:      m.mod_id,
+                id:         m.machine_id,
+                isFluid:    false,
+                name:       m.name || m.machine_id,
+                textureUrl: m.texture_url ?? null,
+                animation:  null,
             });
         }
         // Tags resolve after the items, since a member is only useful once its
@@ -146,6 +159,11 @@ export function catalogEntries() {
 /** lookupCatalog(modID, id, isFluid) → { name, textureUrl } | null */
 export function lookupCatalog(modID, id, isFluid = false) {
     return _entries.get(keyFor(modID, id, isFluid)) ?? null;
+}
+
+/** lookupMachine(modID, machineID) → { name, textureUrl } | null */
+export function lookupMachine(modID, machineID) {
+    return _machines.get(`${modID}:${machineID}`) ?? null;
 }
 
 /**
@@ -268,7 +286,25 @@ export function iconTextHTML(modID, id, {
     isFluid = false, name = null, subtitle = null,
     size = null, marquee = false, extraClass = '', hoverCard = false,
 } = {}) {
-    const entry = lookupCatalog(modID, id, isFluid);
+    return entryTextHTML(lookupCatalog(modID, id, isFluid), modID, id,
+        { name, subtitle, size, marquee, extraClass, hoverCard });
+}
+
+/**
+ * machineIconTextHTML(modID, machineID, opts) → HTML string
+ * The same icontext as iconTextHTML, for a machine. Separate because machines
+ * resolve against their own index (see lookupMachine): a machine's texture is
+ * the model the mod ships for the block, which the item catalog does not carry
+ * even where an item shares its id.
+ */
+export function machineIconTextHTML(modID, machineID, opts = {}) {
+    return entryTextHTML(lookupMachine(modID, machineID), modID, machineID, opts);
+}
+
+function entryTextHTML(entry, modID, id, {
+    name = null, subtitle = null,
+    size = null, marquee = false, extraClass = '', hoverCard = false,
+} = {}) {
     const label = entry?.name ?? name ?? id ?? '';
 
     // extraClass and size come from callers and land inside a quoted attribute,

@@ -206,7 +206,7 @@
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { machine as machineName, loadMI } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
-  import { loadCatalog, iconTextHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, iconTextHTML, machineIconTextHTML, lookupMachine } from '/static/js/catalog-registry.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
 
   const _lang = getLang();
@@ -378,11 +378,12 @@
     const container = document.getElementById('mg-list');
 
     if (!mgs.length) {
-      container.innerHTML = `<tr><td colspan="5"><span class="td-faint">—</span></td></tr>`;
+      container.innerHTML = `<tr><td colspan="5"><span class="td-empty"></span></td></tr>`;
       return;
     }
 
     container.innerHTML = mgs.map(g => mgRowHTML(g)).join('');
+    initHiDPIRender(container);
 
     container.querySelectorAll('[data-mgtoggle]').forEach(btn => {
       btn.addEventListener('click', () => toggleMGStatus(btn.dataset.mgtoggle));
@@ -453,23 +454,25 @@
   // installs something — the base variant has nothing to say.
   function mgVariantHTML(g) {
     if (!g.variant?.items?.length) return '';
-    return `<span class="icontext-subtitle">${esc(g.variant.label)}</span>`;
+    // Its own line under the machine, now that the name and mod sit inside the
+    // icontext rather than sharing a stacked body with it.
+    return `<div class="icontext-subtitle">${esc(g.variant.label)}</div>`;
   }
 
   function mgRowHTML(g) {
-    const name    = machineName(g.machine_mod_id, g.machine_id);
+    // The machine index knows the block's own name; machineName() is the
+    // fallback for one the catalog has no row for.
+    const name    = lookupMachine(g.machine_mod_id, g.machine_id)?.name
+                 ?? machineName(g.machine_mod_id, g.machine_id);
     const outName = _recipeOutputs.get(g.recipe_id) || '—';
 
     return `<tr>
         <td>${esc(g.count)}×</td>
         <td>
-            <span class="icontext">
-                <span class="icontext-body">
-                    <span class="icontext-text">${esc(name)}</span>
-                    <span class="icontext-subtitle">${esc(g.machine_mod_id)}</span>
-                    ${mgVariantHTML(g)}
-                </span>
-            </span>
+            ${machineIconTextHTML(g.machine_mod_id, g.machine_id, {
+              name, subtitle: g.machine_mod_id, size: 'lg',
+            })}
+            ${mgVariantHTML(g)}
         </td>
         <td class="td-mono" style="font-size:var(--text-xs)" title="${esc(outName)}">${esc(outName)}</td>
         <td>${mgBuildFieldHTML(g)}</td>

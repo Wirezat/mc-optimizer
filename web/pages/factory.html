@@ -41,27 +41,29 @@
        permanently-reserved empty gutter for a state that's usually absent. */
     #pl-table:not(.has-mod-warnings) .col-warn { display: none; }
 
+    /* ── Row hover / cursor ───────────────────────────────────────────────── */
+    #pl-table tbody tr[data-plid] { cursor: pointer; }
+    #pl-table tbody tr[data-plid].pl-row-archived { cursor: default; }
+    #pl-table tbody tr input, #pl-table tbody tr button { cursor: auto; }
+    #pl-table .td-editable { cursor: text; }
+
+    /* ── Hover targets ────────────────────────────────────────────────────── */
+    /* The cell content is its own infocard trigger — no separate glyph to aim
+       at. Shrink-wrapped, so the box is the content rather than the whole cell
+       width: pointing at empty space beside a value shouldn't raise its card. */
+    .cell-hover { display: inline-block; max-width: 100%; vertical-align: middle; }
+
     /* ── Machines cell ────────────────────────────────────────────────────── */
-    /* Count first: the number is what someone reads off this column. */
+    /* Count first: the number is what someone reads off this column. After
+       .cell-hover, whose display it has to override — it is both. */
     .machines-cell {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: var(--gap-control);
       min-width: 0;
     }
     .machines-cell .icontext { flex: 0 1 auto; min-width: 0; }
     .machines-more { flex: 0 0 auto; font-family: var(--font-mono); font-size: var(--text-xs); }
-
-    /* ── Row hover / cursor ───────────────────────────────────────────────── */
-    #pl-table tbody tr[data-plid] { cursor: pointer; }
-    #pl-table tbody tr[data-plid].pl-row-archived { cursor: default; }
-    #pl-table tbody tr input, #pl-table tbody tr button { cursor: auto; }
-    #pl-table .td-editable { cursor: text; }
-    /* .infocard-trigger defaults to cursor:default (it's not clickable itself
-       elsewhere, e.g. the Balance sidebar table) — but inside a live PL row,
-       a click on it still bubbles to the row's navigate handler, so it should
-       look clickable too. Archived rows opt out, matching the handler. */
-    #pl-table tbody tr[data-plid]:not(.pl-row-archived) .infocard-trigger { cursor: pointer; }
 
 
     /* ── Rate cell ────────────────────────────────────────────────────────── */
@@ -323,7 +325,7 @@
   import { initKonfigBar, initModal, openModal } from '/static/ui/js/index.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
-  import { loadCatalog, lookupCatalog, iconTextHTML, infocardHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, lookupCatalog, lookupMachine, iconTextHTML, machineIconTextHTML, infocardHTML } from '/static/js/catalog-registry.js';
 
   await load(getLang());
   applyI18n();
@@ -597,30 +599,28 @@
     return Number.isInteger(r) ? String(r) : r.toFixed(4).replace(/\.?0+$/, '');
   };
   const _toPerSec = { s: 1, min: 1/60, t: 20 };
-  const _TRIGGER  = `<span class="infocard-trigger" data-infocard-inline style="color:var(--text-faint);font-size:var(--text-xs);flex-shrink:0;line-height:1;">ℹ</span>`;
 
   // labelCls carries styling only; the label clamps itself. The mod trails the
   // name on the same line rather than under it — an ellipsis, not a marquee,
   // see .icontext-inline — and withMod drops it where the column can't carry
-  // both (balance). The full name is a hover away on the info trigger.
+  // both (balance). The cell is its own hover trigger, so an ellipsised name
+  // is readable by pointing at it rather than at a separate glyph.
   function itemHtml(itemId, itemName, modId, labelCls = '', isFluid = false, withMod = true) {
-    const def = itemId ? infocardHTML(lookupCatalog(modId, itemId, isFluid), {
+    const label = `<div class="${esc(labelCls)} cell-hover" style="min-width:0;"${itemId ? ' data-infocard-inline' : ''}>
+        ${iconTextHTML(modId, itemId, {
+          isFluid, name: itemName, subtitle: withMod ? modName(modId) : null,
+          size: 'lg', extraClass: 'icontext-inline',
+        })}
+      </div>`;
+    if (!itemId) return label;
+    return label + infocardHTML(lookupCatalog(modId, itemId, isFluid), {
       title: itemName || itemId,
       subtitle: modName(modId),
       sections: `<div class="infocard-section">
         <div class="infocard-row"><span class="infocard-key">Item ID</span><span class="infocard-val">${esc(itemId)}</span></div>
         <div class="infocard-row"><span class="infocard-key">Mod ID</span><span class="infocard-val">${esc(modId || '')}</span></div>
       </div>`,
-    }) : '';
-    return `<div style="display:flex;align-items:center;gap:var(--gap-icon);">
-      <div class="${esc(labelCls)}" style="flex:1;min-width:0;">
-        ${iconTextHTML(modId, itemId, {
-          isFluid, name: itemName, subtitle: withMod ? modName(modId) : null,
-          size: 'lg', extraClass: 'icontext-inline',
-        })}
-      </div>
-      ${itemId ? _TRIGGER + def : ''}
-    </div>`;
+    });
   }
 
   // The machine kind a line uses most, with how many of it, and a bare count of
@@ -631,16 +631,23 @@
     const machines = pl.machines || [];
     if (!machines.length) return `<span class="td-empty"></span>`;
     const [first, ...rest] = machines;
-    const firstName = machineName(first.machine_mod_id, first.machine_id);
-    const label = iconTextHTML(first.machine_mod_id, first.machine_id, {
-      name: firstName, size: 'lg', extraClass: 'icontext-inline',
+    const nameOf = m => lookupMachine(m.machine_mod_id, m.machine_id)?.name
+                     ?? machineName(m.machine_mod_id, m.machine_id);
+    const label = machineIconTextHTML(first.machine_mod_id, first.machine_id, {
+      name: nameOf(first), size: 'lg', extraClass: 'icontext-inline',
     });
     const more = rest.length
       ? `<span class="machines-more td-faint">+${rest.length}</span>`
       : '';
-    // No hover card here, so the title carries whatever the ellipsis cut.
-    const all = machines.map(m => `${m.count}× ${machineName(m.machine_mod_id, m.machine_id)}`).join(', ');
-    return `<div class="machines-cell" title="${esc(all)}"><span class="td-mono">${esc(first.count)}×</span>${label}${more}</div>`;
+    // The card lists every kind, since the cell itself only shows the first.
+    const def = infocardHTML(lookupMachine(first.machine_mod_id, first.machine_id), {
+      title: nameOf(first),
+      subtitle: first.machine_mod_id,
+      sections: `<div class="infocard-section" data-label="${esc(t('factory.pl.col.machines'))}">
+        ${machines.map(m => `<div class="infocard-row"><span class="infocard-key">${esc(nameOf(m))}</span><span class="infocard-val">${esc(m.count)}×</span></div>`).join('')}
+      </div>`,
+    });
+    return `<div class="machines-cell cell-hover" data-infocard-inline><span class="td-mono">${esc(first.count)}×</span>${label}${more}</div>${def}`;
   }
 
   // Per-resource operating-cost rollup for the PL list row: one faint line per
@@ -687,8 +694,8 @@
       { key: '/hr',   val: _fmtN(perSec * 3600) },
     ];
     const valCls = esc(['metric', extraClass].filter(Boolean).join(' '));
-    return `<span class="${valCls}">${esc(fmtRateFrac(num, den))}</span>&nbsp;<span class="badge-unit">/${esc(unit)}</span>
-    ${_TRIGGER}<div class="infocard-def" hidden>
+    return `<span class="cell-hover" data-infocard-inline><span class="${valCls}">${esc(fmtRateFrac(num, den))}</span>&nbsp;<span class="badge-unit">/${esc(unit)}</span></span>
+    <div class="infocard-def" hidden>
       <div class="infocard-section" data-label="Rate">
         ${rows.map(r => `<div class="infocard-row"><span class="infocard-key">${r.key}</span><span class="infocard-val">${esc(r.val)}</span></div>`).join('')}
       </div>

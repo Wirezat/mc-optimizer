@@ -19,17 +19,23 @@
     #pl-table .col-drag    { width: 28px; }
     #pl-table .col-check   { width: 36px; }
     #pl-table .col-warn    { width: 28px; }
-    #pl-table .col-machines { width: 200px; }
-    #pl-table .col-rate    { width: 132px; }
+    /* Explicit, so the column can't be sized by whatever the first row's item
+       happens to be called — a long name ellipsises instead of widening the
+       whole table. Leftover width is shared out when the panel is wider. */
+    #pl-table .col-target  { width: 240px; }
+    #pl-table .col-machines { width: 168px; }
+    #pl-table .col-rate    { width: 108px; }
     /* Value, unit chip and trigger are one reading, not three stacked ones. */
     #pl-table td.col-rate { white-space: nowrap; }
-    #pl-table .col-progress { width: 120px; }
-    #pl-table .col-actions { width: 96px; }
-    #pl-table td, #pl-table th { padding: var(--pad-cell-y) var(--gap-card); }
+    #pl-table .col-progress { width: 104px; }
+    #pl-table .col-actions { width: 84px; }
+    /* The package's cell padding, not a roomier one: eight columns of it is
+       what pushed the table past the panel and into a horizontal scroll. */
+    #pl-table td, #pl-table th { padding: var(--pad-cell-y) var(--pad-cell); }
     #pl-table .col-drag,
     #pl-table .col-check,
     #pl-table .col-warn,
-    #pl-table .col-actions { padding: var(--pad-cell-y) var(--gap-control); }
+    #pl-table .col-actions { padding: var(--pad-cell-y) var(--gap-inline); }
     #pl-table td { overflow: hidden; }
     /* Whole column collapses when nothing in the list needs it — no
        permanently-reserved empty gutter for a state that's usually absent. */
@@ -200,7 +206,7 @@
                     <col class="col-drag" />
                     <col class="col-check" />
                     <col class="col-warn" />
-                    <col />
+                    <col class="col-target" />
                     <col class="col-machines" />
                     <col class="col-rate" />
                     <col class="col-progress" />
@@ -311,7 +317,7 @@
   import { guard, apiFetch } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, tCount, esc, machine as machineName } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
-  import { initClickToEdit, initBulkRow, initCellClampScroll, initCollapsibleGroups, initDraggableRows } from '/static/ui/js/table-features.js';
+  import { initClickToEdit, initBulkRow, initCollapsibleGroups, initDraggableRows } from '/static/ui/js/table-features.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initKonfigBar, initModal, openModal } from '/static/ui/js/index.js';
@@ -531,7 +537,6 @@
     bulkRowCtl = initBulkRow(plTable);
     plTbody.querySelector('[data-bulk-count]').dataset.bulkCountTpl = '{n} ' + t('factory.pl.selected');
     initClickToEdit(plTbody);
-    initCellClampScroll(plTbody);
     initHiDPIRender(plTbody);
     initInfocards(plTbody);
     bulkRowCtl.refresh();
@@ -594,10 +599,10 @@
   const _toPerSec = { s: 1, min: 1/60, t: 20 };
   const _TRIGGER  = `<span class="infocard-trigger" data-infocard-inline style="color:var(--text-faint);font-size:var(--text-xs);flex-shrink:0;line-height:1;">ℹ</span>`;
 
-  // The overflow strategy now lives on the label itself (iconTextHTML's marquee
-  // option), so labelCls carries styling only — passing a cell-clamp modifier
-  // here would be inert. The mod trails the name on the same line rather than
-  // under it; withMod drops it where the column can't carry both (balance).
+  // labelCls carries styling only; the label clamps itself. The mod trails the
+  // name on the same line rather than under it — an ellipsis, not a marquee,
+  // see .icontext-inline — and withMod drops it where the column can't carry
+  // both (balance). The full name is a hover away on the info trigger.
   function itemHtml(itemId, itemName, modId, labelCls = '', isFluid = false, withMod = true) {
     const def = itemId ? infocardHTML(lookupCatalog(modId, itemId, isFluid), {
       title: itemName || itemId,
@@ -611,7 +616,7 @@
       <div class="${esc(labelCls)}" style="flex:1;min-width:0;">
         ${iconTextHTML(modId, itemId, {
           isFluid, name: itemName, subtitle: withMod ? modName(modId) : null,
-          size: 'lg', extraClass: 'icontext-inline', marquee: true,
+          size: 'lg', extraClass: 'icontext-inline',
         })}
       </div>
       ${itemId ? _TRIGGER + def : ''}
@@ -626,14 +631,16 @@
     const machines = pl.machines || [];
     if (!machines.length) return `<span class="td-empty"></span>`;
     const [first, ...rest] = machines;
+    const firstName = machineName(first.machine_mod_id, first.machine_id);
     const label = iconTextHTML(first.machine_mod_id, first.machine_id, {
-      name: machineName(first.machine_mod_id, first.machine_id),
-      size: 'lg', extraClass: 'icontext-inline', marquee: true,
+      name: firstName, size: 'lg', extraClass: 'icontext-inline',
     });
     const more = rest.length
-      ? `<span class="machines-more td-faint" title="${esc(rest.map(m => machineName(m.machine_mod_id, m.machine_id)).join(', '))}">+${rest.length}</span>`
+      ? `<span class="machines-more td-faint">+${rest.length}</span>`
       : '';
-    return `<div class="machines-cell"><span class="td-mono">${esc(first.count)}×</span>${label}${more}</div>`;
+    // No hover card here, so the title carries whatever the ellipsis cut.
+    const all = machines.map(m => `${m.count}× ${machineName(m.machine_mod_id, m.machine_id)}`).join(', ');
+    return `<div class="machines-cell" title="${esc(all)}"><span class="td-mono">${esc(first.count)}×</span>${label}${more}</div>`;
   }
 
   // Per-resource operating-cost rollup for the PL list row: one faint line per
@@ -1053,7 +1060,6 @@
       (outputs.length ? outputs.map(e => dataRow(e, false)).join('') : emptyRow()) +
       secHd(t('factory.balance.surplus')) +
       (surplus.length ? surplus.map(e => dataRow(e, true)).join('')  : emptyRow());
-    initCellClampScroll(tbody);
     initHiDPIRender(tbody);
     initInfocards(tbody);
     document.getElementById('balance-count').textContent =

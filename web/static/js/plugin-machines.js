@@ -37,21 +37,27 @@ export async function loadMachineHooks(modIDs) {
     return out
 }
 
-// columnsOf flattens every mod's declared chain-table columns, in mod order.
+// columnsOf collects every mod's declared chain-table columns, in mod order.
+// Mods that declare the same column id share one column — that is how two
+// plugins name the same thing (MI's tier and a furnace's material) without
+// each getting a half-empty column of its own. mods lists who fills it.
 // One mod's malformed columns list costs only that mod's columns.
 export function columnsOf(hooks) {
-    const out = []
+    const byID = new Map()
     for (const [modID, m] of hooks) {
         try {
             for (const col of m.columns ?? []) {
                 if (!col?.id) continue
-                out.push({ modID, columnID: String(col.id), label: String(col.label ?? col.id) })
+                const columnID = String(col.id)
+                const shared = byID.get(columnID)
+                if (shared) { shared.mods.push(modID); continue }
+                byID.set(columnID, { columnID, label: String(col.label ?? columnID), mods: [modID] })
             }
         } catch (e) {
             console.error(`plugin machines ${modID}.columns:`, e)
         }
     }
-    return out
+    return [...byID.values()]
 }
 
 // cellText asks the plugin that owns a machine for that machine's text in one

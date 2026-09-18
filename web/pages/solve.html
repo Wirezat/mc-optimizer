@@ -906,7 +906,7 @@
     const machineID  = solved ? solved.MachineID  : item.ChosenMachineID;
     const pluginMod  = machineMod ? _pluginMods[`${machineMod}:${machineID}`] : '';
     return _machineColumns.map(col => {
-      const text = (pluginMod && col.modID === pluginMod)
+      const text = (pluginMod && col.mods.includes(pluginMod))
         ? cellText(_machineHooks, pluginMod, { mod_id: machineMod, machine_id: machineID }, col.columnID)
         : '';
       return `<td>${esc(text)}</td>`;

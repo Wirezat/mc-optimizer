@@ -223,60 +223,6 @@ func solveResultToContents(result solver.SolveResult, modConfigs map[string]json
 	return ios, groups, nil
 }
 
-// ResolveInput carries optional overrides for re-solving a production line. Zero/empty
-// fields fall back to the line's stored request.
-type ResolveInput struct {
-	TargetRate *solver.Rational
-	TimeUnit   string
-}
-
-// Resolve re-solves an existing production line (e.g. to produce more output) using its
-// stored solver request, with the given overrides applied, and replaces its machine groups
-// and IO in place. The line keeps its id, position, and status; new groups are
-// "planned" (build progress resets). Returns the updated detail.
-func (s *PLService) Resolve(ctx context.Context, plID uuid.UUID, in ResolveInput) (*model.ProductionLineDetail, error) {
-	raw, err := s.db.GetPLSolveRequest(ctx, plID)
-	if err != nil {
-		return nil, err
-	}
-	if len(raw) == 0 {
-		return nil, ErrNoStoredRequest
-	}
-	var req solver.SolveRequest
-	if err := json.Unmarshal(raw, &req); err != nil {
-		return nil, fmt.Errorf("service: unmarshal stored request: %w", err)
-	}
-
-	if in.TargetRate != nil && in.TargetRate.Den != 0 {
-		req.TargetRate = *in.TargetRate
-	}
-	if in.TimeUnit != "" {
-		req.TimeUnit = in.TimeUnit
-	}
-
-	pl, err := s.db.GetProductionLine(ctx, plID)
-	if err != nil {
-		return nil, err
-	}
-	sv, err := s.solverFor(ctx, *pl.FactoryID, &req)
-	if err != nil {
-		return nil, err
-	}
-	result, err := sv.Solve(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	ios, groups, err := solveResultToContents(result, req.ModConfigs)
-	if err != nil {
-		return nil, err
-	}
-
-	return s.db.ReplaceProductionLineContents(ctx, plID,
-		int(req.TargetRate.Num), int(req.TargetRate.Den), req.TimeUnit, string(req.Mode),
-		ios, groups)
-}
-
 // Scale resizes a saved line to k times its machines and rates, in place, so
 // status and built counts survive. Returns ErrBuiltCountExceeded when a group
 // would end up smaller than what is already built.

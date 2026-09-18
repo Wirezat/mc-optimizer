@@ -38,7 +38,6 @@
 /* Moved off the bottom-right corner so it cannot collide with the count. */
 .nc-badge { position: absolute; top: 0; left: 2px; font-size: 8px; color: var(--text-faint); pointer-events: none; }
 .crafting-arrow { font-size: 1.2em; color: var(--text-faint); align-self: center; }
-.crafting-result { display: flex; flex-direction: column; gap: var(--gap-inline); justify-content: center; }
 
 /* One recipe card: meta row (machine + duration/EU) above its crafting-layout. */
 .recipe-card { padding: var(--gap-inline) 0; border-bottom: 1px solid var(--border); }

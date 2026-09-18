@@ -10,9 +10,9 @@ import (
 
 func TestSplitCatalogRef(t *testing.T) {
 	cases := []struct {
-		in        string
-		wantMod   string
-		wantID    string
+		in      string
+		wantMod string
+		wantID  string
 	}{
 		{"mi:compressor", "mi", "compressor"},
 		{"foo", "", ""},

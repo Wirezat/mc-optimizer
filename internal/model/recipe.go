@@ -42,31 +42,3 @@ type RecipeFluidIO struct {
 	ProbabilityNum int     `json:"probability_num"`
 	ProbabilityDen int     `json:"probability_den"`
 }
-
-type CreateRecipeRequest struct {
-	MachineID     string `json:"machine_id"`
-	DurationTicks int    `json:"duration_ticks"`
-
-	ItemInputs   []CreateRecipeItemIO  `json:"item_inputs"`
-	ItemOutputs  []CreateRecipeItemIO  `json:"item_outputs"`
-	FluidInputs  []CreateRecipeFluidIO `json:"fluid_inputs"`
-	FluidOutputs []CreateRecipeFluidIO `json:"fluid_outputs"`
-}
-
-type CreateRecipeItemIO struct {
-	ItemModID      *string `json:"item_mod_id"`
-	ItemID         *string `json:"item_id"`
-	TagID          *string `json:"tag_id"`
-	AmountNum      int     `json:"amount_num"`
-	AmountDen      int     `json:"amount_den"`
-	ProbabilityNum int     `json:"probability_num"`
-	ProbabilityDen int     `json:"probability_den"`
-}
-
-type CreateRecipeFluidIO struct {
-	FluidModID     string `json:"fluid_mod_id"`
-	FluidID        string `json:"fluid_id"`
-	AmountMB       int64  `json:"amount_mb"`
-	ProbabilityNum int    `json:"probability_num"`
-	ProbabilityDen int    `json:"probability_den"`
-}

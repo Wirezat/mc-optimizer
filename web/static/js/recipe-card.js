@@ -140,7 +140,7 @@ function fmt0(v, suffix) {
  * itself, see Task 4/5's machineNames map), or omitted to fall back to the
  * raw machine_id.
  */
-export function recipeCardHTML(recipe, machineName) {
+function recipeCardHTML(recipe, machineName) {
   const machineUrl = `/catalog/machines?mod=${encodeURIComponent(recipe.machine_mod_id)}&machine=${encodeURIComponent(recipe.machine_id)}`;
   const inputs = [...recipe.inputs, ...recipe.fluid_inputs];
   const outputs = [...recipe.outputs, ...recipe.fluid_outputs];

@@ -8,43 +8,6 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/model"
 )
 
-// ListMachineSlotsHandler returns slot layout for one machine.
-func ListMachineSlotsHandler(database *db.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		modID := r.PathValue("mod_id")
-		machineID := r.PathValue("machine_id")
-		slots, err := database.ListMachineSlots(r.Context(), modID, machineID)
-		if err != nil {
-			errInternal(w, err)
-			return
-		}
-		if slots == nil {
-			slots = []*model.MachineSlot{}
-		}
-		writeJSON(w, http.StatusOK, slots)
-	}
-}
-
-// SearchTagsHandler returns up to 50 tag names matching query q.
-func SearchTagsHandler(database *db.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query().Get("q")
-		offset := 0
-		if v, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil {
-			offset = v
-		}
-		tags, err := database.SearchTags(r.Context(), q, offset)
-		if err != nil {
-			errInternal(w, err)
-			return
-		}
-		if tags == nil {
-			tags = []string{}
-		}
-		writeJSON(w, http.StatusOK, tags)
-	}
-}
-
 // ListTagMembersHandler returns every tag's members, grouped by tag name.
 //
 // Grouped rather than a flat list because that is the shape the caller needs:

@@ -202,23 +202,6 @@ func (d *DB) ListMods(ctx context.Context) ([]*model.Mod, error) {
 	return mods, nil
 }
 
-// CreateMod inserts a new mod. Caller must be an admin (enforced at API layer).
-func (d *DB) CreateMod(ctx context.Context, modID, name string) (*model.Mod, error) {
-	m := &model.Mod{}
-	err := d.Pool.QueryRow(ctx, `
-		INSERT INTO mods (mod_id, name)
-		VALUES ($1, $2)
-		RETURNING mod_id, name
-	`, modID, name).Scan(&m.ModID, &m.Name)
-	if err != nil {
-		if isUniqueViolation(err) {
-			return nil, ErrConflict
-		}
-		return nil, fmt.Errorf("db: create mod: %w", err)
-	}
-	return m, nil
-}
-
 // UpdateModFull overwrites all editable fields for a mod. Caller must be an admin.
 // Every field but name is overwritten unconditionally, including to NULL; name falls
 // back to its current value via COALESCE when nil.
@@ -261,26 +244,6 @@ func (d *DB) UpdateMachineType(ctx context.Context, modID, machineID string, nam
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
-	}
-	return nil
-}
-
-// UpdateItem upserts the en_us translation for an item. Caller must be an admin (enforced at API layer).
-func (d *DB) UpdateItem(ctx context.Context, modID, itemID, name string) error {
-	var exists bool
-	if err := d.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM items WHERE mod_id=$1 AND item_id=$2)`, modID, itemID).Scan(&exists); err != nil {
-		return fmt.Errorf("db: update item: %w", err)
-	}
-	if !exists {
-		return ErrNotFound
-	}
-	_, err := d.Pool.Exec(ctx, `
-		INSERT INTO translations (lang, lang_key, name)
-		VALUES ('en_us', 'item.' || $1 || '.' || $2, $3)
-		ON CONFLICT (lang, lang_key) DO UPDATE SET name = $3
-	`, modID, itemID, name)
-	if err != nil {
-		return fmt.Errorf("db: update item: %w", err)
 	}
 	return nil
 }
@@ -641,29 +604,6 @@ func (d *DB) SearchFluids(ctx context.Context, q string, offset int) ([]*model.F
 	return fluids, nil
 }
 
-// SearchTags returns up to 50 tag names matching query q, ordered alphabetically.
-func (d *DB) SearchTags(ctx context.Context, q string, offset int) ([]string, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT name FROM tags
-		WHERE $1 = '' OR name ILIKE '%' || $1 || '%'
-		ORDER BY name
-		LIMIT 50 OFFSET $2
-	`, q, offset)
-	if err != nil {
-		return nil, fmt.Errorf("db: search tags: %w", err)
-	}
-	defer rows.Close()
-	var tags []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("db: scan tag: %w", err)
-		}
-		tags = append(tags, name)
-	}
-	return tags, rows.Err()
-}
-
 // ListTagMembers returns every item each tag stands for, ordered so a tag's
 // members always come back in the same sequence — the UI cycles through them,
 // and a cycle that reshuffled per request would be unreadable.
@@ -840,110 +780,6 @@ func (d *DB) ListMachinesByMod(ctx context.Context, modID string) ([]*model.Mach
 	return machines, nil
 }
 
-// DeleteRecipe removes a recipe (and its IO rows via CASCADE). Caller must be an admin (enforced at API layer).
-func (d *DB) DeleteRecipe(ctx context.Context, recipeID string) error {
-	tag, err := d.Pool.Exec(ctx, `
-		DELETE FROM recipes WHERE id::text = $1
-	`, recipeID)
-	if err != nil {
-		return fmt.Errorf("db: delete recipe: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-// UpdateRecipeName sets or clears the display name of a recipe. Caller must be an admin (enforced at API layer).
-func (d *DB) UpdateRecipeName(ctx context.Context, recipeID string, name *string) error {
-	tag, err := d.Pool.Exec(ctx, `
-		UPDATE recipes SET name = $2 WHERE id::text = $1
-	`, recipeID, name)
-	if err != nil {
-		return fmt.Errorf("db: update recipe name: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-// ListRecipesByMod returns recipes for modID, optionally filtered by machineID, with IO hydrated.
-// Includes interface-compatible recipes: recipes belonging to a base machine that modID implements.
-// ListRecipesCatalog returns all recipes with optional mod/machine filter, without IO hydration.
-// Used by the catalog page; IO details are fetched on expand.
-// ListRecipesCatalog lists recipes for the catalog page, optionally filtered by
-// machine mod/id and/or by an item or fluid that must appear among the recipe's
-// OUTPUTS (not inputs) — "how is this item/fluid produced", matching the
-// items/fluids/trades catalog pages' "name → recipes producing this" link convention.
-//
-// modID alone filters by source_mod_id; with machineID also set, modID+machineID
-// identify a specific machine (machine_mod_id+machine_id) instead.
-func (d *DB) ListRecipesCatalog(ctx context.Context, modID, machineID, itemModID, itemID, fluidModID, fluidID string) ([]*model.Recipe, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT id, machine_mod_id, machine_id, source_mod_id, machine_name, name,
-		       duration_ticks
-		FROM (
-			SELECT r.id::text AS id, r.machine_mod_id, r.machine_id, r.source_mod_id,
-			       mt.name AS machine_name,
-			       r.name,
-			       r.duration_ticks
-			FROM recipes r
-			LEFT JOIN machine_types mt ON mt.mod_id = r.machine_mod_id AND mt.machine_id = r.machine_id
-			WHERE ( ($2 <> '' AND r.machine_mod_id = $1 AND r.machine_id = $2)
-			     OR ($2 = ''  AND ($1 = '' OR r.source_mod_id = $1)) )
-			  AND ($3 = '' OR EXISTS (
-			        SELECT 1 FROM recipe_item_outputs rio
-			        WHERE rio.recipe_id = r.id AND rio.item_mod_id = $3 AND rio.item_id = $4
-			      ))
-			  AND ($5 = '' OR EXISTS (
-			        SELECT 1 FROM recipe_fluid_outputs rfo
-			        WHERE rfo.recipe_id = r.id AND rfo.fluid_mod_id = $5 AND rfo.fluid_id = $6
-			      ))
-
-			UNION
-
-			-- Interface-inherited recipes: only surfaced when a specific machine
-			-- is picked (mod-level browsing keeps showing pure attribution, per
-			-- the "attribute recipes to the mod that added them" fix — this is
-			-- purely additive for the machine drill-down view).
-			SELECT r.id::text AS id, mi.machine_mod_id, mi.machine_id, r.source_mod_id,
-			       mt.name AS machine_name,
-			       r.name,
-			       r.duration_ticks
-			FROM recipes r
-			JOIN machine_interfaces mi ON mi.base_mod_id = r.machine_mod_id AND mi.base_machine_id = r.machine_id
-			LEFT JOIN machine_types mt ON mt.mod_id = mi.machine_mod_id AND mt.machine_id = mi.machine_id
-			WHERE $2 <> '' AND mi.machine_mod_id = $1 AND mi.machine_id = $2
-			  AND ($3 = '' OR EXISTS (
-			        SELECT 1 FROM recipe_item_outputs rio
-			        WHERE rio.recipe_id = r.id AND rio.item_mod_id = $3 AND rio.item_id = $4
-			      ))
-			  AND ($5 = '' OR EXISTS (
-			        SELECT 1 FROM recipe_fluid_outputs rfo
-			        WHERE rfo.recipe_id = r.id AND rfo.fluid_mod_id = $5 AND rfo.fluid_id = $6
-			      ))
-		) sub
-		ORDER BY source_mod_id, machine_mod_id, machine_id
-	`, modID, machineID, itemModID, itemID, fluidModID, fluidID)
-	if err != nil {
-		return nil, fmt.Errorf("db: list recipes catalog: %w", err)
-	}
-	defer rows.Close()
-	var recipes []*model.Recipe
-	for rows.Next() {
-		rec := &model.Recipe{}
-		if err := rows.Scan(
-			&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.SourceModID, &rec.MachineName, &rec.Name,
-			&rec.DurationTicks,
-		); err != nil {
-			return nil, fmt.Errorf("db: scan recipe: %w", err)
-		}
-		recipes = append(recipes, rec)
-	}
-	return recipes, rows.Err()
-}
-
 func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*model.Recipe, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT r.id::text, r.machine_mod_id, r.machine_id, r.source_mod_id,
@@ -993,102 +829,6 @@ func (d *DB) ListRecipesByMod(ctx context.Context, modID, machineID string) ([]*
 		}
 	}
 	return recipes, nil
-}
-
-// CreateRecipe inserts a recipe with all IO slots in a transaction.
-// Caller must be an admin (enforced at API layer).
-func (d *DB) CreateRecipe(ctx context.Context, modID string, req *model.CreateRecipeRequest) (*model.Recipe, error) {
-	var exists bool
-	if err := d.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM mods WHERE mod_id = $1)`, modID).Scan(&exists); err != nil {
-		return nil, fmt.Errorf("db: create recipe: %w", err)
-	}
-	if !exists {
-		return nil, ErrNotFound
-	}
-
-	tx, err := d.Pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("db: create recipe: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	// 1. Insert recipe.
-	rec := &model.Recipe{}
-	if err := tx.QueryRow(ctx, `
-		INSERT INTO recipes (id, machine_mod_id, machine_id, source_mod_id, duration_ticks)
-		VALUES (gen_random_uuid(), $1, $2, $1, $3)
-		RETURNING id::text, machine_mod_id, machine_id, source_mod_id, duration_ticks
-	`, modID, req.MachineID, req.DurationTicks,
-	).Scan(&rec.ID, &rec.MachineModID, &rec.MachineID, &rec.SourceModID, &rec.DurationTicks); err != nil {
-		if isUniqueViolation(err) {
-			return nil, ErrConflict
-		}
-		return nil, fmt.Errorf("db: create recipe: %w", err)
-	}
-
-	recipeID := rec.ID
-
-	// 2. Insert item inputs.
-	for i, in := range req.ItemInputs {
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO recipe_item_inputs
-				(id, recipe_id, sort_index, item_mod_id, item_id, tag_id, amount_num, amount_den, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
-		`, recipeID, i, in.ItemModID, in.ItemID, in.TagID,
-			in.AmountNum, in.AmountDen, in.ProbabilityNum, in.ProbabilityDen,
-		); err != nil {
-			return nil, fmt.Errorf("db: create recipe: %w", err)
-		}
-	}
-
-	// 3. Insert item outputs.
-	for i, out := range req.ItemOutputs {
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO recipe_item_outputs
-				(id, recipe_id, sort_index, item_mod_id, item_id, amount_num, amount_den, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
-		`, recipeID, i, out.ItemModID, out.ItemID,
-			out.AmountNum, out.AmountDen, out.ProbabilityNum, out.ProbabilityDen,
-		); err != nil {
-			return nil, fmt.Errorf("db: create recipe: %w", err)
-		}
-	}
-
-	// 4. Insert fluid inputs.
-	for i, in := range req.FluidInputs {
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO recipe_fluid_inputs
-				(id, recipe_id, sort_index, fluid_mod_id, fluid_id, amount_mb, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
-		`, recipeID, i, in.FluidModID, in.FluidID,
-			in.AmountMB, in.ProbabilityNum, in.ProbabilityDen,
-		); err != nil {
-			return nil, fmt.Errorf("db: create recipe: %w", err)
-		}
-	}
-
-	// 5. Insert fluid outputs.
-	for i, out := range req.FluidOutputs {
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO recipe_fluid_outputs
-				(id, recipe_id, sort_index, fluid_mod_id, fluid_id, amount_mb, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
-		`, recipeID, i, out.FluidModID, out.FluidID,
-			out.AmountMB, out.ProbabilityNum, out.ProbabilityDen,
-		); err != nil {
-			return nil, fmt.Errorf("db: create recipe: %w", err)
-		}
-	}
-
-	// 6. Commit transaction.
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("db: create recipe: %w", err)
-	}
-
-	if err := d.hydrateRecipeIO(ctx, rec); err != nil {
-		return nil, err
-	}
-	return rec, nil
 }
 
 func (d *DB) hydrateRecipeIO(ctx context.Context, rec *model.Recipe) error {
@@ -1240,30 +980,6 @@ type MachineInterface struct {
 	BaseMachineID string `json:"base_machine_id"`
 }
 
-// ListMachineInterfaces returns all interfaces declared for (modID, machineID).
-func (d *DB) ListMachineInterfaces(ctx context.Context, modID, machineID string) ([]MachineInterface, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT machine_mod_id, machine_id, base_mod_id, base_machine_id
-		FROM machine_interfaces
-		WHERE machine_mod_id = $1 AND machine_id = $2
-		ORDER BY base_mod_id, base_machine_id
-	`, modID, machineID)
-	if err != nil {
-		return nil, fmt.Errorf("db: list machine interfaces: %w", err)
-	}
-	defer rows.Close()
-
-	var result []MachineInterface
-	for rows.Next() {
-		var mi MachineInterface
-		if err := rows.Scan(&mi.MachineModID, &mi.MachineID, &mi.BaseModID, &mi.BaseMachineID); err != nil {
-			return nil, fmt.Errorf("db: scan machine interface: %w", err)
-		}
-		result = append(result, mi)
-	}
-	return result, rows.Err()
-}
-
 // AddMachineInterface adds an "A implements B" relationship.
 // Caller must be an admin (enforced at API layer).
 func (d *DB) AddMachineInterface(ctx context.Context, modID, machineID, baseModID, baseMachineID string) error {
@@ -1278,23 +994,6 @@ func (d *DB) AddMachineInterface(ctx context.Context, modID, machineID, baseModI
 			return ErrConflict
 		}
 		return fmt.Errorf("db: add machine interface: %w", err)
-	}
-	return nil
-}
-
-// DeleteMachineInterface removes an "A implements B" relationship.
-// Caller must be an admin (enforced at API layer).
-func (d *DB) DeleteMachineInterface(ctx context.Context, modID, machineID, baseModID, baseMachineID string) error {
-	tag, err := d.Pool.Exec(ctx, `
-		DELETE FROM machine_interfaces
-		WHERE machine_mod_id = $1 AND machine_id = $2
-		  AND base_mod_id = $3 AND base_machine_id = $4
-	`, modID, machineID, baseModID, baseMachineID)
-	if err != nil {
-		return fmt.Errorf("db: delete machine interface: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
 	}
 	return nil
 }

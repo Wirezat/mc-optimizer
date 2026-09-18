@@ -1,8 +1,5 @@
 -- 003_user_data.down.sql
-DROP TABLE IF EXISTS save_unlocked_fluids;
-DROP TABLE IF EXISTS save_unlocked_items;
 DROP TABLE IF EXISTS save_active_mods;
-DROP TABLE IF EXISTS user_active_machines;
 DROP TABLE IF EXISTS factory_source_inputs;
 DROP TABLE IF EXISTS factory_source_outputs;
 DROP TABLE IF EXISTS solver_drafts;

@@ -106,12 +106,6 @@ type PLPositionStore struct{ DB *db.DB }
 func (s PLPositionStore) OwnerUserID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	return s.DB.ProductionLineOwnerUserID(ctx, id)
 }
-func (s PLPositionStore) GetPosition(ctx context.Context, id uuid.UUID) (string, error) {
-	return s.DB.GetPLPosition(ctx, id)
-}
-func (s PLPositionStore) SetPosition(ctx context.Context, id uuid.UUID, position string) error {
-	return s.DB.SetPLPosition(ctx, id, position)
-}
 
 // PLReorderHandler is like ReorderHandler but also accepts after_group_id /
 // before_group_id, which reference pl_groups.position in the unified list

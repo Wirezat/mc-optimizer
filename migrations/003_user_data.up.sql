@@ -119,32 +119,8 @@ CREATE TABLE factory_source_inputs (
     UNIQUE (factory_id, mod_id, item_id)
 );
 
-CREATE TABLE user_active_machines (
-    user_id    UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
-    mod_id     TEXT NOT NULL,
-    machine_id TEXT NOT NULL,
-    PRIMARY KEY (user_id, mod_id, machine_id),
-    FOREIGN KEY (mod_id, machine_id) REFERENCES machine_types(mod_id, machine_id) ON DELETE CASCADE
-);
-
 CREATE TABLE save_active_mods (
     save_id UUID NOT NULL REFERENCES saves(id)    ON DELETE CASCADE,
     mod_id  TEXT NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
     PRIMARY KEY (save_id, mod_id)
-);
-
-CREATE TABLE save_unlocked_items (
-    save_id UUID NOT NULL REFERENCES saves(id)                ON DELETE CASCADE,
-    mod_id  TEXT NOT NULL,
-    item_id TEXT NOT NULL,
-    PRIMARY KEY (save_id, mod_id, item_id),
-    FOREIGN KEY (mod_id, item_id) REFERENCES items(mod_id, item_id) ON DELETE CASCADE
-);
-
-CREATE TABLE save_unlocked_fluids (
-    save_id  UUID NOT NULL REFERENCES saves(id)                 ON DELETE CASCADE,
-    mod_id   TEXT NOT NULL,
-    fluid_id TEXT NOT NULL,
-    PRIMARY KEY (save_id, mod_id, fluid_id),
-    FOREIGN KEY (mod_id, fluid_id) REFERENCES fluids(mod_id, fluid_id) ON DELETE CASCADE
 );

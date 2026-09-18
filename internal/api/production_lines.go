@@ -619,53 +619,6 @@ func UpdateProductionLineStatusHandler(database *db.DB) http.HandlerFunc {
 	}
 }
 
-// ResolveProductionLineHandler re-solves an existing line (e.g. for more output) using its
-// stored solver request with the given overrides, replacing its machine groups and IO.
-func ResolveProductionLineHandler(database *db.DB, svc *service.PLService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID := userIDFromContext(r.Context())
-		plID, ok := parseUUIDParam(w, r, "line_id")
-		if !ok {
-			return
-		}
-		if err := requirePLOwner(r, w, database, plID, userID); err != nil {
-			return
-		}
-		var body struct {
-			TargetRate *solver.Rational `json:"target_rate"`
-			TimeUnit   string           `json:"time_unit"`
-		}
-		if !decodeJSON(w, r, &body) {
-			return
-		}
-		detail, err := svc.Resolve(r.Context(), plID, service.ResolveInput{
-			TargetRate: body.TargetRate,
-			TimeUnit:   body.TimeUnit,
-		})
-		if err != nil {
-			var cycleErr *solver.ErrCycleBreakNeeded
-			if errors.As(err, &cycleErr) {
-				writeJSON(w, http.StatusConflict, map[string]any{
-					"error":       "CYCLE_BREAK_NEEDED",
-					"cycle_nodes": cycleErr.CycleNodes,
-				})
-				return
-			}
-			if errors.Is(err, service.ErrNoStoredRequest) {
-				errBadRequest(w, "this line cannot be re-solved (no stored request)")
-				return
-			}
-			if errors.Is(err, db.ErrNotFound) {
-				errNotFound(w)
-				return
-			}
-			errInternal(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, detail)
-	}
-}
-
 // MarkProductionLineBuiltHandler marks all planned machine groups in a line as built.
 func MarkProductionLineBuiltHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

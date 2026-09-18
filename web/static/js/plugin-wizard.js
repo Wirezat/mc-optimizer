@@ -103,4 +103,3 @@ export async function openPluginWizard(modId, displayName, { config = {}, onSave
     }
 }
 
-export function closePluginWizard() { close() }

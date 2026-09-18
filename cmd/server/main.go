@@ -18,7 +18,6 @@ import (
 	"github.com/Wirezat/GoLog"
 	"github.com/Wirezat/production-optimizer/internal/api"
 	"github.com/Wirezat/production-optimizer/internal/db"
-	"github.com/Wirezat/production-optimizer/internal/logging"
 	"github.com/Wirezat/production-optimizer/internal/plugins"
 	"github.com/Wirezat/production-optimizer/internal/render"
 	"github.com/Wirezat/production-optimizer/internal/service"
@@ -54,14 +53,6 @@ func run() error {
 
 	if err := GoLog.ToFile(); err != nil {
 		GoLog.Warnf("file logging unavailable: %v", err)
-	} else {
-		logPath := GoLog.LogPath()
-		if err := logging.Global.Load(logPath); err != nil {
-			GoLog.Warnf("log store load: %v", err)
-		}
-		if err := logging.Global.Tail(logPath); err != nil {
-			GoLog.Warnf("log store tail: %v", err)
-		}
 	}
 
 	ctx := context.Background()
@@ -123,8 +114,6 @@ func run() error {
 	mux.Handle("PATCH /api/me/password", protected(api.ChangePasswordHandler(database)))
 
 	// Log viewer
-	mux.Handle("GET /api/logs", adminOnly(api.LogsHandler()))
-	mux.Handle("GET /api/logs/stream", adminOnly(api.LogsStreamHandler()))
 
 	// Admin settings
 	mux.Handle("GET /api/admin/settings", adminOnly(api.GetAdminSettingsHandler(database)))
@@ -168,31 +157,19 @@ func run() error {
 	mux.Handle("DELETE /api/source-inputs/{input_id}", protected(api.DeleteFactorySourceInputHandler(database)))
 
 	mux.Handle("GET /api/mods", api.ListModsHandler(database)) // public: global game data, needed for /demo/solve pre-login
-	mux.Handle("POST /api/mods", adminOnly(api.CreateModHandler(database)))
 	mux.Handle("PUT /api/mods/{mod_id}", adminOnly(api.UpdateModHandler(database)))
 	mux.Handle("GET /api/mods/{mod_id}/modrinth-preview", adminOnly(api.ModrinthPreviewHandler(database)))
 	mux.Handle("DELETE /api/mods/{mod_id}", adminOnly(api.DeleteModHandler(database)))
 	mux.Handle("GET /api/machines", protected(api.ListAllMachinesHandler(database, "assets")))
 	mux.Handle("GET /api/mods/{mod_id}/machines", protected(api.ListMachinesHandler(database)))
-	mux.Handle("PATCH /api/mods/{mod_id}/machines/{machine_id}", adminOnly(api.UpdateMachineHandler(database)))
-	mux.Handle("GET /api/mods/{mod_id}/machines/{machine_id}/interfaces", protected(api.ListMachineInterfacesHandler(database)))
-	mux.Handle("POST /api/mods/{mod_id}/machines/{machine_id}/interfaces", adminOnly(api.AddMachineInterfaceHandler(database)))
-	mux.Handle("DELETE /api/mods/{mod_id}/machines/{machine_id}/interfaces/{base_mod_id}/{base_machine_id}", adminOnly(api.DeleteMachineInterfaceHandler(database)))
-	mux.Handle("GET /api/mods/{mod_id}/machines/{machine_id}/slots", protected(api.ListMachineSlotsHandler(database)))
 	mux.Handle("GET /api/mods/{mod_id}/items", protected(api.ListModItemsHandler(database, "assets")))
 	mux.Handle("GET /api/mods/{mod_id}/fluids", protected(api.ListModFluidsHandler(database, "assets")))
-	mux.Handle("PATCH /api/mods/{mod_id}/items/{item_id}", adminOnly(api.UpdateItemHandler(database)))
-	mux.Handle("GET /api/recipes", protected(api.ListRecipesCatalogHandler(database)))
 	mux.Handle("GET /api/mods/{mod_id}/recipes", protected(api.ListModRecipesHandler(database)))
-	mux.Handle("POST /api/mods/{mod_id}/recipes", adminOnly(api.CreateModRecipeHandler(database)))
-	mux.Handle("PATCH /api/recipes/{recipe_id}", adminOnly(api.UpdateRecipeNameHandler(database)))
-	mux.Handle("DELETE /api/recipes/{recipe_id}", adminOnly(api.DeleteRecipeHandler(database)))
 
 	mux.Handle("GET /api/items", api.SearchItemsHandler(database, "assets")) // public: global game data, needed for /demo/solve pre-login
 	mux.Handle("GET /api/items/{mod_id}/{item_id}/recipes", protected(api.GetItemRecipesHandler(database)))
 	mux.Handle("GET /api/fluids/{mod_id}/{fluid_id}/recipes", protected(api.GetFluidRecipesHandler(database)))
 	mux.Handle("GET /api/fluids", api.SearchFluidsHandler(database, "assets")) // public: global game data, needed for /demo/solve pre-login
-	mux.Handle("GET /api/tags", protected(api.SearchTagsHandler(database)))
 	mux.Handle("GET /api/tag-members", protected(api.ListTagMembersHandler(database)))
 	mux.Handle("GET /api/trades", protected(api.ListVillagerTradesHandler(database)))
 
@@ -200,11 +177,9 @@ func run() error {
 	// handler drops the cache.
 	renderCache := render.NewCache(render.NewLoader("assets"))
 
-	mux.Handle("GET /api/import/status", adminOnly(api.ImportStatusHandler(database)))
 	mux.Handle("POST /api/import/modfile", adminOnly(api.ImportModFileHandler(database, "assets", renderCache)))
 
 	mux.Handle("PATCH /api/machine-groups/{group_id}/status", protected(api.UpdateMachineGroupStatusHandler(database, variantResolver)))
-	mux.Handle("PUT /api/machine-groups/{group_id}/variant", protected(api.SetGroupVariantHandler(database, variantResolver)))
 
 	mux.Handle("GET /plugin-assets/{mod_id}/plugin.js", protected(api.PluginAssetHandler(database)))
 	mux.Handle("GET /api/saves/{save_id}/mod-config-defaults", protected(api.GetSaveModConfigDefaultsHandler(database)))
@@ -220,7 +195,6 @@ func run() error {
 	mux.Handle("GET /api/production-lines/{line_id}", protected(api.GetProductionLineHandler(database, variantResolver)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/status", protected(api.UpdateProductionLineStatusHandler(database)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/mark-built", protected(api.MarkProductionLineBuiltHandler(database)))
-	mux.Handle("POST /api/production-lines/{line_id}/resolve", protected(api.ResolveProductionLineHandler(database, plSvc)))
 	mux.Handle("POST /api/production-lines/{line_id}/scale", protected(api.ScaleProductionLineHandler(database, plSvc)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/position", protected(api.PLReorderHandler(database)))
 	mux.Handle("PATCH /api/production-lines/{line_id}/group", protected(api.SetPLGroupHandler(database)))

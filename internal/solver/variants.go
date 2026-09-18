@@ -3,7 +3,6 @@ package solver
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/Wirezat/production-optimizer/internal/plugins"
 )
@@ -384,20 +383,6 @@ func pinnedCells(cells []cell, id string) []cell {
 	return out
 }
 
-// pinnedVariant returns the variant with the given id, provided it exists and
-// is runnable. An empty id pins nothing.
-func pinnedVariant(vs []plugins.Variant, id string) (plugins.Variant, bool) {
-	if id == "" {
-		return plugins.Variant{}, false
-	}
-	for _, v := range vs {
-		if v.ID == id && v.Valid && v.Rate.Num > 0 && v.Rate.Den > 0 {
-			return v, true
-		}
-	}
-	return plugins.Variant{}, false
-}
-
 // variantOptionsFor lists the chosen machine's runnable variants.
 func variantOptionsFor(cells []cell, machine *MachineSpec) []VariantOption {
 	out := make([]VariantOption, 0, len(cells))
@@ -536,21 +521,4 @@ func repickVariants(groups []MachineGroupDraft, req SolveRequest, lc *ladderCtx)
 		g.applyCell(best)
 	}
 	return groups
-}
-
-// RecountForVariant recomputes a machine group's counts when it switches from
-// variant from to variant to, reconstructing the recipe rate from the group's
-// fractional count under the old variant. Returns the new machine count and
-// the new fractional count.
-func RecountForVariant(exact Rational, from, to plugins.Variant) (count int64, newExact Rational, err error) {
-	defer guardRateArithmetic(&err)
-	if from.Rate.Num <= 0 || from.Rate.Den <= 0 {
-		return 0, Rational{}, fmt.Errorf("solver: variant %q has no usable rate", from.ID)
-	}
-	if to.Rate.Num <= 0 || to.Rate.Den <= 0 {
-		return 0, Rational{}, fmt.Errorf("solver: variant %q has no usable rate", to.ID)
-	}
-	recipeRate := exact.Mul(NewRational(from.Rate.Num, from.Rate.Den))
-	newExact = recipeRate.Div(NewRational(to.Rate.Num, to.Rate.Den))
-	return max(newExact.CeilInt(), 1), newExact, nil
 }

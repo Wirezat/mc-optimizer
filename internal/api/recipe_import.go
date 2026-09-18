@@ -83,19 +83,3 @@ func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render
 		writeJSON(w, http.StatusOK, results)
 	}
 }
-
-// ImportStatusHandler returns total mod count and presence of core namespaces.
-func ImportStatusHandler(database *db.DB) http.HandlerFunc {
-	type status struct {
-		TotalMods int `json:"total_mods"`
-	}
-	return func(w http.ResponseWriter, r *http.Request) {
-		var n int
-		err := database.Pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM mods`).Scan(&n)
-		if err != nil {
-			errInternal(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, status{TotalMods: n})
-	}
-}

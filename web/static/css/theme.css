@@ -7,18 +7,20 @@
 */
 
 /* ── Typography scale ────────────────────────────────────────────────────── */
-/* One step above the package defaults, which are sized for dense admin tables;
-   these rows carry item names and rates someone reads at a glance. */
+/* Half a step above the package defaults, which are sized for dense admin
+   tables; these rows carry item names and rates someone reads at a glance. A
+   full step (15px base) was legible but cost the target column the width its
+   names need, so they clipped. */
 :root {
-    --text-xs:   12px;
-    --text-sm:   13px;
-    --text-base: 15px;
-    --text-md:   16px;
-    --text-lg:   18px;
-    --text-xl:   22px;
+    --text-xs:   11px;
+    --text-sm:   12px;
+    --text-base: 14px;
+    --text-md:   15px;
+    --text-lg:   17px;
+    --text-xl:   21px;
 
     /* Rows hold a 28px icon; the package's 7px would clamp them. */
-    --pad-cell-y: 10px;
+    --pad-cell-y: 9px;
 }
 
 :root {

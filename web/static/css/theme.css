@@ -1,8 +1,25 @@
 /* mc_optimizer / theme.css
    Color tokens for wirezatUI. Accent: copper.
-   Surface style: flat (bg = bg-card — borders carry hierarchy, no card elevation).
+   Surface style: the page is the lowest level, containers sit above it, and
+   recessed strips inside them (table head, group header, container header)
+   drop back to the page's own color.
    Load after: /static/ui/index.css
 */
+
+/* ── Typography scale ────────────────────────────────────────────────────── */
+/* One step above the package defaults, which are sized for dense admin tables;
+   these rows carry item names and rates someone reads at a glance. */
+:root {
+    --text-xs:   12px;
+    --text-sm:   13px;
+    --text-base: 15px;
+    --text-md:   16px;
+    --text-lg:   18px;
+    --text-xl:   22px;
+
+    /* Rows hold a 28px icon; the package's 7px would clamp them. */
+    --pad-cell-y: 10px;
+}
 
 :root {
     /* Accent — copper */
@@ -19,10 +36,11 @@
     --border:           rgba(0, 0, 0, 0.12);
     --border-strong:    rgba(0, 0, 0, 0.22);
 
-    /* Surfaces — flat style */
-    --bg:               #f0f0ee;
-    --bg-card:          #f0f0ee;
-    --bg-hover:         #e6e6e4;
+    /* Surfaces */
+    --bg:               #e8e8e5;
+    --bg-card:          #f8f8f6;
+    --bg-hover:         #ededea;
+    --shadow-card:      0 1px 2px rgba(0, 0, 0, 0.06);
 
     /* Semantic */
     --danger:           #c0392b;
@@ -32,10 +50,10 @@
     --warn:             #d97706;
     --warn-muted:       #fef3c7;
 
-    /* Config-Container (accent tint) */
-    --config-bg:        #fef3c7;
-    --config-border:    color-mix(in srgb, var(--accent) 22%, transparent);
-    --config-header-bg: color-mix(in srgb, var(--accent) 6%, transparent);
+    /* .container-config reads --config; the --config-bg/-border/-header-bg
+       tokens that used to sit here were read by nothing, so the variant fell
+       back to the package's violet default. */
+    --config:           color-mix(in srgb, var(--accent) 40%, var(--border-strong));
 }
 
 html.dark {
@@ -60,9 +78,10 @@ html.dark {
     --border-strong:    rgba(255, 255, 255, 0.16);
 
     /* Surfaces */
-    --bg:               #0f0e0d;
-    --bg-card:          #0f0e0d;
-    --bg-hover:         #1c1b19;
+    --bg:               #0c0b0a;
+    --bg-card:          #171614;
+    --bg-hover:         #232120;
+    --shadow-card:      0 1px 2px rgba(0, 0, 0, 0.40);
 
     /* Semantic */
     --danger:           #e57373;
@@ -72,10 +91,8 @@ html.dark {
     --warn:             #fbbf24;
     --warn-muted:       #1c1500;
 
-    /* Config-Container (accent tint) */
-    --config-bg:        #1c1200;
-    --config-border:    color-mix(in srgb, var(--accent) 22%, transparent);
-    --config-header-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+    /* Config-container — see the light-mode note above. */
+    --config:           color-mix(in srgb, var(--accent) 40%, var(--border-strong));
 }
 
 /* ── Mod picker (mod-picker.js) ──────────────────────────────────────────── */

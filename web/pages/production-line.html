@@ -306,7 +306,7 @@
   function statPair(label, targetVal, targetUnit, currentVal, showCurrent) {
     return `<div class="detail-row">
       <span class="detail-key">${esc(label)}</span>
-      <span class="detail-val"><span class="metric">${esc(targetVal)}</span><span class="metric-unit"> /${esc(targetUnit)}</span>` +
+      <span class="detail-val"><span class="metric">${esc(targetVal)}</span>&nbsp;<span class="badge-unit">/${esc(targetUnit)}</span>` +
       `${showCurrent ? ` <span class="metric-unit metric-warn">(${esc(currentVal)})</span>` : ''}</span>
     </div>`;
   }
@@ -512,7 +512,7 @@
     const star = isPrimary ? `<span style="color:var(--accent);font-weight:var(--weight-semibold)">★</span> ` : '';
     return `<div class="detail-row">
       <span class="detail-key" style="color:var(--text)">${star}${label}</span>
-      <span class="detail-val"><span class="metric">${esc(rate)}</span><span class="metric-unit"> /${esc(unit)}</span></span>
+      <span class="detail-val"><span class="metric">${esc(rate)}</span>&nbsp;<span class="badge-unit">/${esc(unit)}</span></span>
     </div>`;
   }
 

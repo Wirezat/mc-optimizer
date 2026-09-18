@@ -31,6 +31,17 @@ type ProductionLine struct {
 	// cache, never stored. ListProductionLinesHandler always sets it to a
 	// list (possibly empty); handlers that don't populate it leave it null.
 	Costs []plugins.Cost `json:"costs"`
+	// Machines is what the line runs on, one entry per machine kind with the
+	// counts of every group using it added up. Derived from the machine
+	// groups on read, never stored; null from handlers that don't populate it.
+	Machines []MachineUse `json:"machines"`
+}
+
+// MachineUse is one machine kind a production line runs, and how many of it.
+type MachineUse struct {
+	MachineModID string `json:"machine_mod_id"`
+	MachineID    string `json:"machine_id"`
+	Count        int    `json:"count"`
 }
 
 type ProductionLineDetail struct {

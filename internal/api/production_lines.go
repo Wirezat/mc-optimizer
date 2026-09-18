@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -481,9 +482,39 @@ func ListProductionLinesHandler(database *db.DB, variants solver.VariantSource) 
 				pl.CurrentRate = frac * float64(pl.RateNum) / float64(pl.RateDen)
 			}
 			pl.Costs = aggregateCosts(groupOperatingCosts(r, database, variants, mgs))
+			pl.Machines = aggregateMachines(mgs)
 		}
 		writeJSON(w, http.StatusOK, pls)
 	}
+}
+
+// aggregateMachines folds a line's machine groups into one entry per machine
+// kind, busiest first — a line built from three bronze macerators in two
+// groups runs one kind of machine, six of them, and the list says so.
+func aggregateMachines(mgs []*model.MachineGroup) []model.MachineUse {
+	idx := make(map[string]int, len(mgs))
+	out := make([]model.MachineUse, 0, len(mgs))
+	for _, mg := range mgs {
+		key := mg.MachineModID + ":" + mg.MachineID
+		if i, ok := idx[key]; ok {
+			out[i].Count += mg.Count
+			continue
+		}
+		idx[key] = len(out)
+		out = append(out, model.MachineUse{
+			MachineModID: mg.MachineModID,
+			MachineID:    mg.MachineID,
+			Count:        mg.Count,
+		})
+	}
+	// Ties break on the key so the column doesn't reshuffle between reloads.
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].MachineModID+":"+out[i].MachineID < out[j].MachineModID+":"+out[j].MachineID
+	})
+	return out
 }
 
 // groupOperatingCosts resolves each machine group's chosen operating variant

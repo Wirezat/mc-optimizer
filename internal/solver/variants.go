@@ -3,6 +3,7 @@ package solver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/Wirezat/production-optimizer/internal/plugins"
 )
@@ -504,4 +505,20 @@ func repickVariants(groups []MachineGroupDraft, req SolveRequest, lc *ladderCtx)
 		g.applyCell(best)
 	}
 	return groups
+}
+
+// RecountForVariant recomputes a machine group's counts when it switches variant.
+// Input: the group's fractional count under from. Output: the new machine count and
+// fractional count.
+func RecountForVariant(exact Rational, from, to plugins.Variant) (count int64, newExact Rational, err error) {
+	defer guardRateArithmetic(&err)
+	if from.Rate.Num <= 0 || from.Rate.Den <= 0 {
+		return 0, Rational{}, fmt.Errorf("solver: variant %q has no usable rate", from.ID)
+	}
+	if to.Rate.Num <= 0 || to.Rate.Den <= 0 {
+		return 0, Rational{}, fmt.Errorf("solver: variant %q has no usable rate", to.ID)
+	}
+	recipeRate := exact.Mul(NewRational(from.Rate.Num, from.Rate.Den))
+	newExact = recipeRate.Div(NewRational(to.Rate.Num, to.Rate.Den))
+	return max(newExact.CeilInt(), 1), newExact, nil
 }

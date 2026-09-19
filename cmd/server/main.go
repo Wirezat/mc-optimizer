@@ -180,6 +180,7 @@ func run() error {
 	mux.Handle("POST /api/import/modfile", adminOnly(api.ImportModFileHandler(database, "assets", renderCache)))
 
 	mux.Handle("PATCH /api/machine-groups/{group_id}/status", protected(api.UpdateMachineGroupStatusHandler(database, variantResolver)))
+	mux.Handle("PUT /api/machine-groups/{group_id}/variant", protected(api.SetGroupVariantHandler(database, variantResolver)))
 
 	mux.Handle("GET /plugin-assets/{mod_id}/plugin.js", protected(api.PluginAssetHandler(database)))
 	mux.Handle("GET /api/saves/{save_id}/mod-config-defaults", protected(api.GetSaveModConfigDefaultsHandler(database)))

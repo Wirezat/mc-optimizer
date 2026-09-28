@@ -172,6 +172,7 @@ func LoginHandler(database *db.DB) http.HandlerFunc {
 		}
 		u, err := database.GetUserByUsername(r.Context(), req.Username)
 		if err != nil {
+			auth.BurnPasswordCheck(req.Password)
 			GoLog.Warnf("login: unknown user from %s: %v", ip, err)
 			fail()
 			return

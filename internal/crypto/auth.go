@@ -60,6 +60,13 @@ func VerifyPassword(encodedHash, password string) error {
 	return nil
 }
 
+var burnSalt = make([]byte, argonSaltLen)
+
+// BurnPasswordCheck spends the same Argon2id work as VerifyPassword and discards the result.
+func BurnPasswordCheck(password string) {
+	argon2.IDKey([]byte(password), burnSalt, argonTime, argonMemory, argonThreads, argonKeyLen)
+}
+
 func decodeHash(encoded string) (p argon2Params, salt, hash []byte, err error) {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {

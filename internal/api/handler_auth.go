@@ -102,6 +102,11 @@ func RegisterHandler(database *db.DB) http.HandlerFunc {
 			errBadRequest(w, "password must be at least 8 characters")
 			return
 		}
+		ip := clientIP(r)
+		if !allowAll(w, r, "register", limitCheck{registerIPLimiter, ip}) {
+			return
+		}
+		registerIPLimiter.record(ip)
 		hash, err := auth.HashPassword(req.Password)
 		if err != nil {
 			errInternal(w, err)
@@ -154,17 +159,30 @@ func LoginHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		req.Username = strings.TrimSpace(req.Username)
+		ip := clientIP(r)
+		if !allowAll(w, r, "login",
+			limitCheck{loginIPLimiter, ip},
+			limitCheck{loginAccountLimiter, req.Username}) {
+			return
+		}
+		fail := func() {
+			loginIPLimiter.record(ip)
+			loginAccountLimiter.record(req.Username)
+			errUnauthorized(w)
+		}
 		u, err := database.GetUserByUsername(r.Context(), req.Username)
 		if err != nil {
 			GoLog.Warnf("login: user not found: %q err=%v", req.Username, err)
-			errUnauthorized(w)
+			fail()
 			return
 		}
 		if err := auth.VerifyPassword(u.PasswordHash, req.Password); err != nil {
 			GoLog.Warnf("login: wrong password for user %q", req.Username)
-			errUnauthorized(w)
+			fail()
 			return
 		}
+		loginIPLimiter.reset(ip)
+		loginAccountLimiter.reset(req.Username)
 		pair, err := issueTokensForUser(r, database, u)
 		if err != nil {
 			errInternal(w, err)
@@ -187,9 +205,14 @@ func RefreshHandler(database *db.DB) http.HandlerFunc {
 			errBadRequest(w, "refresh_token is required")
 			return
 		}
+		ip := clientIP(r)
+		if !allowAll(w, r, "refresh", limitCheck{refreshIPLimiter, ip}) {
+			return
+		}
 		hashed := auth.HashToken(req.RefreshToken)
 		token, err := database.GetTokenByHash(r.Context(), hashed)
 		if err != nil || token.Type != db.TokenTypeRefresh {
+			refreshIPLimiter.record(ip)
 			errUnauthorized(w)
 			return
 		}

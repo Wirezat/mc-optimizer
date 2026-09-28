@@ -51,6 +51,10 @@ func run() error {
 		}
 	}
 
+	if err := api.ConfigureTrustedProxies(os.Getenv("TRUSTED_PROXIES")); err != nil {
+		return err
+	}
+
 	if err := GoLog.ToFile(); err != nil {
 		GoLog.Warnf("file logging unavailable: %v", err)
 	}
@@ -69,6 +73,7 @@ func run() error {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
+			api.ReapRateLimiters()
 			n, err := database.DeleteExpiredTokens(context.Background())
 			if err != nil {
 				GoLog.Errorf("cleanup: delete expired tokens: %v", err)

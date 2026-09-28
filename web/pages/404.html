@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title data-i18n="error.not_found_title"></title>
+  <link rel="stylesheet" href="/static/ui/index.css" />
+  <link rel="stylesheet" href="/static/css/theme.css" />
+  <script>
+    (function(){
+      const s = localStorage.getItem('theme');
+      if (s === 'dark' || (!s && matchMedia('(prefers-color-scheme: dark)').matches))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+</head>
+<body class="app-shell">
+
+  <header class="header">
+    <a class="header-brand" href="/saves"><div class="header-logo">⚙️</div><span data-i18n="app.name"></span></a>
+    <div class="header-right">
+      <button data-wui-theme data-i18n-title="common.toggle_theme"></button>
+      <div class="dropdown-wrap" data-wui-lang><button data-dropdown-trigger></button><div class="dropdown-panel"><button class="dropdown-item" data-lang="en">🇬🇧 English</button><button class="dropdown-item" data-lang="de">🇩🇪 Deutsch</button></div></div>
+    </div>
+  </header>
+
+  <main class="error-main">
+    <div class="error-card">
+      <div class="error-head">
+        <div class="error-icon">?</div>
+        <div class="error-code">404</div>
+        <div class="error-sub" data-i18n="error.not_found_title"></div>
+      </div>
+      <div class="error-body">
+        <p class="error-text" data-i18n="error.not_found_text"></p>
+        <a class="btn btn-primary error-link" href="/saves" data-i18n="error.back_home"></a>
+      </div>
+    </div>
+  </main>
+
+<script type="module">
+  import { load, applyI18n, getLang } from '/static/js/i18n.js';
+  import { init as initHeader } from '/static/js/header.js';
+
+  await load(getLang());
+  applyI18n();
+  initHeader({ publicPage: true });
+</script>
+
+</body>
+</html>

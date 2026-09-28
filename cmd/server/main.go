@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -254,6 +256,15 @@ func run() error {
 	pagesFS := http.FileServer(http.Dir("web/pages"))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
+		fi, err := os.Stat(filepath.Join("web/pages", filepath.FromSlash(path.Clean(r.URL.Path))))
+		if err != nil || fi.IsDir() {
+			serveNotFoundPage(w)
+			return
+		}
 		pagesFS.ServeHTTP(w, r)
 	}))
 
@@ -322,4 +333,17 @@ func maskPassword(dsn string) string {
 	}
 	// Show only host:port, not the full DSN
 	return net.JoinHostPort(u.Hostname(), u.Port()) + u.Path
+}
+
+// serveNotFoundPage answers with the styled 404 page.
+func serveNotFoundPage(w http.ResponseWriter) {
+	body, err := os.ReadFile("web/pages/404.html")
+	if err != nil {
+		GoLog.Errorf("404 page unavailable: %v", err)
+		http.Error(w, "404 page not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = w.Write(body)
 }

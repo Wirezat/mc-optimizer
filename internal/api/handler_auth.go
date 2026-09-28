@@ -211,13 +211,14 @@ func RefreshHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		hashed := auth.HashToken(req.RefreshToken)
-		token, err := database.GetTokenByHash(r.Context(), hashed)
-		if err != nil || token.Type != db.TokenTypeRefresh {
+		token, err := database.ClaimRefreshToken(r.Context(), hashed)
+		if errors.Is(err, db.ErrNotFound) {
 			refreshIPLimiter.record(ip)
+			revokeOnReuse(r, database, hashed, ip)
 			errUnauthorized(w)
 			return
 		}
-		if err := database.DeleteToken(r.Context(), hashed); err != nil {
+		if err != nil {
 			errInternal(w, err)
 			return
 		}
@@ -233,6 +234,30 @@ func RefreshHandler(database *db.DB) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, pair)
 	}
+}
+
+// refreshReuseGrace is how long after its use a refresh token may still arrive from a
+// racing request without counting as stolen.
+const refreshReuseGrace = 30 * time.Second
+
+// revokeOnReuse ends every session of the token's owner when hashed is a refresh token that
+// was used longer ago than refreshReuseGrace.
+func revokeOnReuse(r *http.Request, database *db.DB, hashed, ip string) {
+	userID, usedAt, err := database.UsedRefreshToken(r.Context(), hashed)
+	if err != nil {
+		if !errors.Is(err, db.ErrNotFound) {
+			GoLog.Errorf("refresh: reuse check: %v", err)
+		}
+		return
+	}
+	if time.Since(usedAt) < refreshReuseGrace {
+		return
+	}
+	if err := database.DeleteAllTokensForUser(r.Context(), userID); err != nil {
+		GoLog.Errorf("refresh: revoking sessions of user %s after token reuse: %v", userID, err)
+		return
+	}
+	GoLog.Errorf("refresh: used token replayed from %s, all sessions of user %s revoked", ip, userID)
 }
 
 // LogoutHandler handles POST /api/auth/logout — invalidates access and optional refresh

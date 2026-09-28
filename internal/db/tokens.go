@@ -34,7 +34,7 @@ func (d *DB) CreateToken(ctx context.Context, userID uuid.UUID, tokenHash, token
 func (d *DB) GetTokenByHash(ctx context.Context, tokenHash string) (*model.Token, error) {
 	t := &model.Token{}
 	err := d.Pool.QueryRow(ctx,
-		`SELECT id, user_id, token_hash, type, expires_at FROM tokens WHERE token_hash = $1 AND expires_at > now()`,
+		`SELECT id, user_id, token_hash, type, expires_at FROM tokens WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()`,
 		tokenHash,
 	).Scan(&t.ID, &t.UserID, &t.TokenHash, &t.Type, &t.ExpiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -44,6 +44,44 @@ func (d *DB) GetTokenByHash(ctx context.Context, tokenHash string) (*model.Token
 		return nil, fmt.Errorf("db: get token by hash: %w", err)
 	}
 	return t, nil
+}
+
+// ClaimRefreshToken marks a live, unused refresh token as used and returns it; returns
+// ErrNotFound if no such token exists.
+func (d *DB) ClaimRefreshToken(ctx context.Context, tokenHash string) (*model.Token, error) {
+	t := &model.Token{}
+	err := d.Pool.QueryRow(ctx,
+		`UPDATE tokens SET used_at = now()
+		 WHERE token_hash = $1 AND type = $2 AND used_at IS NULL AND expires_at > now()
+		 RETURNING id, user_id, token_hash, type, expires_at`,
+		tokenHash, TokenTypeRefresh,
+	).Scan(&t.ID, &t.UserID, &t.TokenHash, &t.Type, &t.ExpiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: claim refresh token: %w", err)
+	}
+	return t, nil
+}
+
+// UsedRefreshToken returns the owner and use time of an already used, unexpired refresh
+// token; returns ErrNotFound if the hash is not such a token.
+func (d *DB) UsedRefreshToken(ctx context.Context, tokenHash string) (uuid.UUID, time.Time, error) {
+	var userID uuid.UUID
+	var usedAt time.Time
+	err := d.Pool.QueryRow(ctx,
+		`SELECT user_id, used_at FROM tokens
+		 WHERE token_hash = $1 AND type = $2 AND used_at IS NOT NULL AND expires_at > now()`,
+		tokenHash, TokenTypeRefresh,
+	).Scan(&userID, &usedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, time.Time{}, ErrNotFound
+	}
+	if err != nil {
+		return uuid.Nil, time.Time{}, fmt.Errorf("db: used refresh token: %w", err)
+	}
+	return userID, usedAt, nil
 }
 
 // DeleteToken removes a single token by hash.

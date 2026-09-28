@@ -17,7 +17,8 @@ CREATE TABLE tokens (
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash TEXT        NOT NULL,
     type       TEXT        NOT NULL,
-    expires_at TIMESTAMPTZ NOT NULL
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at    TIMESTAMPTZ
 );
 
 CREATE INDEX ON tokens (user_id, type, expires_at);

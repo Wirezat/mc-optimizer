@@ -886,7 +886,7 @@
     const pluginMod  = machineMod ? _pluginMods[`${machineMod}:${machineID}`] : '';
     return _machineColumns.map(col => {
       const text = (pluginMod && col.mods.includes(pluginMod))
-        ? cellText(_machineHooks, pluginMod, { mod_id: machineMod, machine_id: machineID }, col.columnID)
+        ? cellText(_machineHooks, pluginMod, { mod_id: machineMod, machine_id: machineID }, col.columnID, solved?.Variant ?? null)
         : '';
       return `<td>${esc(text)}</td>`;
     }).join('');
@@ -1253,6 +1253,7 @@
       if (!mg.RecipeOutput) continue;
       _solvedMachines[itemKey(mg.RecipeOutput)] = {
         MachineMod: mg.MachineMod, MachineID: mg.MachineID, Name: mg.MachineName,
+        Variant: mg.VariantID ? { id: mg.VariantID, label: mg.Label || '' } : null,
       };
     }
     renderChainConfig();

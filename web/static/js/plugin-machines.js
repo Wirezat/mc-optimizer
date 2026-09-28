@@ -52,13 +52,14 @@ export function columnsOf(hooks) {
     return [...byID.values()]
 }
 
-// cellText asks the plugin that owns a machine for that machine's text in one column.
-// Returns empty for a cell belonging to another mod's column.
-export function cellText(hooks, pluginModID, machine, columnID) {
+// cellText asks the plugin that owns a machine for that machine's text in one column; variant
+// is the chosen { id, label } or null before a solve. Returns empty for a cell belonging to
+// another mod's column.
+export function cellText(hooks, pluginModID, machine, columnID, variant = null) {
     const m = hooks.get(pluginModID)
     if (!m?.cell) return ''
     try {
-        const v = m.cell(machine, columnID)
+        const v = m.cell(machine, columnID, variant)
         return typeof v === 'string' ? v : ''
     } catch (e) {
         console.error(`plugin machines ${pluginModID}.cell:`, e)

@@ -172,12 +172,12 @@ func LoginHandler(database *db.DB) http.HandlerFunc {
 		}
 		u, err := database.GetUserByUsername(r.Context(), req.Username)
 		if err != nil {
-			GoLog.Warnf("login: user not found: %q err=%v", req.Username, err)
+			GoLog.Warnf("login: unknown user from %s: %v", ip, err)
 			fail()
 			return
 		}
 		if err := auth.VerifyPassword(u.PasswordHash, req.Password); err != nil {
-			GoLog.Warnf("login: wrong password for user %q", req.Username)
+			GoLog.Warnf("login: wrong password from %s", ip)
 			fail()
 			return
 		}

@@ -99,6 +99,7 @@
   import { guard, apiFetch, getUser } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, esc, tCount } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
+  import { costHTML } from '/static/js/rates.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
   import { initIconCycle } from '/static/ui/js/icon-cycle.js';
@@ -147,20 +148,9 @@
       <div class="infocard-def" hidden>${grid}</div>`;
   }
 
-  // Formats a plugin cost list as one comma-joined "resource amount" string.
-  // The resource key (eu, steam, fe, ...) is a technical identifier, like a
-  // mod or item id, and is never translated. No variant computed yet renders
-  // as the same muted placeholder the table uses elsewhere for "no data",
-  // never as a zero — that would claim knowledge the catalog doesn't have.
   function costsCellHTML(costs) {
     if (!costs || !costs.length) return '<span class="td-muted">—</span>';
-    return costs.map(c => `${esc(c.resource)} ${esc(fmtRational(c.amount.num, c.amount.den))}`).join(', ');
-  }
-
-  function fmtRational(num, den) {
-    if (!den || den === 1) return String(num);
-    const dec = num / den;
-    return Number.isInteger(dec) ? String(dec) : (num + '/' + den);
+    return costs.map(c => costHTML(c)).join(' ');
   }
 
   function machineRowEl(m) {

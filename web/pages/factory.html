@@ -26,6 +26,7 @@
     #pl-table .col-rate    { width: 108px; }
     /* Value, unit chip and trigger are one reading, not three stacked ones. */
     #pl-table td.col-rate { white-space: nowrap; }
+    .pl-cost .wui-uom { font-size: var(--text-xs); color: var(--text-faint); }
     #pl-table .col-progress { width: 104px; }
     #pl-table .col-actions { width: 84px; }
     /* The package's cell padding, not a roomier one: eight columns of it is
@@ -61,7 +62,6 @@
     .machines-cell .icontext { flex: 0 1 auto; min-width: 0; }
     .machines-more { flex: 0 0 auto; font-family: var(--font-mono); font-size: var(--text-xs); }
 
-    .pl-rate-val { white-space: nowrap; }
 
     .pl-tri-btn {
       display: inline-flex;
@@ -236,10 +236,6 @@
               </div>
               <div class="container-body-flush">
                 <table class="table">
-                  <colgroup>
-                    <col />
-                    <col style="width:80px;" />
-                  </colgroup>
                   <tbody id="balance-tbody"></tbody>
                 </table>
               </div>
@@ -306,7 +302,8 @@
   import { guard, apiFetch } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, tCount, esc, machine as machineName } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
-  import { initClickToEdit, initBulkRow, initCollapsibleGroups, initDraggableRows } from '/static/ui/js/table-features.js';
+  import { rateHTML, costHTML } from '/static/js/rates.js';
+  import { initClickToEdit, initBulkRow, initCollapsibleGroups, initDraggableRows, initCellClampScroll } from '/static/ui/js/table-features.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initKonfigBar, initModal, openModal } from '/static/ui/js/index.js';
@@ -561,7 +558,7 @@
       <td class="col-warn">${pl.mod_missing ? modMissingBadge() : ''}</td>
       <td>${itemHtml(pl.target_item_id, pl.target_item_name, pl.target_mod_id, '', pl.target_is_fluid)}</td>
       <td class="col-machines">${machinesHtml(pl)}</td>
-      <td class="col-rate">${rateHtml(pl.rate_num, pl.rate_den, pl.time_unit, 'pl-rate-val')}${costsRollupHtml(pl)}</td>
+      <td class="col-rate">${rateHTML({ num: pl.rate_num, den: pl.rate_den }, pl.time_unit, { isFluid: pl.target_is_fluid })}${costsRollupHtml(pl)}</td>
       <td class="col-progress">${progressHtml(pl)}</td>
       <td class="col-actions">
         <button class="pl-tri-btn btn-icon-color ${esc(triCls[pl.status] || 'inbau')}" data-plid="${esc(pl.id)}" data-action="triAdvance" data-status="${esc(pl.status)}" title="${esc(triTip[pl.status] || '')}">
@@ -576,18 +573,12 @@
   // These are used wherever items or rates are displayed — the infocard
   // definition is always co-located with its trigger (inline mode).
 
-  const _fmtN = n => {
-    const r = Math.round(n * 10000) / 10000;
-    return Number.isInteger(r) ? String(r) : r.toFixed(4).replace(/\.?0+$/, '');
-  };
-  const _toPerSec = { s: 1, min: 1/60, t: 20 };
-
   // itemHtml renders one item cell: icon, name and (when withMod) the mod on the same line.
-  function itemHtml(itemId, itemName, modId, labelCls = '', isFluid = false, withMod = true) {
+  function itemHtml(itemId, itemName, modId, labelCls = '', isFluid = false, withMod = true, marquee = false) {
     const label = `<div class="${esc(labelCls)} cell-hover" style="min-width:0;"${itemId ? ' data-infocard-inline' : ''}>
         ${iconTextHTML(modId, itemId, {
           isFluid, name: itemName, subtitle: withMod ? modName(modId) : null,
-          size: 'lg', extraClass: 'icontext-inline',
+          size: 'lg', extraClass: 'icontext-inline', marquee,
         })}
       </div>`;
     if (!itemId) return label;
@@ -639,9 +630,7 @@
       return `<div class="td-faint" style="font-size:var(--text-xs);white-space:nowrap;">${esc(t('factory.costs.none'))}</div>`;
     }
     const label = esc(t('factory.costs.label'));
-    return costs.map(c =>
-      `<div class="td-faint" style="font-size:var(--text-xs);white-space:nowrap;" title="${label}">${esc(c.resource)} ${esc(fmtRateFrac(c.amount.num, c.amount.den))}</div>`
-    ).join('');
+    return costs.map(c => `<div class="pl-cost" title="${label}">${costHTML(c)}</div>`).join('');
   }
 
   // Compact build-state rollup for the PL list row: a warn-colored "current"
@@ -659,24 +648,6 @@
     return `<div class="progress-cell"${title}>
       <div class="wui-progress-track"><div class="wui-progress-fill" style="width:${pct}%"></div></div>
       <span class="progress-cell-text${done ? '' : ' metric-warn'}">${text}</span>
-    </div>`;
-  }
-
-  function rateHtml(num, den, unit, extraClass = null) {
-    if (!num) return '';
-    const perSec = (num / den) * (_toPerSec[unit] ?? 1);
-    const rows   = [
-      { key: '/sec',  val: unit === 's'   ? fmtRateFrac(num, den) : _fmtN(perSec) },
-      { key: '/min',  val: unit === 'min' ? fmtRateFrac(num, den) : _fmtN(perSec * 60) },
-      { key: '/tick', val: unit === 't'   ? fmtRateFrac(num, den) : _fmtN(perSec / 20) },
-      { key: '/hr',   val: _fmtN(perSec * 3600) },
-    ];
-    const valCls = esc(['metric', extraClass].filter(Boolean).join(' '));
-    return `<span class="cell-hover" data-infocard-inline><span class="${valCls}">${esc(fmtRateFrac(num, den))}</span>&nbsp;<span class="badge-unit">/${esc(unit)}</span></span>
-    <div class="infocard-def" hidden>
-      <div class="infocard-section" data-label="Rate">
-        ${rows.map(r => `<div class="infocard-row"><span class="infocard-key">${r.key}</span><span class="infocard-val">${esc(r.val)}</span></div>`).join('')}
-      </div>
     </div>`;
   }
 
@@ -1015,8 +986,8 @@
     const dataRow = (e, isSurplus) => {
       const bot = isSurplus && e.is_bottleneck;
       return `<tr>
-        <td>${itemHtml(e.item_fluid_id, e.name, e.mod_id, '', e.io_type === 'fluid', false)}</td>
-        <td style="text-align:right;white-space:nowrap;">${rateHtml(e.rate_num, e.rate_den, 'min', bot ? 'metric-neg' : null)}</td>
+        <td class="cell-fill">${itemHtml(e.item_fluid_id, e.name, e.mod_id, '', e.io_type === 'fluid', false, true)}</td>
+        <td class="cell-fit" style="text-align:right;">${rateHTML({ num: e.rate_num, den: e.rate_den }, 'min', { isFluid: e.io_type === 'fluid', cls: bot ? 'metric-neg' : '' })}</td>
       </tr>`;
     };
 
@@ -1033,39 +1004,9 @@
       (surplus.length ? surplus.map(e => dataRow(e, true)).join('')  : emptyRow());
     initHiDPIRender(tbody);
     initInfocards(tbody);
+    initCellClampScroll(tbody);
     document.getElementById('balance-count').textContent =
       tCount(inputs.length + outputs.length + surplus.length, 'factory.balance.count');
-  }
-
-  function balanceItemDef(e, defId) {
-    const perMin = e.rate_num / e.rate_den;
-    const fmtN   = n => {
-      const r = Math.round(n * 10000) / 10000;
-      return Number.isInteger(r) ? String(r) : r.toFixed(4).replace(/\.?0+$/, '');
-    };
-    return infocardHTML(lookupCatalog(e.mod_id, e.item_fluid_id, e.io_type === 'fluid'), {
-      id: defId,
-      title: e.name || e.item_fluid_id,
-      subtitle: e.item_fluid_id,
-      sections: `<div class="infocard-section" data-label="Rate">
-        <div class="infocard-row">
-          <span class="infocard-key">/min</span>
-          <span class="infocard-val">${esc(fmtRateFrac(e.rate_num, e.rate_den))}</span>
-        </div>
-        <div class="infocard-row">
-          <span class="infocard-key">/sec</span>
-          <span class="infocard-val">${esc(fmtN(perMin / 60))}</span>
-        </div>
-        <div class="infocard-row">
-          <span class="infocard-key">/hr</span>
-          <span class="infocard-val">${esc(fmtN(perMin * 60))}</span>
-        </div>
-        <div class="infocard-row">
-          <span class="infocard-key">/tick</span>
-          <span class="infocard-val">${esc(fmtN(perMin / 1200))}</span>
-        </div>
-      </div>`,
-    });
   }
 
   let _srcInputs  = [];
@@ -1090,8 +1031,7 @@
       `<tr>
         <td class="td-mono">${esc(o.item_id)}</td>
         <td class="td-faint">${esc(o.mod_id)}</td>
-        <td class="td-muted">${esc(fmtRateFrac(o.rate_num, o.rate_den))}</td>
-        <td class="td-muted" style="white-space:nowrap;">/${esc(o.time_unit)}</td>
+        <td colspan="2">${rateHTML({ num: o.rate_num, den: o.rate_den }, o.time_unit)}</td>
         <td>
           <div style="display:flex;align-items:center;gap:var(--gap-icon);width:100%;">
             <span class="td-faint" style="font-weight:600;letter-spacing:.04em;">${esc(dir)}</span>

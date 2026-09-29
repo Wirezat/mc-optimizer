@@ -389,6 +389,7 @@
   import { guard, apiFetch } from '/static/ui/js/auth.js';
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
+  import { rateHTML } from '/static/js/rates.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { createContainer } from '/static/ui/js/components/container.js';
   import { openPopover, closePopover } from '/static/ui/js/components/popover.js';
@@ -1283,7 +1284,6 @@
     _tagResolutions = r.TagResolutions || {};
     document.getElementById('result-card').style.display = '';
 
-    const actualRate = fmtR(r.ActualRate);
     document.getElementById('result-stats').innerHTML = `
       <div class="stat">
         <span class="stat-label">${t('solve.scale.label')}</span>
@@ -1292,7 +1292,7 @@
       </div>
       <div class="stat">
         <span class="stat-label">${t('solve.stats.actual_rate')}</span>
-        <span class="stat-value">${actualRate} /${unit}</span>
+        <span class="stat-value">${rateHTML(r.ActualRate, unit, { isFluid: !!_targetItem?.IsFluid })}</span>
       </div>
       <div class="stat">
         <span class="stat-label">${t('common.mode')}</span>
@@ -1375,7 +1375,7 @@
             ${ioItemHTML(e)}
             ${sublabel ? `<div class="io-sublabel">${esc(sublabel)}</div>` : ''}
           </div>
-          <div class="io-rate"><span class="metric">${fmtR(e.Rate)}</span>&nbsp;<span class="badge-unit">/${e.TimeUnit||unit}</span></div>
+          <div class="io-rate">${rateHTML(e.Rate, e.TimeUnit || unit, { isFluid: !!e.Item?.IsFluid })}</div>
         </div>`;
       }).join('');
     }
@@ -1383,7 +1383,7 @@
       io += `<div class="io-section-label" style="margin-top:${inputs.length?'var(--gap-control)':'0'}">${t('solve.outputs')}</div>`;
       io += outputs.map(e => `<div class="io-row">
         <div style="flex:1;min-width:0;">${ioItemHTML(e)}</div>
-        <div class="io-rate"><span class="metric">${fmtR(e.Rate)}</span>&nbsp;<span class="badge-unit">/${e.TimeUnit||unit}</span></div>
+        <div class="io-rate">${rateHTML(e.Rate, e.TimeUnit || unit, { isFluid: !!e.Item?.IsFluid })}</div>
       </div>`).join('');
     }
     ioEl.innerHTML = io || `<span style="color:var(--text-faint);font-size:var(--text-sm);">—</span>`;

@@ -196,6 +196,7 @@
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { machine as machineName, loadMI } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
+  import { rateHTML } from '/static/js/rates.js';
   import { loadCatalog, iconTextHTML, machineIconTextHTML, lookupMachine } from '/static/js/catalog-registry.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
 
@@ -293,19 +294,19 @@
   // Key/value row for the Detail-Grid meta block. The "current" value (from the
   // real build state) renders muted in parens next to the target — only while
   // the line is incomplete; once fully built it matches the target anyway.
-  function statPair(label, targetVal, targetUnit, currentVal, showCurrent) {
+  function statPair(label, targetHTML, currentHTML, showCurrent) {
     return `<div class="detail-row">
       <span class="detail-key">${esc(label)}</span>
-      <span class="detail-val"><span class="metric">${esc(targetVal)}</span>&nbsp;<span class="badge-unit">/${esc(targetUnit)}</span>` +
-      `${showCurrent ? ` <span class="metric-unit metric-warn">(${esc(currentVal)})</span>` : ''}</span>
+      <span class="detail-val">${targetHTML}${showCurrent ? ` <span class="metric-warn">(${currentHTML})</span>` : ''}</span>
     </div>`;
   }
 
   function renderMeta() {
-    const rate       = fmtFrac(_pl.rate_num, _pl.rate_den);
+    const isFluid    = !!_pl.target_is_fluid;
+    const rate       = rateHTML({ num: _pl.rate_num, den: _pl.rate_den }, _pl.time_unit, { isFluid });
     const targetName = _pl.target_item_name || (_pl.target_item_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()));
     const incomplete = _pl.status === 'active' && !isLineComplete();
-    const curRate    = fmtNum(_pl.current_rate || 0) + ' /' + _pl.time_unit;
+    const curRate    = rateHTML(_pl.current_rate || 0, _pl.time_unit, { isFluid, cls: 'metric-warn' });
     document.getElementById('pl-meta').innerHTML = `
       <div class="detail-row">
         <span class="detail-key">${esc(t('production_line.meta.target'))}</span>
@@ -315,7 +316,7 @@
         <span class="detail-key">${esc(t('production_line.meta.mode'))}</span>
         <span class="detail-val">${esc(_pl.optimize_mode.toUpperCase())}</span>
       </div>
-      ${statPair(t('common.rate'), rate, _pl.time_unit, curRate, incomplete)}
+      ${statPair(t('common.rate'), rate, curRate, incomplete)}
     `;
     initHiDPIRender(document.getElementById('pl-meta'));
   }
@@ -490,8 +491,7 @@
   }
 
   function ioRow(e, isPrimary) {
-    const rate = fmtFrac(e.rate_num, e.rate_den);
-    const unit = _pl.time_unit || 't';
+    const rate = rateHTML({ num: e.rate_num, den: e.rate_den }, _pl.time_unit || 't', { isFluid: e.io_type === 'fluid' });
     // Same fallback as targetName above: a name-less id reads as words.
     const name  = e.name || e.item_fluid_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     const label = iconTextHTML(e.mod_id, e.item_fluid_id, {
@@ -503,7 +503,7 @@
     const star = isPrimary ? `<span style="color:var(--accent);font-weight:var(--weight-semibold)">★</span> ` : '';
     return `<div class="detail-row">
       <span class="detail-key" style="color:var(--text)">${star}${label}</span>
-      <span class="detail-val"><span class="metric">${esc(rate)}</span>&nbsp;<span class="badge-unit">/${esc(unit)}</span></span>
+      <span class="detail-val">${rate}</span>
     </div>`;
   }
 
@@ -600,16 +600,6 @@
     if (!res?.ok) return;
     _pl = await res.json();
     render();
-  }
-
-  function fmtFrac(num, den) {
-    if (!den || den === 1) return String(num);
-    return fmtNum(num / den);
-  }
-
-  function fmtNum(v) {
-    const r = Math.round(v * 10000) / 10000;
-    return Number.isInteger(r) ? String(r) : r.toFixed(4).replace(/\.?0+$/, '');
   }
 
   init();

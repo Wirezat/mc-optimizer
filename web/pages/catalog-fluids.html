@@ -286,6 +286,8 @@
       dropEl:    document.getElementById('fluid-search-ac'),
       primary:   r => r.name || r.fluid_id,
       secondary: r => r.mod_name,
+      icon:      r => iconImageHTML(entryOf(r, true), { hidpiPx: 16 }),
+      onRender:  drop => initHiDPIRender(drop),
       fetch(q, offset) {
         const rows = wuiFilter(allFluids, q, ['name', 'fluid_id', 'mod_name']);
         return Promise.resolve({ rows: rows.slice(offset, offset + 50), hasMore: offset + 50 < rows.length });

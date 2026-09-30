@@ -661,6 +661,8 @@
       dropEl:    document.getElementById('target-ac'),
       primary:   r => r.name,
       secondary: r => r.mod_id,
+      icon:      r => iconImageHTML(lookupCatalog(r.mod_id, r.item_id, r._fluid), { hidpiPx: 16 }),
+      onRender:  drop => initHiDPIRender(drop),
       fetch(q, offset) {
         let results = _allEntries;
         if (q) {

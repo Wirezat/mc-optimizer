@@ -290,6 +290,8 @@
       dropEl:    document.getElementById('item-search-ac'),
       primary:   r => r.name || r.item_id,
       secondary: r => r.mod_name,
+      icon:      r => iconImageHTML(entryOf(r), { hidpiPx: 16 }),
+      onRender:  drop => initHiDPIRender(drop),
       fetch(q, offset) {
         const rows = wuiFilter(allItems, q, ['name', 'item_id', 'mod_name']);
         return Promise.resolve({ rows: rows.slice(offset, offset + 50), hasMore: offset + 50 < rows.length });

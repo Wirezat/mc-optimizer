@@ -309,7 +309,7 @@
   import { initKonfigBar, initModal, openModal } from '/static/ui/js/index.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
-  import { loadCatalog, lookupCatalog, lookupMachine, iconTextHTML, machineIconTextHTML, infocardHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, lookupCatalog, lookupMachine, iconTextHTML, iconImageHTML, machineIconTextHTML, infocardHTML } from '/static/js/catalog-registry.js';
 
   await load(getLang());
   applyI18n();
@@ -874,6 +874,8 @@
       inputEl:   filterEl,
       dropEl:    document.getElementById('pl-filter-ac'),
       primary:   pl => pl.target_item_name || pl.target_item_id,
+      icon:      pl => iconImageHTML(lookupCatalog(pl.target_mod_id, pl.target_item_id, pl.target_is_fluid), { hidpiPx: 16 }),
+      onRender:  drop => initHiDPIRender(drop),
       secondary: pl => fmtRateFrac(pl.rate_num, pl.rate_den) + '/' + pl.time_unit,
       fetch(q, offset) {
         const rows = wuiFilter(_pls, q, ['target_item_name', 'target_item_id']);
@@ -1090,6 +1092,8 @@
       fetch:     itemAndFluidFetcher,
       primary:   it => it.name || it.item_id,
       secondary: it => it.mod_id,
+      icon:      it => iconImageHTML(lookupCatalog(it.mod_id, it.item_id, !!it._fluid), { hidpiPx: 16 }),
+      onRender:  drop => initHiDPIRender(drop),
       onSelect(it) {
         _srcSel = it;
         document.getElementById('src-add-item-input').value = it.name || it.item_id;
@@ -1131,7 +1135,7 @@
     const items  = ir?.ok ? await ir.json() : [];
     const fluids = fr?.ok ? await fr.json() : [];
     return {
-      rows: [...items, ...fluids.map(f => ({ mod_id: f.mod_id, item_id: f.fluid_id, name: f.name }))],
+      rows: [...items, ...fluids.map(f => ({ mod_id: f.mod_id, item_id: f.fluid_id, name: f.name, _fluid: true }))],
       hasMore: items.length >= 50 || fluids.length >= 50,
     };
   }

@@ -112,7 +112,7 @@
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { wuiFilter } from '/static/ui/js/filter.js';
-  import { loadCatalog, lookupCatalog, iconTextHTML, infocardHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, lookupCatalog, iconTextHTML, iconImageHTML, infocardHTML } from '/static/js/catalog-registry.js';
   import { VirtualWindow } from '/static/ui/js/virtual-window.js';
 
   await load(getLang());
@@ -283,6 +283,8 @@
       inputEl:   searchEl,
       dropEl:    document.getElementById('trade-search-ac'),
       primary:   r => r.result_name || r.result_item_id,
+      icon:      r => iconImageHTML(lookupCatalog(r.result_mod_id, r.result_item_id), { hidpiPx: 16 }),
+      onRender:  drop => initHiDPIRender(drop),
       secondary: r => r.profession,
       fetch(q, offset) {
         let rows = allTrades;

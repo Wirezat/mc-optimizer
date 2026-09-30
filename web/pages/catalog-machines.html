@@ -105,6 +105,7 @@
   import { initIconCycle } from '/static/ui/js/icon-cycle.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
+  import { iconImageHTML } from '/static/js/catalog-registry.js';
 
   await load(getLang());
   applyI18n();
@@ -275,6 +276,8 @@
       dropEl:    document.getElementById('machine-search-ac'),
       primary:   r => r.name || r.machine_id,
       secondary: r => r.mod_name,
+      icon:      r => iconImageHTML({ modID: r.mod_id, id: r.machine_id, textureUrl: r.texture_url ?? null }, { hidpiPx: 16 }),
+      onRender:  drop => initHiDPIRender(drop),
       fetch(q, offset) {
         const rows = allMachines.filter(m => {
           if (wuiFilter([m], q, ['name', 'machine_id', 'mod_name']).length) return true;

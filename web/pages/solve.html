@@ -122,6 +122,9 @@
     .chain-machine.active { border-color: var(--accent); background: var(--accent-muted); }
     .chain-machine-pinned { border-color: var(--accent); color: var(--accent); }
     .chain-machine-auto { color: var(--text-muted); font-style: italic; }
+    .chain-machine-icon { --chain-machine-icon-size: 16px; display: inline-flex; flex-shrink: 0;
+      width: var(--chain-machine-icon-size); height: var(--chain-machine-icon-size); }
+    .chain-machine-icon img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
     .chain-machine-name {
       overflow: hidden;
       text-overflow: ellipsis;
@@ -427,7 +430,7 @@
   import { createContainer } from '/static/ui/js/components/container.js';
   import { openPopover, closePopover } from '/static/ui/js/components/popover.js';
   import { renderGraph } from '/static/ui/js/components/graph.js';
-  import { loadCatalog, lookupCatalog, refIconTextHTML, catalogEntries, iconTextHTML, machineIconTextHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, lookupCatalog, lookupMachine, refIconTextHTML, catalogEntries, iconTextHTML, iconImageHTML, machineIconTextHTML } from '/static/js/catalog-registry.js';
   import { initCellClampScroll } from '/static/ui/js/table-features.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initIconCycle } from '/static/ui/js/icon-cycle.js';
@@ -547,6 +550,10 @@
 
   function machineLabel(opt) {
     return _machineNames[opt.MachineMod + ':' + opt.MachineID] || opt.MachineID;
+  }
+
+  function machineIcon(mod, id, hidpiPx = 20) {
+    return iconImageHTML(lookupMachine(mod, id), { placeholder: false, hidpiPx });
   }
 
   async function init() {
@@ -887,18 +894,20 @@
       const base = machineCandidates(item, chosen.RecipeID)[0];
       const pinned = !!base && chosen.Key !== base.Key;
       const solved = _solvedMachines[key];
-      let machineText = t('solve.chain.machine_auto'), machineCls = ' chain-machine-auto';
+      let machineText = t('solve.chain.machine_auto'), machineCls = ' chain-machine-auto', icon = '';
       if (pinned) {
         machineText = machineLabel(chosen);
         machineCls = ' chain-machine-pinned';
+        icon = machineIcon(chosen.MachineMod, chosen.MachineID, 16);
       } else if (solved) {
         machineText = solved.Name || machineLabel(solved);
         machineCls = '';
+        icon = machineIcon(solved.MachineMod, solved.MachineID, 16);
       }
       return warnIcon +
         `<button class="chain-machine${machineCls}" data-action="openMachinePicker"
             data-key="${esc(key)}" title="${esc(t('solve.chain.machine_pick_title'))}"
-          ><span class="chain-machine-name">${esc(machineText)}</span><span class="chain-machine-chev">▾</span></button>` +
+          >${icon ? `<span class="chain-machine-icon">${icon}</span>` : ''}<span class="chain-machine-name">${esc(machineText)}</span><span class="chain-machine-chev">▾</span></button>` +
         (inputs ? `<span class="chain-recipe-inputs">← ${esc(inputs)}</span>` : '') +
         `<button class="chain-override-btn" data-action="openChainPicker"
             data-key="${esc(key)}" data-with-stop="${withStop}">${changeLabel}</button>`;
@@ -1121,6 +1130,7 @@
       const hint = opts.length > 1 ? t('solve.chain.solver_picks') : '';
       items.push({
         label: machineLabel(opts[0]),
+        icon: machineIcon(opts[0].MachineMod, opts[0].MachineID),
         subtitle: [ins ? '← ' + ins : '', hint].filter(Boolean).join(' · '),
         action: opts[0].RecipeID,
         active: opts.some(o => o.RecipeID === item.ChosenRecipeID),
@@ -1145,6 +1155,7 @@
     for (const opt of cands) {
       items.push({
         label: machineLabel(opt),
+        icon: machineIcon(opt.MachineMod, opt.MachineID),
         subtitle: modName(opt.MachineMod),
         action: opt.Key,
         active: pinned === opt.Key,
@@ -1162,9 +1173,9 @@
     if (wasOpen) return;
 
     const withStop = btn.dataset.withStop === 'true';
-    openPopover(btn, buildRecipeMenu(item, key, { withStop }), {
+    initHiDPIRender(openPopover(btn, buildRecipeMenu(item, key, { withStop }), {
       onSelect: recipeID => selectChainOverride(key, recipeID),
-    });
+    }));
     _openChainPickerKey = key;
     btn.classList.add('active');
   }
@@ -1177,9 +1188,9 @@
     closeAllPickers();
     if (wasOpen) return;
 
-    openPopover(btn, buildMachineMenu(item), {
+    initHiDPIRender(openPopover(btn, buildMachineMenu(item), {
       onSelect: optionKey => selectMachineOverride(key, optionKey),
-    });
+    }));
     _openChainPickerKey = key;
     btn.classList.add('active');
   }

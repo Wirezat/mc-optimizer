@@ -80,7 +80,7 @@ export function loadCatalog({ saveIDParam = '' } = {}) {
                 animation:  fl.animation ?? null,
             });
         }
-        for (const m of machines ?? []) {
+        for (const m of (machines ?? []).flatMap(m => [m, ...(m.variants ?? [])])) {
             _machines.set(`${m.mod_id}:${m.machine_id}`, {
                 modID:      m.mod_id,
                 id:         m.machine_id,

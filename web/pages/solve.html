@@ -14,6 +14,11 @@
     })();
   </script>
   <style>
+    :root {
+      --res-util-w:      96px;
+      --res-main-min:    520px;
+      --res-card-indent: 44px;
+    }
     .solve-grid {
       display: grid;
       grid-template-columns: 1fr 130px 180px auto;
@@ -133,60 +138,93 @@
     .graph-node-label.clickable.badge-warn    { color: var(--warn); }
     .graph-node-label.clickable.badge-danger  { color: var(--danger); }
 
-    .partial-btn {
-      font-size: var(--text-xs);
-      padding: 2px var(--gap-inline);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--bg);
-      color: var(--text-faint);
-      cursor: pointer;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .partial-btn:hover:not(.active) { border-color: var(--border-strong); color: var(--text-muted); }
-    .partial-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-muted); }
+    .res-split { display: flex; flex-wrap: wrap; }
+    .res-split > .main-panel { flex: 999 1 var(--res-main-min); }
+    .res-split > .side-panel { flex-grow: 1; }
+    .res-head { display: flex; align-items: center; gap: var(--gap-control); }
+    .res-head .container-title { flex: 1; }
+    .res-factor { display: inline-flex; align-items: center; gap: var(--gap-inline); font-size: var(--text-xs);
+      color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; }
+    .res-factor .input { width: 5.5rem; height: var(--h-btn-sm); }
+    .res-stats { padding: var(--pad-container); border-bottom: 1px solid var(--border); }
+    .res-stats .stat-tile { flex: 1 1 110px; min-width: 0; }
+    .res-stats .stat-tile-value { display: flex; flex-wrap: wrap; gap: var(--gap-inline); }
+    .res-stat-sub { font-size: var(--text-xs); color: var(--text-faint); }
+    .res-stat-warn .stat-tile-label { color: var(--warn); }
+    #result-warnings:not(:empty) { padding: var(--gap-control) var(--pad-container) 0; }
 
-    .result-stats {
-      display: flex;
-      gap: var(--gap-section);
-      flex-wrap: wrap;
-      padding: var(--gap-control) var(--pad-container);
-      background: var(--bg);
-      border-bottom: 1px solid var(--border);
-    }
-    .stat { display: flex; flex-direction: column; gap: 2px; }
-    /* The manual multiple sits with the numbers it changes, not in a form row. */
-    .stat-factor { width: 5.5rem; height: var(--h-btn-sm); padding: 0 var(--gap-inline); }
-    .stat-label { font-size: var(--text-xs); color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; }
-    .stat-value { font-size: var(--text-md); font-weight: var(--weight-bold); color: var(--text); }
+    .res-util { display: flex; align-items: center; gap: var(--gap-inline); width: var(--res-util-w); }
+    .res-util .wui-progress-track { flex: 1; }
+    .res-util-pct { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); min-width: 4ch; text-align: right; }
+    .res-util.full .wui-progress-fill { background: var(--success); }
+    .res-half { font-family: var(--font-mono); }
+    .res-half.active { color: var(--accent); border-color: var(--accent); }
+    .res-cost .wui-uom { font-size: var(--text-xs); color: var(--text-faint); }
+    .res-up { display: flex; flex-direction: column; gap: 2px; }
+    .res-up-item { display: inline-flex; align-items: center; gap: var(--gap-icon); min-width: 0; max-width: 100%; }
+    .res-up-item .icontext { min-width: 0; }
+    .res-up-item .icontext-text { text-overflow: ellipsis; }
+    .res-up-count { flex-shrink: 0; }
+    .res-up-count { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-muted); }
+    .res-none { color: var(--text-faint); }
 
-    .result-body { display: grid; grid-template-columns: 2fr 1fr; gap: 0; }
-    @media (max-width: 640px) { .result-body { grid-template-columns: 1fr; } }
-    .result-col { padding: var(--gap-control) var(--pad-container); }
-    .result-col + .result-col { border-left: 1px solid var(--border); }
-    @media (max-width: 640px) { .result-col + .result-col { border-left: none; border-top: 1px solid var(--border); } }
+    .res-table td, .res-table th { white-space: nowrap; }
+    .res-table td.res-c-machine, .res-table td.res-c-recipe { width: 50%; max-width: 0; }
+    .res-table .res-c-machine .icontext, .res-table .res-c-recipe .icontext { width: 100%; }
+    .res-table .icontext-subtitle { text-overflow: ellipsis; }
+    .res-table .res-c-count { width: 1%; }
+    .res-table td.res-c-plugin { color: var(--text-muted); font-size: var(--text-sm); }
+    .res-table .res-c-half { width: 1%; }
 
-    .mg-header {
-      display: flex; align-items: center; gap: var(--gap-control);
-      padding: 2px 0 var(--gap-inline);
-      border-bottom: 1px solid var(--border);
-      font-size: 10px; font-weight: var(--weight-bold); text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--text-faint);
+    .res-mg { container-type: inline-size; --res-row-pad: var(--gap-item) var(--pad-cell); }
+
+    @container (max-width: 819px) {
+      .res-table, .res-table tbody { display: block; }
+      .res-table thead { display: none; }
+      .res-table tbody td, .res-table tbody td.res-c-count, .res-table tbody td.res-c-half,
+      .res-table tbody td.res-c-machine, .res-table tbody td.res-c-recipe {
+        display: block; padding: 0; border: none; width: auto; max-width: none; min-width: 0;
+      }
+      .res-table tbody tr { padding: var(--res-row-pad); border-bottom: 1px solid var(--border); }
+      .res-table tbody tr:last-child { border-bottom: none; }
+      .res-table td[data-label]::before {
+        content: attr(data-label); margin-right: var(--gap-inline);
+        font-size: var(--text-xs); color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em;
+      }
     }
-    .mg-header .mg-count { font-size: 10px; }
-    .mg-row {
-      display: flex; align-items: center; gap: var(--gap-control);
-      padding: var(--gap-inline) 0; border-bottom: 1px solid var(--border);
+
+    @container (min-width: 560px) and (max-width: 819px) {
+      .res-table tbody tr {
+        display: grid; align-items: center;
+        grid-template-columns: var(--res-card-indent) minmax(0, 1fr) minmax(0, 1fr) auto auto;
+        column-gap: var(--gap-card); row-gap: var(--gap-inline);
+      }
+      .res-table .res-c-count   { grid-row: 1 / 3; grid-column: 1; align-self: start; font-weight: var(--weight-bold); }
+      .res-table .res-c-machine { grid-area: 1 / 2; }
+      .res-table .res-c-recipe  { grid-area: 1 / 3; }
+      .res-table .res-c-util    { grid-area: 1 / 4; }
+      .res-table .res-c-half    { grid-area: 1 / 5; }
+      .res-table .res-c-row2    { grid-row: 2; }
+      .res-table td.res-c-up    { display: flex; align-items: center; min-width: 0; overflow: hidden; }
+      .res-table td.res-c-up .res-up { min-width: 0; }
+      .res-table td.res-c-up .res-up { flex-direction: row; flex-wrap: wrap; gap: var(--gap-inline); }
     }
-    .mg-row:last-child { border-bottom: none; }
-    .mg-count { font-weight: var(--weight-bold); width: 32px; flex-shrink: 0; }
-    .mg-info  { flex: 1; min-width: 0; }
-    .mg-machine { color: var(--text); font-size: var(--text-sm); }
-    .mg-recipe  { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mg-mod     { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--font-mono); }
-    .mg-variant { font-size: var(--text-xs); color: var(--text-faint); }
-    .mg-util    { font-size: var(--text-xs); color: var(--text-muted); flex-shrink: 0; }
+
+    @container (max-width: 559px) {
+      .res-table tbody tr {
+        display: flex; flex-wrap: wrap; align-items: center;
+        column-gap: var(--gap-card); row-gap: var(--gap-control);
+      }
+      .res-table .res-c-count   { order: 1; flex: 0 0 var(--res-card-indent); font-weight: var(--weight-bold); }
+      .res-table .res-c-machine { order: 2; flex: 1 1 0; }
+      .res-table .res-c-half    { order: 3; flex: 0 0 auto; }
+      .res-table .res-c-recipe  { order: 4; flex: 1 0 calc(100% - var(--res-card-indent) - var(--gap-card));
+                                  margin-left: calc(var(--res-card-indent) + var(--gap-card)); }
+      .res-table .res-c-row2    { order: 5; }
+      .res-table .res-c-lead    { margin-left: calc(var(--res-card-indent) + var(--gap-card)); }
+      .res-table .res-c-util    { order: 8; flex-basis: 100%; margin-left: calc(var(--res-card-indent) + var(--gap-card)); }
+      .res-table td[data-label]::before { display: block; margin: 0 0 2px; }
+    }
 
     .io-section-label {
       font-size: var(--text-xs); font-weight: var(--weight-semibold);
@@ -194,12 +232,7 @@
       margin: var(--gap-control) 0 var(--gap-inline);
     }
     .io-section-label:first-child { margin-top: 0; }
-    .io-row {
-      display: flex; align-items: baseline; justify-content: space-between;
-      gap: var(--gap-control); padding: 3px 0; font-size: var(--text-sm);
-    }
-    .io-sublabel { font-size: 10px; color: var(--text-faint); font-style: italic; font-family: var(--font-mono); }
-    .io-rate { flex-shrink: 0; white-space: nowrap; }
+    .io-sublabel { font-size: var(--text-xs); color: var(--text-faint); font-style: italic; }
 
     .info-banner {
       padding: var(--gap-control) var(--pad-card);
@@ -212,13 +245,7 @@
       color: var(--text-muted);
     }
 
-    .confirm-bar {
-      display: flex; gap: var(--gap-control); align-items: flex-end; flex-wrap: wrap;
-      padding: var(--gap-control) var(--pad-container);
-      border-top: 1px solid var(--border);
-      background: var(--bg);
-    }
-    .confirm-bar .field { flex: 1; min-width: 200px; }
+    .confirm-bar { display: flex; justify-content: flex-end; align-items: center; gap: var(--gap-control); }
   </style>
 </head>
 <body class="app-shell">
@@ -362,22 +389,28 @@
         <div class="step-label" id="result-step-label" style="display:none;">
           <span>3 — </span><span data-i18n="solve.step.result">Result</span>
         </div>
-        <div class="container" id="result-card" style="display:none;overflow:hidden;">
-          <div class="result-stats" id="result-stats"></div>
-          <div id="result-warnings"></div>
-          <div class="result-body">
-            <div class="result-col">
-              <div style="font-size:var(--text-xs);font-weight:var(--weight-bold);text-transform:uppercase;letter-spacing:0.06em;color:var(--text-faint);margin-bottom:var(--gap-inline);"
-                data-i18n="solve.machine_groups">Machines Needed</div>
-              <div id="result-machines"></div>
-            </div>
-            <div class="result-col">
-              <div id="result-io"></div>
+        <div class="split-layout fit res-split" id="result-card" style="display:none;">
+          <div class="main-panel">
+            <div class="container">
+              <div class="container-header res-head">
+                <span class="container-title" data-i18n="solve.result.title"></span>
+                <label class="res-factor"><span data-i18n="solve.scale.label"></span>
+                  <input class="input" type="number" id="scale-factor" min="0" step="1" value="1" /></label>
+              </div>
+              <div id="result-warnings"></div>
+              <div class="res-stats"><div class="stat-grid" id="result-stats"></div></div>
+              <div class="container-body-flush res-mg" id="result-machines"></div>
+              <div class="container-footer confirm-bar">
+                <span class="status-msg" id="confirm-status"></span>
+                <button class="btn btn-primary" id="confirm-btn"></button>
+              </div>
             </div>
           </div>
-          <div class="confirm-bar">
-            <button class="btn btn-primary" id="confirm-btn" style="align-self:flex-end;"></button>
-            <span class="status-msg" id="confirm-status" style="align-self:center;"></span>
+          <div class="side-panel">
+            <div class="container">
+              <div class="container-header"><span class="container-title" data-i18n="solve.io_profile"></span></div>
+              <div class="container-body" id="result-io"></div>
+            </div>
           </div>
         </div>
 
@@ -387,14 +420,15 @@
 
 <script type="module">
   import { guard, apiFetch } from '/static/ui/js/auth.js';
-  import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
+  import { load, applyI18n, getLang, t, esc, tCount } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
-  import { rateHTML } from '/static/js/rates.js';
+  import { rateHTML, costHTML } from '/static/js/rates.js';
   import { WuiAutocomplete } from '/static/ui/js/autocomplete.js';
   import { createContainer } from '/static/ui/js/components/container.js';
   import { openPopover, closePopover } from '/static/ui/js/components/popover.js';
   import { renderGraph } from '/static/ui/js/components/graph.js';
-  import { loadCatalog, lookupCatalog, refIconTextHTML, catalogEntries } from '/static/js/catalog-registry.js';
+  import { loadCatalog, lookupCatalog, refIconTextHTML, catalogEntries, iconTextHTML, machineIconTextHTML } from '/static/js/catalog-registry.js';
+  import { initCellClampScroll } from '/static/ui/js/table-features.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initIconCycle } from '/static/ui/js/icon-cycle.js';
   import { initInfocards } from '/static/ui/js/infocard.js';
@@ -660,6 +694,12 @@
   document.getElementById('btn-auto').addEventListener('click',   () => setMode('AUTO'));
   document.getElementById('solve-btn').addEventListener('click', doDiscover);
   document.getElementById('confirm-btn').addEventListener('click', doConfirm);
+  document.getElementById('scale-factor').addEventListener('change', e => {
+    const v = parseFloat(e.target.value);
+    if (!Number.isFinite(v) || v <= 0) { e.target.value = String(_factor); return; }
+    _factor = v;
+    doSolve();
+  });
 
   // Popover.js owns the floating panel itself (positioning + DOM removal on
   // outside-click/Escape); this listener only keeps the page-local "which
@@ -1284,112 +1324,167 @@
     _tagResolutions = r.TagResolutions || {};
     document.getElementById('result-card').style.display = '';
 
-    document.getElementById('result-stats').innerHTML = `
-      <div class="stat">
-        <span class="stat-label">${t('solve.scale.label')}</span>
-        <input class="input stat-factor" type="number" id="scale-factor"
-               min="0" step="1" value="${esc(String(_factor))}" />
-      </div>
-      <div class="stat">
-        <span class="stat-label">${t('solve.stats.actual_rate')}</span>
-        <span class="stat-value">${rateHTML(r.ActualRate, unit, { isFluid: !!_targetItem?.IsFluid })}</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">${t('common.mode')}</span>
-        <span class="stat-value">${esc(r.ModeUsed || _mode)}</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">${t('solve.stats.machine_groups')}</span>
-        <span class="stat-value">${r.MachineGroups?.length ?? 0}</span>
-      </div>
-      ${r.HadCycles ? `<div class="stat"><span class="stat-label" style="color:#f59e0b;">${t('solve.cycles_detected')}</span></div>` : ''}
-    `;
-
-    document.getElementById('scale-factor').addEventListener('change', e => {
-      const v = parseFloat(e.target.value);
-      if (!Number.isFinite(v) || v <= 0) { e.target.value = String(_factor); return; }
-      _factor = v;
-      doSolve();
-    });
-
-    const warnEl = document.getElementById('result-warnings');
-    const warns = r.Warnings || [];
-    warnEl.innerHTML = warns.length
-      ? `<div style="margin:var(--gap-inline) 0;padding:var(--gap-card);border:1px solid var(--warn,#f59e0b);border-radius:var(--radius);color:var(--warn,#f59e0b);font-size:var(--text-sm);">⚠ ${warns.map(w => esc(fmtWarning(w))).join('<br>')}</div>`
-      : '';
-
-    const machEl = document.getElementById('result-machines');
-    const groups  = (r.MachineGroups || []).slice().sort((a, b) => {
+    document.getElementById('scale-factor').value = String(_factor);
+    const groups = (r.MachineGroups || []).slice().sort((a, b) => {
       const an = nameOf(a.RecipeOutput) || a.RecipeID;
       const bn = nameOf(b.RecipeOutput) || b.RecipeID;
       return an.localeCompare(bn) || a.RecipeID.localeCompare(b.RecipeID);
     });
-    if (!groups.length) {
-      machEl.innerHTML = `<div style="color:var(--text-faint);font-size:var(--text-sm);">
-        ${t('solve.no_machines_prefix')}${esc(itemName)}${t('solve.no_machines_suffix')}</div>`;
-    } else {
-      const hdr = `<div class="mg-header">
-        <div class="mg-count">${t('solve.col.count')}</div>
-        <div style="flex:1">${t('solve.col.machine')}</div>
-        <div style="min-width:36px;text-align:right">${t('solve.col.util')}</div>
+    const isFluid = !!_targetItem?.IsFluid;
+    const energy  = sumCosts(groups.flatMap(groupCosts));
+    const tile = (label, value, sub = '', cls = '') => `<div class="stat-tile${cls ? ' ' + cls : ''}">
+        <span class="stat-tile-label">${esc(label)}</span>
+        <span class="stat-tile-value">${value}</span>
+        ${sub ? `<span class="res-stat-sub">${esc(sub)}</span>` : ''}
       </div>`;
-      machEl.innerHTML = hdr + groups.map(g => {
-        const util    = g.Utilization?.Den ? Math.round(g.Utilization.Num/g.Utilization.Den*100) + '%' : '';
-        const outName = g.RecipeOutput ? nameOf(g.RecipeOutput) : '';
-        const outID   = g.RecipeOutput?.ItemID || '';
-        const partial = _allowPartial.has(g.RateKey);
-        const partialLabel = partial ? t('solve.partial.active_label') : t('solve.partial.allow_label');
-        const partialTitle = partial ? t('solve.partial.active_title') : t('solve.partial.allow_title');
-        // The variant is the solver's pick; the page never offers alternatives.
-        const variantCell = `<div class="mg-variant">${g.Label ? esc(g.Label) : esc(t('solve.variant.default'))}</div>`;
-        return `<div class="mg-row">
-          <div class="mg-count">${g.Count}×</div>
-          <div class="mg-info">
-            <div class="mg-machine">${esc(g.MachineName || g.MachineID)}</div>
-            ${outName ? `<div class="mg-recipe" title="${esc(outID)}">→ ${esc(outName)}</div>` : ''}
-            <div class="mg-mod">${esc(modName(g.MachineMod))}</div>
-            ${variantCell}
-          </div>
-          ${util ? `<div class="mg-util" style="${partial && util!=='100%' ? 'color:var(--text-faint);' : ''}">${util}</div>` : ''}
-          <button class="partial-btn${partial ? ' active' : ''}"
-            data-action="togglePartial" data-ratekey="${esc(g.RateKey)}"
-            title="${esc(partialTitle)}">${esc(partialLabel)}</button>
-        </div>`;
-      }).join('');
-    }
+    document.getElementById('result-stats').innerHTML =
+      tile(t('solve.stats.actual_rate'), rateHTML(r.ActualRate, unit, { isFluid })) +
+      tile(t('solve.stats.machines'), esc(String(groups.reduce((n, g) => n + (g.Count || 0), 0))),
+        tCount(groups.length, 'solve.stats.in_groups')) +
+      tile(t('solve.stats.energy'), energy.length ? energy.map(c => costHTML(c)).join('') : '—') +
+      tile(t('common.mode'), esc(r.ModeUsed || _mode)) +
+      (r.HadCycles ? tile(t('solve.cycles_detected'), '', '', 'res-stat-warn') : '');
 
-    const ioEl   = document.getElementById('result-io');
+    const warnEl = document.getElementById('result-warnings');
+    const warns = r.Warnings || [];
+    warnEl.innerHTML = warns.length
+      ? `<div class="alert warn"><span class="alert-icon">⚠</span><span>${warns.map(w => esc(fmtWarning(w))).join('<br>')}</span></div>`
+      : '';
+
+    _resultGroups = { groups, itemName };
+    renderGroupTable();
+
+    const ioEl    = document.getElementById('result-io');
     const inputs  = r.IOProfile?.Inputs  || [];
     const outputs = r.IOProfile?.Outputs || [];
+    const ioRow = (e, sublabel = '') => `<div class="detail-row">
+        <span class="detail-key">
+          ${refIconTextHTML(e.Item, { name: nameOf(e.Item), subtitle: e.Item.TagRef ? '' : modName(e.Item.ModID), size: 'sm' })}
+          ${sublabel ? `<div class="io-sublabel">${esc(sublabel)}</div>` : ''}
+        </span>
+        <span class="detail-val">${rateHTML(e.Rate, e.TimeUnit || unit, { isFluid: !!e.Item?.IsFluid })}</span>
+      </div>`;
     let io = '';
-    const ioItemHTML = (e) => {
-      const sub = e.Item.TagRef ? '' : modName(e.Item.ModID);
-      return refIconTextHTML(e.Item, { name: nameOf(e.Item), subtitle: sub, size: 'sm' });
-    };
     if (inputs.length) {
-      io += `<div class="io-section-label">${t('solve.inputs')}</div>`;
-      io += inputs.map(e => {
-        const sublabel = e.IsFactoryProvided ? t('solve.stop_point.from_source') : '';
-        return `<div class="io-row">
-          <div style="flex:1;min-width:0;">
-            ${ioItemHTML(e)}
-            ${sublabel ? `<div class="io-sublabel">${esc(sublabel)}</div>` : ''}
-          </div>
-          <div class="io-rate">${rateHTML(e.Rate, e.TimeUnit || unit, { isFluid: !!e.Item?.IsFluid })}</div>
-        </div>`;
-      }).join('');
+      io += `<div class="io-section-label">${esc(t('solve.inputs'))}</div><div class="detail-grid">` +
+        inputs.map(e => ioRow(e, e.IsFactoryProvided ? t('solve.stop_point.from_source') : '')).join('') + '</div>';
     }
     if (outputs.length) {
-      io += `<div class="io-section-label" style="margin-top:${inputs.length?'var(--gap-control)':'0'}">${t('solve.outputs')}</div>`;
-      io += outputs.map(e => `<div class="io-row">
-        <div style="flex:1;min-width:0;">${ioItemHTML(e)}</div>
-        <div class="io-rate">${rateHTML(e.Rate, e.TimeUnit || unit, { isFluid: !!e.Item?.IsFluid })}</div>
-      </div>`).join('');
+      io += `<div class="io-section-label">${esc(t('solve.outputs'))}</div><div class="detail-grid">` +
+        outputs.map(e => ioRow(e)).join('') + '</div>';
     }
-    ioEl.innerHTML = io || `<span style="color:var(--text-faint);font-size:var(--text-sm);">—</span>`;
+    ioEl.innerHTML = io || `<span class="td-faint">—</span>`;
     initHiDPIRender(ioEl);
     initIconCycle(ioEl);
     initInfocards(ioEl);
+  }
+
+  let _resultGroups = null;
+  let _groupLayout  = '';
+
+  // groupLayout names the result table's responsive step for a container width.
+  function groupLayout(width) {
+    return width >= 820 ? 'row' : width >= 560 ? 'two' : 'card';
+  }
+
+  function renderGroupTable() {
+    const machEl = document.getElementById('result-machines');
+    if (!_resultGroups) return;
+    const { groups, itemName } = _resultGroups;
+    _groupLayout = groupLayout(machEl.clientWidth);
+    if (!groups.length) {
+      machEl.innerHTML = `<div class="td-faint" style="padding:var(--pad-container);">
+        ${t('solve.no_machines_prefix')}${esc(itemName)}${t('solve.no_machines_suffix')}</div>`;
+      return;
+    }
+    const colHead = _machineColumns.map(col => `<th class="res-c-plugin">${esc(col.label)}</th>`).join('');
+    machEl.innerHTML = `<table class="table res-table">
+      <thead><tr>
+        <th class="res-c-count">${esc(t('solve.col.count'))}</th>
+        <th class="res-c-machine">${esc(t('solve.col.machine'))}</th>
+        ${colHead}
+        <th>${esc(t('solve.col.upgrades'))}</th>
+        <th class="res-c-recipe">${esc(t('solve.col.recipe'))}</th>
+        <th>${esc(t('solve.col.energy'))}</th>
+        <th>${esc(t('solve.col.utilization'))}</th>
+        <th class="res-c-half"></th>
+      </tr></thead>
+      <tbody>${groups.map(groupRowHTML).join('')}</tbody>
+    </table>`;
+    initHiDPIRender(machEl);
+    initInfocards(machEl);
+    initCellClampScroll(machEl);
+  }
+
+  new ResizeObserver(entries => {
+    const w = entries[0].contentRect.width;
+    if (w > 0 && groupLayout(w) !== _groupLayout) renderGroupTable();
+  }).observe(document.getElementById('result-machines'));
+
+  // groupCosts scales a group's per-machine plugin costs by its machine count.
+  function groupCosts(g) {
+    const costs = g.Costs || g.Variant?.costs || [];
+    return costs.map(c => ({
+      resource: c.resource,
+      amount: { num: c.amount.num * (g.Count || 0), den: c.amount.den || 1 },
+    }));
+  }
+
+  // sumCosts adds costs of the same resource into one exact fraction each.
+  function sumCosts(costs) {
+    const gcd = (a, b) => b ? gcd(b, a % b) : Math.abs(a);
+    const by = new Map();
+    for (const c of costs) {
+      const p = by.get(c.resource);
+      if (!p) { by.set(c.resource, { resource: c.resource, amount: { ...c.amount } }); continue; }
+      const num = p.amount.num * c.amount.den + c.amount.num * p.amount.den;
+      const den = p.amount.den * c.amount.den;
+      const g = gcd(num, den) || 1;
+      p.amount = { num: num / g, den: den / g };
+    }
+    return [...by.values()];
+  }
+
+  function groupRowHTML(g) {
+    const pct       = g.Utilization?.Den ? Math.round(g.Utilization.Num / g.Utilization.Den * 100) : 0;
+    const partial   = _allowPartial.has(g.RateKey);
+    const pluginMod = g.PluginMod || _pluginMods[`${g.MachineMod}:${g.MachineID}`] || '';
+    const variant   = g.VariantID ? { id: g.VariantID, label: g.Label || '' } : null;
+    const out       = g.RecipeOutput;
+    const items     = g.Variant?.items || [];
+    const none      = '<span class="res-none">—</span>';
+    const upgrades  = items.length
+      ? `<div class="res-up">${items.map(it => {
+          const [mod, ...rest] = String(it.ref).split(':');
+          const id = rest.join(':');
+          return `<span class="res-up-item">${iconTextHTML(mod, id, { name: nameOf({ ModID: mod, ItemID: id }), size: 'sm' })}<span class="res-up-count">×${esc(String(it.count))}</span></span>`;
+        }).join('')}</div>`
+      : none;
+    const costs = groupCosts(g);
+    const pluginCells = _machineColumns.map((col, i) => {
+      const text = pluginMod && col.mods.includes(pluginMod)
+        ? cellText(_machineHooks, pluginMod, { mod_id: g.MachineMod, machine_id: g.MachineID }, col.columnID, variant)
+        : '';
+      return `<td class="res-c-plugin res-c-row2${i === 0 ? ' res-c-lead' : ''}" data-label="${esc(col.label)}">${text ? esc(text) : none}</td>`;
+    }).join('');
+    return `<tr>
+      <td class="res-c-count">${g.Count}×</td>
+      <td class="res-c-machine">${machineIconTextHTML(g.MachineMod, g.MachineID, {
+        name: g.MachineName || g.MachineID, subtitle: modName(g.MachineMod), size: 'lg', marquee: true,
+      })}</td>
+      ${pluginCells}
+      <td class="res-c-up res-c-row2${_machineColumns.length ? '' : ' res-c-lead'}" data-label="${esc(t('solve.col.upgrades'))}">${upgrades}</td>
+      <td class="res-c-recipe">${out ? iconTextHTML(out.ModID, out.ItemID, {
+        isFluid: out.IsFluid, name: nameOf(out), subtitle: modName(out.ModID), size: 'sm', marquee: true,
+      }) : none}</td>
+      <td class="res-cost res-c-row2" data-label="${esc(t('solve.col.energy'))}">${costs.length ? costs.map(c => costHTML(c)).join(' ') : none}</td>
+      <td class="res-c-util"><div class="res-util${pct >= 100 ? ' full' : ''}">
+        <div class="wui-progress-track"><div class="wui-progress-fill" style="width:${Math.min(pct, 100)}%"></div></div>
+        <span class="res-util-pct">${pct}%</span></div></td>
+      <td class="res-c-half"><button class="btn btn-sm res-half${partial ? ' active' : ''}"
+        data-action="togglePartial" data-ratekey="${esc(g.RateKey)}"
+        title="${esc(partial ? t('solve.partial.active_title') : t('solve.partial.allow_title'))}">½</button></td>
+    </tr>`;
   }
 
   let _openChainPickerKey = null;

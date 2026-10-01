@@ -9,7 +9,7 @@ FROM alpine:3.19
 WORKDIR /app
 COPY --from=builder /app/server .
 COPY web/ web/
-# web/static/ui is a symlink to the wirezatUI package (outside build context).
+# web/static/ui is the wirezatUI submodule; the image takes it from a build context.
 # Pass --build-context wirezat_ui=/path/to/wirezatUI when building.
 COPY --from=wirezat_ui . web/static/ui/
 EXPOSE 8081

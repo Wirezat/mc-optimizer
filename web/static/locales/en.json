@@ -276,7 +276,7 @@
   "production_line.row.current": "Current",
   "production_line.scale": "Scale",
   "production_line.scale_prompt": "Multiply this line by which factor? Machine counts and rates scale with it.",
-  "recipe.non_consuming_title": "Not consumed (reusable tool)",
+  "recipe.non_consuming_title": "Not consumed",
   "save.confirm_delete": "Delete this factory? This cannot be undone.",
   "save.empty": "No factories yet — create your first one",
   "save.modal.auto_hint": "Auto mode: the solver generates production lines to reach your targets.",

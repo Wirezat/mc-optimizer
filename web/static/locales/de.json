@@ -276,7 +276,7 @@
   "production_line.row.current": "Ist",
   "production_line.scale": "Skalieren",
   "production_line.scale_prompt": "Mit welchem Faktor soll diese Linie vervielfacht werden? Maschinenzahlen und Raten skalieren mit.",
-  "recipe.non_consuming_title": "Wird nicht verbraucht (wiederverwendbares Werkzeug)",
+  "recipe.non_consuming_title": "Wird nicht verbraucht",
   "save.confirm_delete": "Diese Fabrik löschen? Dies kann nicht rückgängig gemacht werden.",
   "save.empty": "Noch keine Fabriken — erstelle deine erste",
   "save.modal.auto_hint": "Auto-Modus: der Solver generiert Produktionslinien für deine Ziele.",

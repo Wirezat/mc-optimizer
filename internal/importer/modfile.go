@@ -2,7 +2,6 @@ package importer
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
@@ -61,15 +60,7 @@ type rawModFile struct {
 		ModData map[string]any `yaml:",inline"`
 	} `yaml:"machines"`
 
-	Recipes []struct {
-		Machine       string   `yaml:"machine"`
-		DurationTicks int      `yaml:"duration_ticks"`
-		Inputs        rawIO    `yaml:"inputs"`
-		Outputs       rawIO    `yaml:"outputs"`
-		Shape         []string `yaml:"shape"`
-		// ModData collects every key not claimed by a field above.
-		ModData map[string]any `yaml:",inline"`
-	} `yaml:"recipes"`
+	Recipes []rawRecipe `yaml:"recipes"`
 
 	BlockDrops []struct {
 		Block string `yaml:"block"`
@@ -107,21 +98,65 @@ type rawModFile struct {
 	} `yaml:"villager_trades"`
 }
 
+type rawRecipe struct {
+	Machine       string   `yaml:"machine"`
+	DurationTicks int      `yaml:"duration_ticks"`
+	Inputs        rawIO    `yaml:"inputs"`
+	Outputs       rawIO    `yaml:"outputs"`
+	Shape         []string `yaml:"shape"`
+	// ModData collects every key not claimed by a field above.
+	ModData map[string]any `yaml:",inline"`
+	line    int
+}
+
+func (r *rawRecipe) UnmarshalYAML(n *yaml.Node) error {
+	type plain rawRecipe
+	if err := n.Decode((*plain)(r)); err != nil {
+		return err
+	}
+	r.line = n.Line
+	return nil
+}
+
 type rawIO struct {
-	Items []struct {
-		Item        string   `yaml:"item"`
-		Tag         string   `yaml:"tag"`
-		Amount      *float64 `yaml:"amount"`
-		AmountNum   *int     `yaml:"amount_num"`
-		AmountDen   *int     `yaml:"amount_den"`
-		Probability *float64 `yaml:"probability"`
-	} `yaml:"items"`
-	Fluids []struct {
-		Fluid       string   `yaml:"fluid"`
-		Tag         string   `yaml:"tag"`
-		AmountMB    int64    `yaml:"amount_mb"`
-		Probability *float64 `yaml:"probability"`
-	} `yaml:"fluids"`
+	Items  []rawItemIO  `yaml:"items"`
+	Fluids []rawFluidIO `yaml:"fluids"`
+}
+
+type rawItemIO struct {
+	Item        string       `yaml:"item"`
+	Tag         string       `yaml:"tag"`
+	Amount      *exactNumber `yaml:"amount"`
+	AmountNum   *int         `yaml:"amount_num"`
+	AmountDen   *int         `yaml:"amount_den"`
+	Probability *exactNumber `yaml:"probability"`
+	line        int
+}
+
+func (r *rawItemIO) UnmarshalYAML(n *yaml.Node) error {
+	type plain rawItemIO
+	if err := n.Decode((*plain)(r)); err != nil {
+		return err
+	}
+	r.line = n.Line
+	return nil
+}
+
+type rawFluidIO struct {
+	Fluid       string       `yaml:"fluid"`
+	Tag         string       `yaml:"tag"`
+	AmountMB    *int64       `yaml:"amount_mb"`
+	Probability *exactNumber `yaml:"probability"`
+	line        int
+}
+
+func (r *rawFluidIO) UnmarshalYAML(n *yaml.Node) error {
+	type plain rawFluidIO
+	if err := n.Decode((*plain)(r)); err != nil {
+		return err
+	}
+	r.line = n.Line
+	return nil
 }
 
 // ParseModFile parses YAML bytes into a ModDef.
@@ -234,6 +269,9 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 		if err != nil {
 			return nil, fmt.Errorf("modfile: recipe machine ref %q: %w", r.Machine, err)
 		}
+		if r.DurationTicks <= 0 {
+			return nil, fmt.Errorf("modfile: mod.yml line %d: recipe on %s: duration_ticks must be positive", r.line, r.Machine)
+		}
 		rec := model.ModRecipeDef{
 			MachineModID:  machineModID,
 			MachineID:     machineID,
@@ -241,37 +279,40 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 			Shape:         r.Shape,
 			ModData:       r.ModData,
 		}
+		ioErr := func(line int, side, ref string, err error) error {
+			return fmt.Errorf("modfile: mod.yml line %d: recipe on %s, %s %s: %w", line, r.Machine, side, ref, err)
+		}
 		for _, io := range r.Inputs.Items {
-			d, err := parseItemIO(io.Item, io.Tag, io.Amount, io.AmountNum, io.AmountDen, io.Probability, raw.ModID)
+			d, err := parseItemIO(io, false, raw.ModID)
 			if err != nil {
-				return nil, fmt.Errorf("modfile: recipe input: %w", err)
+				return nil, ioErr(io.line, "input", itemName(io), err)
 			}
 			if d != nil {
 				rec.ItemInputs = append(rec.ItemInputs, *d)
 			}
 		}
 		for _, io := range r.Outputs.Items {
-			d, err := parseItemIO(io.Item, io.Tag, io.Amount, io.AmountNum, io.AmountDen, io.Probability, raw.ModID)
+			d, err := parseItemIO(io, true, raw.ModID)
 			if err != nil {
-				return nil, fmt.Errorf("modfile: recipe output: %w", err)
+				return nil, ioErr(io.line, "output", itemName(io), err)
 			}
 			if d != nil {
 				rec.ItemOutputs = append(rec.ItemOutputs, *d)
 			}
 		}
 		for _, io := range r.Inputs.Fluids {
-			d, err := parseFluidIO(io.Fluid, io.Tag, io.AmountMB, io.Probability, raw.ModID)
+			d, err := parseFluidIO(io, false, raw.ModID)
 			if err != nil {
-				return nil, fmt.Errorf("modfile: recipe fluid input: %w", err)
+				return nil, ioErr(io.line, "fluid input", fluidName(io), err)
 			}
 			if d != nil {
 				rec.FluidInputs = append(rec.FluidInputs, *d)
 			}
 		}
 		for _, io := range r.Outputs.Fluids {
-			d, err := parseFluidIO(io.Fluid, io.Tag, io.AmountMB, io.Probability, raw.ModID)
+			d, err := parseFluidIO(io, true, raw.ModID)
 			if err != nil {
-				return nil, fmt.Errorf("modfile: recipe fluid output: %w", err)
+				return nil, ioErr(io.line, "fluid output", fluidName(io), err)
 			}
 			if d != nil {
 				rec.FluidOutputs = append(rec.FluidOutputs, *d)
@@ -393,72 +434,89 @@ func splitRef(ref, defaultMod string) (modID, id string, err error) {
 	return defaultMod, ref, nil
 }
 
-func parseItemIO(item, tag string, amount *float64, amountNum, amountDen *int, prob *float64, defaultMod string) (*model.ModIODef, error) {
-	if isSentinel(item) && isSentinel(tag) {
+func itemName(io rawItemIO) string {
+	if !isSentinel(io.Tag) {
+		return "#" + io.Tag
+	}
+	return io.Item
+}
+
+func fluidName(io rawFluidIO) string {
+	if !isSentinel(io.Tag) {
+		return "#" + io.Tag
+	}
+	return io.Fluid
+}
+
+func parseItemIO(io rawItemIO, output bool, defaultMod string) (*model.ModIODef, error) {
+	if isSentinel(io.Item) && isSentinel(io.Tag) {
 		return nil, nil
 	}
-	d := &model.ModIODef{
-		AmountNum: 1,
-		AmountDen: 1,
-		ProbNum:   1,
-		ProbDen:   1,
-	}
-	if !isSentinel(tag) && tag != "" {
-		d.TagName = ptr(tag)
+	d := &model.ModIODef{AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1}
+	if !isSentinel(io.Tag) {
+		d.TagName = ptr(io.Tag)
 	} else {
-		modID, id, err := splitRef(item, defaultMod)
+		modID, id, err := splitRef(io.Item, defaultMod)
 		if err != nil {
 			return nil, err
 		}
 		d.ItemModID = ptr(modID)
 		d.ItemID = ptr(id)
 	}
-	if amountNum != nil && amountDen != nil {
-		d.AmountNum = *amountNum
-		d.AmountDen = *amountDen
-	} else if amount != nil {
-		d.AmountNum, d.AmountDen = floatToRational(*amount)
+	switch {
+	case io.Amount != nil && (io.AmountNum != nil || io.AmountDen != nil):
+		return nil, fmt.Errorf("give either amount or amount_num/amount_den")
+	case (io.AmountNum == nil) != (io.AmountDen == nil):
+		return nil, fmt.Errorf("amount_num and amount_den must be given together")
+	case io.AmountNum != nil:
+		if !fitsInt32(int64(*io.AmountNum), true) || !fitsInt32(int64(*io.AmountDen), true) {
+			return nil, fmt.Errorf("amount %d/%d is out of range", *io.AmountNum, *io.AmountDen)
+		}
+		d.AmountNum, d.AmountDen = *io.AmountNum, *io.AmountDen
+	case io.Amount != nil:
+		d.AmountNum, d.AmountDen = io.Amount.num, io.Amount.den
 	}
-	if prob != nil {
-		d.ProbNum, d.ProbDen = floatToRational(*prob)
+	if err := checkAmount(int64(d.AmountNum), int64(d.AmountDen)); err != nil {
+		return nil, err
+	}
+	if io.Probability != nil {
+		d.ProbNum, d.ProbDen = io.Probability.num, io.Probability.den
+	}
+	if err := checkProbability(int64(d.ProbNum), int64(d.ProbDen), !output); err != nil {
+		return nil, err
 	}
 	return d, nil
 }
 
-func parseFluidIO(fluid, tag string, amountMB int64, prob *float64, defaultMod string) (*model.ModFluidIODef, error) {
-	if isSentinel(fluid) && isSentinel(tag) {
+func parseFluidIO(io rawFluidIO, output bool, defaultMod string) (*model.ModFluidIODef, error) {
+	if isSentinel(io.Fluid) && isSentinel(io.Tag) {
 		return nil, nil
 	}
-	d := &model.ModFluidIODef{
-		AmountMB: amountMB,
-		ProbNum:  1,
-		ProbDen:  1,
-	}
-	if !isSentinel(tag) && tag != "" {
-		d.TagName = ptr(tag)
+	d := &model.ModFluidIODef{ProbNum: 1, ProbDen: 1}
+	if !isSentinel(io.Tag) {
+		d.TagName = ptr(io.Tag)
 	} else {
-		modID, id, err := splitRef(fluid, defaultMod)
+		modID, id, err := splitRef(io.Fluid, defaultMod)
 		if err != nil {
 			return nil, err
 		}
 		d.FluidModID = ptr(modID)
 		d.FluidID = ptr(id)
 	}
-	if prob != nil {
-		d.ProbNum, d.ProbDen = floatToRational(*prob)
+	if io.AmountMB == nil {
+		return nil, fmt.Errorf("amount_mb is required")
+	}
+	if err := checkAmount(*io.AmountMB, 1); err != nil {
+		return nil, err
+	}
+	d.AmountMB = *io.AmountMB
+	if io.Probability != nil {
+		d.ProbNum, d.ProbDen = io.Probability.num, io.Probability.den
+	}
+	if err := checkProbability(int64(d.ProbNum), int64(d.ProbDen), !output); err != nil {
+		return nil, err
 	}
 	return d, nil
-}
-
-func floatToRational(f float64) (num, den int) {
-	if f <= 0 {
-		return 0, 1
-	}
-	if f >= 1 {
-		n := int(math.Round(f))
-		return n, 1
-	}
-	return ProbToRational(f)
 }
 
 func isSentinel(s string) bool {

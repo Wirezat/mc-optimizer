@@ -162,6 +162,7 @@
   import { load, applyI18n, getLang, t, esc } from '/static/js/i18n.js';
   import { init as initHeader } from '/static/js/header.js';
   import { initModal, openModal } from '/static/ui/js/modal.js';
+  import { showToast } from '/static/ui/js/components/toast.js';
   import { renderModList } from '/static/js/mod-list.js';
 
   await load(getLang());
@@ -270,6 +271,7 @@
       if (!res.ok) {
         renderOutput([], data?.message || String(res.status));
         setStatus(t('msg.save_error'), 'err');
+        showToast({ tone: 'danger', messageKey: t(data?.error === 'MODFILE_INVALID' ? 'admin.mods.modfile_invalid' : 'msg.save_error') });
         btn.disabled = false;
         return;
       }
@@ -294,6 +296,7 @@
       pb.style.display = 'none';
       dropZone.classList.remove('disabled');
       setStatus(t('msg.network_error') + ': ' + e.message, 'err');
+      showToast({ tone: 'danger', messageKey: t('msg.network_error') });
       btn.disabled = false;
     }
   }

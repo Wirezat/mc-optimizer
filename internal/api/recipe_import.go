@@ -1,11 +1,13 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/Wirezat/GoLog"
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/importer"
 	"github.com/Wirezat/production-optimizer/internal/render"
@@ -18,8 +20,6 @@ func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render
 		_ = rc.SetReadDeadline(time.Now().Add(10 * time.Minute))
 		_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Minute))
 
-		// Deferred, not called after the loop: a later file can fail and return early once an
-		// earlier one already overwrote rendered assets.
 		if renderCache != nil {
 			defer renderCache.Invalidate()
 		}
@@ -34,8 +34,6 @@ func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render
 			return
 		}
 
-		// Resolved once per request and attributed to any plugin a ZIP in this batch bundles;
-		// empty if the acting user cannot be resolved.
 		var uploadedBy string
 		if u, err := database.GetUserByID(r.Context(), userIDFromContext(r.Context())); err == nil {
 			uploadedBy = u.Username
@@ -68,6 +66,11 @@ func ImportModFileHandler(database *db.DB, assetsDir string, renderCache *render
 			imp := importer.New(database, assetsDir)
 			imp.UploadedBy = uploadedBy
 			result, err := imp.RunModFile(r.Context(), tmpName)
+			if errors.Is(err, importer.ErrInvalidModFile) {
+				GoLog.Errorf("modfile import %s: %v", h.Filename, err)
+				writeAPIError(w, http.StatusInternalServerError, CodeModFileInvalid, fmt.Sprintf("%s: %v", h.Filename, err))
+				return
+			}
 			if err != nil {
 				errInternal(w, fmt.Errorf("modfile import %s: %w", h.Filename, err))
 				return

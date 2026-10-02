@@ -26,6 +26,7 @@ const (
 	CodeConflict        = "CONFLICT"
 	CodeTooManyRequests = "TOO_MANY_REQUESTS"
 	CodeInternal        = "INTERNAL_SERVER_ERROR"
+	CodeModFileInvalid  = "MODFILE_INVALID"
 )
 
 // apiError is the standard error envelope for all API responses.

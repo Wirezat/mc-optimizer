@@ -16,6 +16,15 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/model"
 )
 
+// ErrInvalidModFile marks an import refused because its mod.yml cannot be parsed.
+var ErrInvalidModFile = errors.New("invalid modfile")
+
+type invalidModFileError struct{ err error }
+
+func (e invalidModFileError) Error() string        { return e.err.Error() }
+func (e invalidModFileError) Unwrap() error        { return e.err }
+func (e invalidModFileError) Is(target error) bool { return target == ErrInvalidModFile }
+
 // ModFileResult summarises one modfile ZIP import.
 type ModFileResult struct {
 	ModID           string   `json:"mod_id"`
@@ -66,11 +75,9 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 
 	def, err := ParseModFile(yamlData)
 	if err != nil {
-		return ModFileResult{}, fmt.Errorf("modfile: parse: %w", err)
+		return ModFileResult{}, invalidModFileError{err}
 	}
 
-	// Plugin validation runs before any DB write below: a broken bundled plugin must never
-	// leave a half-imported mod behind.
 	bundle, err := findPluginBundle(zr.File)
 	if err != nil {
 		return ModFileResult{}, fmt.Errorf("modfile: %w", err)
@@ -185,8 +192,7 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 		res.Machines++
 	}
 
-	// 7b. Machine interfaces ("A implements B"), after all machines are upserted:
-	// AddMachineInterface requires both sides to exist.
+	// 7b. Machine interfaces ("A implements B").
 	for _, m := range def.Machines {
 		for _, ref := range m.Implements {
 			baseModID, baseMachineID, err := splitRef(ref, def.ModID)

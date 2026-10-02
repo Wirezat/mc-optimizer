@@ -5,6 +5,7 @@
   "admin.mods.installed": "Installed mods",
   "admin.mods.output": "Import output",
   "admin.mods.output_empty": "Nothing imported yet.",
+  "admin.mods.modfile_invalid": "Modfile rejected — details below",
   "admin.mods.saved_with_warnings": "Saved with warnings — see below",
   "admin.mods.stat.block_drops": "Block drops",
   "admin.mods.stat.fluids": "Fluids",

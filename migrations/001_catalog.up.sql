@@ -40,17 +40,28 @@ CREATE INDEX ON translations (lang_key);
 
 CREATE TABLE tags (
     id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL UNIQUE
+    kind TEXT NOT NULL DEFAULT 'item' CHECK (kind IN ('item', 'fluid')),
+    name TEXT NOT NULL,
+    UNIQUE (kind, name)
 );
 
 CREATE TABLE tag_members (
-    tag_id      UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-    item_mod_id TEXT NOT NULL,
-    item_id     TEXT NOT NULL,
-    PRIMARY KEY (tag_id, item_mod_id, item_id),
+    tag_id        UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    item_mod_id   TEXT NOT NULL,
+    item_id       TEXT NOT NULL,
+    source_mod_id TEXT NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
+    PRIMARY KEY (tag_id, item_mod_id, item_id, source_mod_id),
     FOREIGN KEY (item_mod_id, item_id) REFERENCES items(mod_id, item_id) ON DELETE CASCADE
 );
 
+CREATE TABLE tag_fluid_members (
+    tag_id        UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    fluid_mod_id  TEXT NOT NULL,
+    fluid_id      TEXT NOT NULL,
+    source_mod_id TEXT NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
+    PRIMARY KEY (tag_id, fluid_mod_id, fluid_id, source_mod_id),
+    FOREIGN KEY (fluid_mod_id, fluid_id) REFERENCES fluids(mod_id, fluid_id) ON DELETE CASCADE
+);
 
 CREATE TABLE machine_types (
     mod_id        TEXT  NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
@@ -195,17 +206,7 @@ CREATE INDEX ON block_drops (block_mod_id, block_item_id);
 CREATE INDEX ON block_drops (drop_mod_id,  drop_item_id);
 
 -- Villager trades: what each profession buys/sells at each tier.
---
--- source_mod_id names the mod the offer belongs to, not the mod of the traded
--- items: vanilla's optional trade_rebalance datapack redefines the very same
--- professions and tiers minecraft already defines, so without it the two sets
--- overwrite each other instead of coexisting.
---
--- trade_key is the offer's stable identity within its mod (the source file
--- stem for data-driven trades). Profession + tier + item pair does NOT
--- identify an offer: the cartographer alone sells nine distinct explorer maps
--- that all read as "emerald + compass -> map" and differ only in an NBT
--- modifier, and keying on the item pair silently collapses them to two rows.
+-- source_mod_id is the mod the offer belongs to; trade_key its identity within that mod.
 CREATE TABLE villager_trades (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_mod_id    TEXT NOT NULL,
@@ -215,8 +216,7 @@ CREATE TABLE villager_trades (
     cost_mod_id      TEXT NOT NULL,
     cost_item_id     TEXT NOT NULL,
     cost_count       INT  NOT NULL DEFAULT 1,
-    -- Optional second cost slot: vanilla charges two different items for a
-    -- single offer 18 times (emerald + compass, emerald + book, ...).
+    -- Optional second cost slot.
     cost2_mod_id     TEXT,
     cost2_item_id    TEXT,
     cost2_count      INT,
@@ -224,9 +224,7 @@ CREATE TABLE villager_trades (
     result_item_id   TEXT NOT NULL,
     result_count     INT  NOT NULL DEFAULT 1,
     result_modified  BOOL NOT NULL DEFAULT FALSE,
-    -- The offer's price is not fixed in the data: an enchanted book costs what
-    -- the enchantment decides. The counts above are then a floor, and saying so
-    -- is the difference between a catalog that is right and one that looks it.
+    -- The price is not fixed in the data; the counts above are a floor.
     cost_variable    BOOL NOT NULL DEFAULT FALSE,
     max_uses         INT,
     xp               INT,

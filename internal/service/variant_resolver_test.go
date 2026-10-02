@@ -341,7 +341,7 @@ func (s *solveStore) GetMachineType(_ context.Context, modID, machineID string) 
 	return nil, nil
 }
 
-func (s *solveStore) GetTagMembers(_ context.Context, _ string) ([]solver.ItemRef, error) {
+func (s *solveStore) GetTagMembers(_ context.Context, _ solver.ItemRef) ([]solver.ItemRef, error) {
 	return nil, nil
 }
 

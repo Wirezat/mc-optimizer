@@ -31,8 +31,8 @@ func (s *tagStub) GetMachinesForRecipe(_ context.Context, _ string) ([]MachineRe
 func (s *tagStub) GetMachineType(_ context.Context, modID, machineID string) (*MachineSpec, error) {
 	return &MachineSpec{ModID: modID, MachineID: machineID, Name: machineID}, nil
 }
-func (s *tagStub) GetTagMembers(_ context.Context, tagName string) ([]ItemRef, error) {
-	if tagName == "c:raw_materials/copper" {
+func (s *tagStub) GetTagMembers(_ context.Context, tag ItemRef) ([]ItemRef, error) {
+	if tag.TagRef == "c:raw_materials/copper" && !tag.IsFluid {
 		return s.members, nil
 	}
 	return nil, nil

@@ -13,6 +13,7 @@ type stubStore struct {
 	byItem     map[string][]*RecipeRow
 	machines   map[string]*MachineSpec
 	interfaces map[string][]MachineRef // recipe id → machine_interfaces implementers
+	tags       map[string][]ItemRef
 }
 
 // GetRecipesForItem mirrors the real query: one row per (recipe, machine), the recipe's own
@@ -55,8 +56,8 @@ func (s *stubStore) GetMachinesForRecipe(_ context.Context, recipeID string) ([]
 	return append([]MachineRef{{ModID: r.MachineMod, MachineID: r.MachineID}}, s.interfaces[recipeID]...), nil
 }
 
-func (s *stubStore) GetTagMembers(_ context.Context, _ string) ([]ItemRef, error) {
-	return nil, nil
+func (s *stubStore) GetTagMembers(_ context.Context, tag ItemRef) ([]ItemRef, error) {
+	return s.tags[tag.Key()], nil
 }
 
 // ironIngotRecipe is 1 iron ore → 1 iron ingot in a furnace, taking durationTicks.

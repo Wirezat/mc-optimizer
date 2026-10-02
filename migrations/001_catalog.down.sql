@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS recipe_item_outputs;
 DROP TABLE IF EXISTS recipe_item_inputs;
 DROP TABLE IF EXISTS recipes;
 DROP TABLE IF EXISTS machine_types;
+DROP TABLE IF EXISTS tag_fluid_members;
 DROP TABLE IF EXISTS tag_members;
 DROP TABLE IF EXISTS tags;
 DROP TABLE IF EXISTS translations;

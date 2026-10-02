@@ -20,15 +20,14 @@ type ImporterDB interface {
 	UpsertMachineType(ctx context.Context, m model.MachineTypeDef) error
 	UpsertMachineSlots(ctx context.Context, slots []model.MachineSlotDef) error
 	AddMachineInterface(ctx context.Context, modID, machineID, baseModID, baseMachineID string) error
-	UpsertDirectTagMembers(ctx context.Context, tagName string, members []string) error
+	UpsertDirectTagMembers(ctx context.Context, sourceModID, kind, tagName string, members []string) error
 	UpsertModPlugin(ctx context.Context, p db.ModPlugin) error
 }
 
 // Importer writes mod data to the database and the assets directory.
 type Importer struct {
-	db        ImporterDB
-	assetsDir string
-	// UploadedBy is attributed to any plugin recorded during import.
+	db         ImporterDB
+	assetsDir  string
 	UploadedBy string
 }
 

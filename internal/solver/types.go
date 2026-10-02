@@ -65,13 +65,14 @@ type ItemRef struct {
 
 // Key returns the canonical string key for use in maps.
 func (i *ItemRef) Key() string {
-	if i.TagRef != "" {
-		return "#" + i.TagRef
-	}
+	prefix := ""
 	if i.IsFluid {
-		return "fluid:" + i.ModID + ":" + i.ItemID
+		prefix = "fluid:"
 	}
-	return i.ModID + ":" + i.ItemID
+	if i.TagRef != "" {
+		return prefix + "#" + i.TagRef
+	}
+	return prefix + i.ModID + ":" + i.ItemID
 }
 
 type SolveRequest struct {
@@ -84,14 +85,11 @@ type SolveRequest struct {
 	TagOverrides         map[string]string // tagName → "mod_id:item_id"
 	FactoryState         FactoryState
 	AllowPartialMachines []string // groups that may stand idle, by RateKey
-	// ModConfigs holds each mod's opaque plugin config, keyed by the mod that owns the plugin
-	// (a machine's ecosystem, or its own mod id).
+	// ModConfigs holds each plugin's opaque config, keyed by the plugin's mod.
 	ModConfigs map[string]json.RawMessage
-	// Factor is the manual override on the solver's own answer: the line is this multiple of
-	// it. The zero value means x1.
+	// Factor multiplies the solver's answer; the zero value means x1.
 	Factor Rational
-	// VariantPins fixes the operating variant of individual machine groups, keyed by
-	// RecipeOptionKey.
+	// VariantPins fixes a machine group's variant, keyed by RecipeOptionKey.
 	VariantPins map[string]string
 }
 
@@ -135,19 +133,16 @@ type MachineGroupDraft struct {
 	ExactCount   Rational // fractional machine count before ceiling
 	Utilization  Rational
 	Status       DraftStatus
-	// VariantID, Label and Costs describe the operating configuration chosen for this group;
-	// Variant carries it whole, including any output overrides.
+	// Variant is the chosen operating configuration, VariantID/Label/Costs its summary.
 	VariantID string
 	Label     string
 	// PluginMod is the mod whose plugin evaluated this group.
 	PluginMod string
 	Costs     []plugins.Cost
 	Variant   plugins.Variant
-	// VariantOptions lists every runnable variant of this group so a client can offer the
-	// alternatives the automatic pick did not take.
+	// VariantOptions lists every runnable variant of this group.
 	VariantOptions []VariantOption
-	// RateKey names the node this group was computed for, and is the only stable handle on it:
-	// the ladder may swap the group's machine or recipe.
+	// RateKey names the node this group was computed for.
 	RateKey string
 	cells   []cell // the matrix the pick was made from, for the AUTO repick
 }
@@ -161,8 +156,7 @@ func (g *MachineGroupDraft) applyCell(c cell) {
 	g.VariantOptions = variantOptionsFor(g.cells, c.machine)
 }
 
-// VariantOption is one selectable operating variant of a machine group, as offered to a
-// client.
+// VariantOption is one selectable operating variant of a machine group.
 type VariantOption struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
@@ -181,8 +175,7 @@ type IOEntry struct {
 	IsFactoryProvided bool
 }
 
-// ErrCycleBreakNeeded is returned by Solve when a cycle exists that cannot be resolved
-// automatically.
+// ErrCycleBreakNeeded is returned by Solve for a cycle it cannot resolve itself.
 type ErrCycleBreakNeeded struct {
 	CycleNodes []string // ItemRef.Key() values of stuck nodes
 }

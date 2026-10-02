@@ -106,11 +106,12 @@ func (d *DB) UpsertMachineSlots(ctx context.Context, slots []model.MachineSlotDe
 	return nil
 }
 
-// UpsertDirectTagMembers replaces a tag's members with the given list (already resolved
-// mod_id:item_id pairs).
-func (d *DB) UpsertDirectTagMembers(ctx context.Context, tagName string, members []string) error {
-	if len(members) == 0 {
-		return nil
+// UpsertDirectTagMembers replaces the members sourceModID contributes to the tag (kind,
+// tagName) with members, each "mod_id:id"; other mods' members stay.
+func (d *DB) UpsertDirectTagMembers(ctx context.Context, sourceModID, kind, tagName string, members []string) error {
+	table, modCol, idCol := "tag_members", "item_mod_id", "item_id"
+	if kind == model.TagKindFluid {
+		table, modCol, idCol = "tag_fluid_members", "fluid_mod_id", "fluid_id"
 	}
 	tx, err := d.Pool.Begin(ctx)
 	if err != nil {
@@ -118,29 +119,27 @@ func (d *DB) UpsertDirectTagMembers(ctx context.Context, tagName string, members
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	var tagID string
-	if err := tx.QueryRow(ctx, `
-		INSERT INTO tags (id, name)
-		VALUES (gen_random_uuid(), $1)
-		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-		RETURNING id
-	`, tagName).Scan(&tagID); err != nil {
-		return fmt.Errorf("db: upsert tag %q: %w", tagName, err)
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM tag_members WHERE tag_id = $1`, tagID); err != nil {
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM `+table+` m USING tags t
+		WHERE t.id = m.tag_id AND t.kind = $1 AND t.name = $2 AND m.source_mod_id = $3`,
+		kind, tagName, sourceModID); err != nil {
 		return fmt.Errorf("db: upsert tag %q: clear members: %w", tagName, err)
 	}
-	for _, ref := range members {
-		modID, itemID, err := splitColonRef(ref)
+	if len(members) > 0 {
+		tagID, err := upsertTag(ctx, tx, kind, tagName)
 		if err != nil {
-			return fmt.Errorf("db: tag member %q: %w", ref, err)
+			return err
 		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO tag_members (tag_id, item_mod_id, item_id)
-			VALUES ($1, $2, $3)
-			ON CONFLICT DO NOTHING
-		`, tagID, modID, itemID); err != nil {
-			return fmt.Errorf("db: upsert tag member %s: %w", ref, err)
+		for _, ref := range members {
+			modID, id, err := splitColonRef(ref)
+			if err != nil {
+				return fmt.Errorf("db: tag member %q: %w", ref, err)
+			}
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO `+table+` (tag_id, `+modCol+`, `+idCol+`, source_mod_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+				tagID, modID, id, sourceModID); err != nil {
+				return fmt.Errorf("db: upsert tag member %s: %w", ref, err)
+			}
 		}
 	}
 	return tx.Commit(ctx)

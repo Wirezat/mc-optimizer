@@ -37,9 +37,15 @@ type FluidDef struct {
 	LangKey string
 }
 
+const (
+	TagKindItem  = "item"
+	TagKindFluid = "fluid"
+)
+
 type TagDef struct {
 	Name    string   // e.g. "forge:ores/iron"
-	Members []string // "mod_id:item_id"
+	Kind    string   // TagKindItem or TagKindFluid
+	Members []string // "mod_id:item_id" or "mod_id:fluid_id"
 }
 
 type MachineTypeDef struct {
@@ -48,11 +54,9 @@ type MachineTypeDef struct {
 	Name      string // resolved from lang key at import time
 	LangKey   string
 	Slots     []MachineSlotDef
-	// Implements lists base machine refs ("mod_id:machine_id" or plain "machine_id" for
-	// same-mod) whose recipes this machine can also run — e.g.
+	// Implements lists base machine refs whose recipes this machine can also run.
 	Implements []string
-	// Ecosystem names which plugin evaluates this machine; empty means the machine's own
-	// mod_id.
+	// Ecosystem names the plugin's mod_id; empty means the machine's own.
 	Ecosystem string
 	// ModData holds every mod-specific field from mod.yml, keyed as written.
 	ModData map[string]any
@@ -77,8 +81,7 @@ type ModRecipeDef struct {
 	ItemOutputs   []ModIODef
 	FluidInputs   []ModFluidIODef
 	FluidOutputs  []ModFluidIODef
-	// Shape is a 9-element row-major 3×3 array for crafting_shaped-style recipes (each cell is
-	// a bare item id or tag name, "" for an empty cell).
+	// Shape is a row-major 3×3 grid of item ids or tag names, "" for an empty cell.
 	Shape []string
 	// ModData holds every mod-specific field from the recipe entry, keyed as written.
 	ModData map[string]any

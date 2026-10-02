@@ -14,7 +14,7 @@ type RecipeStore interface {
 	GetRecipe(ctx context.Context, id string) (*RecipeRow, error)
 	GetMachinesForRecipe(ctx context.Context, recipeID string) ([]MachineRef, error)
 	GetMachineType(ctx context.Context, modID, machineID string) (*MachineSpec, error)
-	GetTagMembers(ctx context.Context, tagName string) ([]ItemRef, error)
+	GetTagMembers(ctx context.Context, tag ItemRef) ([]ItemRef, error)
 }
 
 // Solver executes production line optimization.

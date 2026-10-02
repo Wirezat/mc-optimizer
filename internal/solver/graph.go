@@ -126,7 +126,7 @@ func (s *Solver) BuildRecipeGraph(
 		// Tag node: resolve to a concrete item, then continue BFS with the concrete item. The tag
 		// node itself is NOT added to g.Nodes; edges are rewritten post-BFS.
 		if item.TagRef != "" {
-			members, err := s.DB.GetTagMembers(ctx, item.TagRef)
+			members, err := s.DB.GetTagMembers(ctx, item)
 			if err != nil {
 				return nil, fmt.Errorf("solver: get tag members for %s: %w", key, err)
 			}
@@ -308,7 +308,7 @@ func itemSignatures(ios []RecipeRowItemIO) []string {
 func fluidSignatures(ios []RecipeRowFluidIO) []string {
 	out := make([]string, 0, len(ios))
 	for _, io := range ios {
-		ref := ItemRef{ModID: io.FluidModID, ItemID: io.FluidID, IsFluid: true}
+		ref := io.Ref()
 		out = append(out, fmt.Sprintf("%s=%s*%s", ref.Key(),
 			NewRational(io.AmountMB, 1), NewRational(io.ProbabilityNum, io.ProbabilityDen)))
 	}
@@ -335,7 +335,7 @@ func appendRecipeEdges(node *RecipeNode, r *RecipeRow, queue *[]ItemRef) {
 		*queue = append(*queue, ref)
 	}
 	for _, fi := range r.FluidInputs {
-		ref := ItemRef{ModID: fi.FluidModID, ItemID: fi.FluidID, IsFluid: true}
+		ref := fi.Ref()
 		node.Inputs = append(node.Inputs, Edge{
 			Item:        ref,
 			Amount:      NewRational(fi.AmountMB, 1),

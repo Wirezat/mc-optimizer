@@ -176,23 +176,31 @@ func (d *DB) GetMachineType(ctx context.Context, modID, machineID string) (*solv
 	return m, nil
 }
 
-// GetTagMembers returns all concrete items that satisfy the given tag, ordered by mod_id,
-// item_id.
-func (d *DB) GetTagMembers(ctx context.Context, tagName string) ([]solver.ItemRef, error) {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT tm.item_mod_id, tm.item_id
+// GetTagMembers returns every item, or for a fluid tag every fluid, that satisfies tag,
+// ordered by mod and id.
+func (d *DB) GetTagMembers(ctx context.Context, tag solver.ItemRef) ([]solver.ItemRef, error) {
+	query := `
+		SELECT DISTINCT tm.item_mod_id, tm.item_id
 		FROM tag_members tm
 		JOIN tags t ON t.id = tm.tag_id
-		WHERE t.name = $1
-		ORDER BY tm.item_mod_id, tm.item_id
-	`, tagName)
+		WHERE t.kind = 'item' AND t.name = $1
+		ORDER BY 1, 2`
+	if tag.IsFluid {
+		query = `
+		SELECT DISTINCT tm.fluid_mod_id, tm.fluid_id
+		FROM tag_fluid_members tm
+		JOIN tags t ON t.id = tm.tag_id
+		WHERE t.kind = 'fluid' AND t.name = $1
+		ORDER BY 1, 2`
+	}
+	rows, err := d.Pool.Query(ctx, query, tag.TagRef)
 	if err != nil {
 		return nil, fmt.Errorf("db: get tag members: %w", err)
 	}
 	defer rows.Close()
 	var refs []solver.ItemRef
 	for rows.Next() {
-		var r solver.ItemRef
+		r := solver.ItemRef{IsFluid: tag.IsFluid}
 		if err := rows.Scan(&r.ModID, &r.ItemID); err != nil {
 			return nil, fmt.Errorf("db: get tag members: %w", err)
 		}
@@ -259,10 +267,12 @@ func (d *DB) loadRecipeIO(ctx context.Context, r *solver.RecipeRow) error {
 
 	// Fluid Inputs
 	rows3, err := d.Pool.Query(ctx, `
-		SELECT COALESCE(fluid_mod_id, ''), COALESCE(fluid_id, ''),
-		       amount_mb, probability_num, probability_den
-		FROM recipe_fluid_inputs WHERE recipe_id = $1
-		ORDER BY sort_index
+		SELECT COALESCE(rfi.fluid_mod_id, ''), COALESCE(rfi.fluid_id, ''), t.name,
+		       rfi.amount_mb, rfi.probability_num, rfi.probability_den
+		FROM recipe_fluid_inputs rfi
+		LEFT JOIN tags t ON t.id = rfi.tag_id
+		WHERE rfi.recipe_id = $1
+		ORDER BY rfi.sort_index
 	`, r.ID)
 	if err != nil {
 		return fmt.Errorf("db: load recipe io: %w", err)
@@ -270,7 +280,7 @@ func (d *DB) loadRecipeIO(ctx context.Context, r *solver.RecipeRow) error {
 	defer rows3.Close()
 	for rows3.Next() {
 		var fi solver.RecipeRowFluidIO
-		if err := rows3.Scan(&fi.FluidModID, &fi.FluidID,
+		if err := rows3.Scan(&fi.FluidModID, &fi.FluidID, &fi.TagName,
 			&fi.AmountMB, &fi.ProbabilityNum, &fi.ProbabilityDen); err != nil {
 			return fmt.Errorf("db: load recipe io: %w", err)
 		}

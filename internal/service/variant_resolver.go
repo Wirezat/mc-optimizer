@@ -43,8 +43,6 @@ func (r *VariantResolver) Variants(ctx context.Context, machine *solver.MachineS
 
 	plug, err := r.store.GetModPlugin(ctx, ecosystem)
 	if err != nil {
-		// Only "this mod ships no plugin" means the host default applies; any other error
-		// surfaces.
 		if errors.Is(err, db.ErrNotFound) {
 			return []plugins.Variant{solver.DefaultVariant(recipe)}, nil
 		}
@@ -83,8 +81,6 @@ func (r *VariantResolver) Variants(ctx context.Context, machine *solver.MachineS
 	}
 
 	if err := r.store.PutVariants(ctx, machine.ModID, machine.MachineID, recipe.ID, hash, vs); err != nil {
-		// The variants are already computed and correct; the cache is an optimization. Failing
-		// here would degrade the whole mod to the host default through the solver's warning path.
 		GoLog.Warnf("service: cache variants for %s:%s recipe %s: %v",
 			machine.ModID, machine.MachineID, recipe.ID, err)
 	}
@@ -101,15 +97,12 @@ func (r *VariantResolver) program(modID string, plug *db.ModPlugin) (*plugins.Pr
 	}
 	prog, ok := r.registry.Get(modID, plug.Version)
 	if !ok {
-		// A concurrent Put for another version of the same mod replaced the entry between the two
-		// calls. Reporting it beats dereferencing nil.
 		return nil, fmt.Errorf("service: plugin %s version %s is no longer registered", modID, plug.Version)
 	}
 	return prog, nil
 }
 
-// normalizeConfig treats a nil or empty config as the empty object, the same convention
-// db.VariantCacheHash applies when hashing.
+// normalizeConfig returns the empty object for a nil or empty config.
 func normalizeConfig(cfg json.RawMessage) json.RawMessage {
 	if len(bytes.TrimSpace(cfg)) == 0 {
 		return json.RawMessage(`{}`)
@@ -117,8 +110,7 @@ func normalizeConfig(cfg json.RawMessage) json.RawMessage {
 	return cfg
 }
 
-// recipeOutputs maps a recipe's catalog outputs onto the plugin wire type, amount and
-// probability as separate exact fractions.
+// recipeOutputs maps a recipe's catalog outputs onto the plugin wire type.
 func recipeOutputs(recipe *solver.RecipeRow) []plugins.Output {
 	out := make([]plugins.Output, 0, len(recipe.ItemOutputs)+len(recipe.FluidOutputs))
 	for _, o := range recipe.ItemOutputs {
@@ -143,8 +135,7 @@ func recipeOutputs(recipe *solver.RecipeRow) []plugins.Output {
 	return out
 }
 
-// recipeInputs maps a recipe's catalog inputs onto the plugin wire type, using the same ref
-// format as recipeOutputs.
+// recipeInputs maps a recipe's catalog inputs onto the plugin wire type.
 func recipeInputs(recipe *solver.RecipeRow) []plugins.Output {
 	in := make([]plugins.Output, 0, len(recipe.ItemInputs)+len(recipe.FluidInputs))
 	for _, i := range recipe.ItemInputs {
@@ -164,7 +155,7 @@ func recipeInputs(recipe *solver.RecipeRow) []plugins.Output {
 		})
 	}
 	for _, f := range recipe.FluidInputs {
-		ref := solver.ItemRef{ModID: f.FluidModID, ItemID: f.FluidID, IsFluid: true}
+		ref := f.Ref()
 		in = append(in, plugins.Output{
 			Ref:         ref.Key(),
 			Amount:      plugins.Rational{Num: f.AmountMB, Den: 1},

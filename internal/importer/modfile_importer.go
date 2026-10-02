@@ -168,7 +168,7 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 
 	// 6. Tags.
 	for _, tag := range def.Tags {
-		if err := imp.db.UpsertDirectTagMembers(ctx, tag.Name, tag.Members); err != nil {
+		if err := imp.db.UpsertDirectTagMembers(ctx, def.ModID, tag.Kind, tag.Name, tag.Members); err != nil {
 			warn("tag %q: %v", tag.Name, err)
 			continue
 		}

@@ -37,10 +37,7 @@ type rawModFile struct {
 		LangKey string `yaml:"lang_key"`
 	} `yaml:"fluids"`
 
-	Tags []struct {
-		Name    string   `yaml:"name"`
-		Members []string `yaml:"members"`
-	} `yaml:"tags"`
+	Tags []rawTag `yaml:"tags"`
 
 	Machines []struct {
 		ID         string   `yaml:"id"`
@@ -96,6 +93,22 @@ type rawModFile struct {
 		MaxUses      *int `yaml:"max_uses"`
 		XP           *int `yaml:"xp"`
 	} `yaml:"villager_trades"`
+}
+
+type rawTag struct {
+	Name    string   `yaml:"name"`
+	Kind    string   `yaml:"kind"`
+	Members []string `yaml:"members"`
+	line    int
+}
+
+func (r *rawTag) UnmarshalYAML(n *yaml.Node) error {
+	type plain rawTag
+	if err := n.Decode((*plain)(r)); err != nil {
+		return err
+	}
+	r.line = n.Line
+	return nil
 }
 
 type rawRecipe struct {
@@ -224,7 +237,14 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 		if isSentinel(r.Name) {
 			continue
 		}
-		td := model.TagDef{Name: r.Name}
+		kind := r.Kind
+		if kind == "" {
+			kind = model.TagKindItem
+		}
+		if kind != model.TagKindItem && kind != model.TagKindFluid {
+			return nil, fmt.Errorf("modfile: mod.yml line %d: tag %s: kind %q is neither item nor fluid", r.line, r.Name, r.Kind)
+		}
+		td := model.TagDef{Name: r.Name, Kind: kind}
 		for _, m := range r.Members {
 			if !isSentinel(m) {
 				td.Members = append(td.Members, m)

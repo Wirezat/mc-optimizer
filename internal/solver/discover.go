@@ -75,7 +75,7 @@ func (s *Solver) Discover(
 
 		// Resolve tag to concrete item — tag nodes are not shown in the chain.
 		if item.TagRef != "" {
-			members, err := s.DB.GetTagMembers(ctx, item.TagRef)
+			members, err := s.DB.GetTagMembers(ctx, item)
 			if err != nil {
 				return res, err
 			}
@@ -155,6 +155,11 @@ func (s *Solver) Discover(
 				}
 			}
 			for _, fi := range r.FluidInputs {
+				if fi.TagName != nil {
+					ref := fi.Ref()
+					opt.Inputs = append(opt.Inputs, ref.Key())
+					continue
+				}
 				opt.Inputs = append(opt.Inputs, "~"+fi.FluidID)
 			}
 			for _, out := range r.ItemOutputs {
@@ -196,7 +201,7 @@ func (s *Solver) Discover(
 					}
 				}
 				for _, fi := range r.FluidInputs {
-					ref := ItemRef{ModID: fi.FluidModID, ItemID: fi.FluidID, IsFluid: true}
+					ref := fi.Ref()
 					if !visited[ref.Key()] {
 						queue = append(queue, entry{item: ref, level: e.level + 1})
 					}

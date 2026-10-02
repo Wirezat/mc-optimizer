@@ -158,3 +158,17 @@ func TestParseModFile_NumberErrorNamesLine(t *testing.T) {
 		t.Errorf("error = %v, want it to name line 10", err)
 	}
 }
+
+func TestParseModFile_TagKind(t *testing.T) {
+	def, err := ParseModFile([]byte("mod_id: qmod\ntags:\n  - name: c:ingots\n    members: [qmod:a]\n  - name: c:honey\n    kind: fluid\n    members: [qmod:honey]\n"))
+	if err != nil {
+		t.Fatalf("ParseModFile: %v", err)
+	}
+	if def.Tags[0].Kind != model.TagKindItem || def.Tags[1].Kind != model.TagKindFluid {
+		t.Errorf("kinds = %q, %q; want item, fluid", def.Tags[0].Kind, def.Tags[1].Kind)
+	}
+	_, err = ParseModFile([]byte("mod_id: qmod\ntags:\n  - name: c:x\n    kind: gas\n"))
+	if err == nil || !strings.Contains(err.Error(), "line 3") || !strings.Contains(err.Error(), "c:x") {
+		t.Errorf("error = %v, want it to name line 3 and tag c:x", err)
+	}
+}

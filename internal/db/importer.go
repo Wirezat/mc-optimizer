@@ -74,39 +74,33 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 		}
 	}
 
-	// 4. Upsert tags and build name→UUID map.
-	tagIDs := make(map[string]uuid.UUID)
-	upsertTagInto := func(name string) error {
-		if _, ok := tagIDs[name]; ok {
-			return nil
+	// 4. Upsert tags and build (kind, name)→UUID map.
+	tagIDs := make(map[tagKey]uuid.UUID)
+	upsertTagsOf := func(kind string, ios []model.NormalizedIO) error {
+		for _, io := range ios {
+			if io.TagName == nil {
+				continue
+			}
+			k := tagKey{kind, *io.TagName}
+			if _, ok := tagIDs[k]; ok {
+				continue
+			}
+			id, err := upsertTag(ctx, tx, kind, *io.TagName)
+			if err != nil {
+				return err
+			}
+			tagIDs[k] = id
 		}
-		id, err := upsertTag(ctx, tx, name)
-		if err != nil {
-			return err
-		}
-		tagIDs[name] = id
 		return nil
 	}
-	for _, io := range rec.ItemInputs {
-		if io.TagName != nil {
-			if err := upsertTagInto(*io.TagName); err != nil {
-				return false, err
-			}
-		}
+	if err := upsertTagsOf(model.TagKindItem, rec.ItemInputs); err != nil {
+		return false, err
 	}
-	for _, io := range rec.FluidInputs {
-		if io.TagName != nil {
-			if err := upsertTagInto(*io.TagName); err != nil {
-				return false, err
-			}
-		}
+	if err := upsertTagsOf(model.TagKindFluid, rec.FluidInputs); err != nil {
+		return false, err
 	}
-	for _, io := range rec.FluidOutputs {
-		if io.TagName != nil {
-			if err := upsertTagInto(*io.TagName); err != nil {
-				return false, err
-			}
-		}
+	if err := upsertTagsOf(model.TagKindFluid, rec.FluidOutputs); err != nil {
+		return false, err
 	}
 
 	// 5.
@@ -160,7 +154,7 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 	for i, io := range rec.ItemInputs {
 		var tagID *uuid.UUID
 		if io.TagName != nil {
-			id := tagIDs[*io.TagName]
+			id := tagIDs[tagKey{model.TagKindItem, *io.TagName}]
 			tagID = &id
 		}
 		if _, err := tx.Exec(ctx, `
@@ -197,7 +191,7 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 	for i, io := range rec.FluidInputs {
 		var tagID *uuid.UUID
 		if io.TagName != nil {
-			id := tagIDs[*io.TagName]
+			id := tagIDs[tagKey{model.TagKindFluid, *io.TagName}]
 			tagID = &id
 		}
 		if _, err := tx.Exec(ctx, `
@@ -214,7 +208,7 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 	for i, io := range rec.FluidOutputs {
 		var tagID *uuid.UUID
 		if io.TagName != nil {
-			id := tagIDs[*io.TagName]
+			id := tagIDs[tagKey{model.TagKindFluid, *io.TagName}]
 			tagID = &id
 		}
 		if _, err := tx.Exec(ctx, `
@@ -279,16 +273,18 @@ func upsertFluid(ctx context.Context, tx pgx.Tx, modID, fluidID string) error {
 	return nil
 }
 
-func upsertTag(ctx context.Context, tx pgx.Tx, name string) (uuid.UUID, error) {
+type tagKey struct{ kind, name string }
+
+func upsertTag(ctx context.Context, tx pgx.Tx, kind, name string) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `
-		INSERT INTO tags (id, name)
-		VALUES (gen_random_uuid(), $1)
-		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+		INSERT INTO tags (id, kind, name)
+		VALUES (gen_random_uuid(), $1, $2)
+		ON CONFLICT (kind, name) DO UPDATE SET name = EXCLUDED.name
 		RETURNING id
-	`, name).Scan(&id)
+	`, kind, name).Scan(&id)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("db: upsert tag %q: %w", name, err)
+		return uuid.Nil, fmt.Errorf("db: upsert %s tag %q: %w", kind, name, err)
 	}
 	return id, nil
 }

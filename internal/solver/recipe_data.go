@@ -31,9 +31,18 @@ type RecipeRowItemIO struct {
 type RecipeRowFluidIO struct {
 	FluidModID     string
 	FluidID        string
+	TagName        *string
 	AmountMB       int64
 	ProbabilityNum int64
 	ProbabilityDen int64
+}
+
+// Ref is the fluid, or the fluid tag, this row names.
+func (f RecipeRowFluidIO) Ref() ItemRef {
+	if f.TagName != nil {
+		return ItemRef{TagRef: *f.TagName, IsFluid: true}
+	}
+	return ItemRef{ModID: f.FluidModID, ItemID: f.FluidID, IsFluid: true}
 }
 
 // MachineSpec holds the subset of machine properties the solver needs.
@@ -41,11 +50,9 @@ type MachineSpec struct {
 	ModID     string
 	MachineID string
 	Name      string
-	// Ecosystem names the mod_id whose plugin evaluates this machine. Empty means the
-	// machine's own ModID.
+	// Ecosystem names the plugin's mod_id; empty means the machine's own.
 	Ecosystem string
-	// ModData is the machine's opaque mod_data.
-	ModData json.RawMessage
+	ModData   json.RawMessage
 }
 
 // filterByActiveMods keeps only rows whose own MachineMod is active.

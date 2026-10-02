@@ -60,7 +60,7 @@ func (fakeImporterDB) UpsertMachineSlots(ctx context.Context, slots []model.Mach
 func (fakeImporterDB) AddMachineInterface(ctx context.Context, modID, machineID, baseModID, baseMachineID string) error {
 	return nil
 }
-func (fakeImporterDB) UpsertDirectTagMembers(ctx context.Context, tagName string, members []string) error {
+func (fakeImporterDB) UpsertDirectTagMembers(ctx context.Context, sourceModID, kind, tagName string, members []string) error {
 	return nil
 }
 func (fakeImporterDB) UpsertModPlugin(ctx context.Context, p db.ModPlugin) error { return nil }

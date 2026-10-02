@@ -10,6 +10,7 @@ import (
 	"github.com/Wirezat/GoLog"
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/plugins"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
@@ -117,7 +118,7 @@ func recipeOutputs(recipe *solver.RecipeRow) []plugins.Output {
 		if o.ItemModID == nil || o.ItemID == nil {
 			continue
 		}
-		ref := solver.ItemRef{ModID: *o.ItemModID, ItemID: *o.ItemID}
+		ref := solver.ResourceRef{ModID: *o.ItemModID, ID: *o.ItemID}
 		out = append(out, plugins.Output{
 			Ref:         ref.Key(),
 			Amount:      plugins.Rational{Num: o.AmountNum, Den: o.AmountDen},
@@ -125,7 +126,7 @@ func recipeOutputs(recipe *solver.RecipeRow) []plugins.Output {
 		})
 	}
 	for _, f := range recipe.FluidOutputs {
-		ref := solver.ItemRef{ModID: f.FluidModID, ItemID: f.FluidID, IsFluid: true}
+		ref := solver.ResourceRef{ModID: f.FluidModID, ID: f.FluidID, Kind: resource.KindFluid}
 		out = append(out, plugins.Output{
 			Ref:         ref.Key(),
 			Amount:      plugins.Rational{Num: f.AmountMB, Den: 1},
@@ -139,12 +140,12 @@ func recipeOutputs(recipe *solver.RecipeRow) []plugins.Output {
 func recipeInputs(recipe *solver.RecipeRow) []plugins.Output {
 	in := make([]plugins.Output, 0, len(recipe.ItemInputs)+len(recipe.FluidInputs))
 	for _, i := range recipe.ItemInputs {
-		var ref solver.ItemRef
+		var ref solver.ResourceRef
 		switch {
 		case i.TagName != nil:
-			ref = solver.ItemRef{TagRef: *i.TagName}
+			ref = solver.ResourceRef{TagRef: *i.TagName}
 		case i.ItemModID != nil && i.ItemID != nil:
-			ref = solver.ItemRef{ModID: *i.ItemModID, ItemID: *i.ItemID}
+			ref = solver.ResourceRef{ModID: *i.ItemModID, ID: *i.ItemID}
 		default:
 			continue
 		}

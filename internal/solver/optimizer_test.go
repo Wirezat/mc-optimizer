@@ -13,7 +13,8 @@ type stubStore struct {
 	byItem     map[string][]*RecipeRow
 	machines   map[string]*MachineSpec
 	interfaces map[string][]MachineRef // recipe id → machine_interfaces implementers
-	tags       map[string][]ItemRef
+	tags       map[string][]ResourceRef
+	byFluid    map[string][]*RecipeRow
 }
 
 // GetRecipesForItem mirrors the real query: one row per (recipe, machine), the recipe's own
@@ -31,8 +32,8 @@ func (s *stubStore) GetRecipesForItem(_ context.Context, modID, itemID string) (
 	return out, nil
 }
 
-func (s *stubStore) GetRecipesForFluid(_ context.Context, _, _ string) ([]*RecipeRow, error) {
-	return nil, nil
+func (s *stubStore) GetRecipesForFluid(_ context.Context, modID, fluidID string) ([]*RecipeRow, error) {
+	return s.byFluid[modID+":"+fluidID], nil
 }
 
 func (s *stubStore) GetRecipe(_ context.Context, id string) (*RecipeRow, error) {
@@ -56,7 +57,7 @@ func (s *stubStore) GetMachinesForRecipe(_ context.Context, recipeID string) ([]
 	return append([]MachineRef{{ModID: r.MachineMod, MachineID: r.MachineID}}, s.interfaces[recipeID]...), nil
 }
 
-func (s *stubStore) GetTagMembers(_ context.Context, tag ItemRef) ([]ItemRef, error) {
+func (s *stubStore) GetTagMembers(_ context.Context, tag ResourceRef) ([]ResourceRef, error) {
 	return s.tags[tag.Key()], nil
 }
 
@@ -95,7 +96,7 @@ func calcGroup(t *testing.T, durationTicks int, recipeRate Rational) MachineGrou
 	t.Helper()
 	s := NewSolver(newStub(durationTicks), 1000)
 	ctx := context.Background()
-	g, err := s.BuildRecipeGraph(ctx, ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+	g, err := s.BuildRecipeGraph(ctx, ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{},
 		map[string]string{}, map[string]string{})
 	if err != nil {
@@ -120,7 +121,7 @@ func newVariantTestSolver(t *testing.T, src VariantSource) (*Solver, *RecipeGrap
 	t.Helper()
 	s := NewSolver(newStub(20), 1000)
 	s.VariantSource = src
-	g, err := s.BuildRecipeGraph(context.Background(), ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+	g, err := s.BuildRecipeGraph(context.Background(), ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{},
 		map[string]string{}, map[string]string{})
 	if err != nil {
@@ -202,7 +203,7 @@ func TestCalculateMachineGroups_PinsTheRecipesOwnMachine(t *testing.T) {
 		if override != "" {
 			overrides["minecraft:iron_ingot"] = override
 		}
-		g, err := s.BuildRecipeGraph(ctx, ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+		g, err := s.BuildRecipeGraph(ctx, ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
 			map[string]bool{"minecraft:iron_ore": true}, FactoryState{}, overrides, map[string]string{})
 		if err != nil {
 			t.Fatalf("BuildRecipeGraph: %v", err)
@@ -249,7 +250,7 @@ func TestCalculateMachineGroups_BareRecipeOverrideLeavesTheMachineOpen(t *testin
 	ctx := context.Background()
 	overrides := map[string]string{"minecraft:iron_ingot": "recipe:iron_ingot"}
 
-	g, err := s.BuildRecipeGraph(ctx, ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+	g, err := s.BuildRecipeGraph(ctx, ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{}, overrides, map[string]string{})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)

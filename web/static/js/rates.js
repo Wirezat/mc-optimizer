@@ -17,14 +17,10 @@ initUom();
 
 const TIME_UNITS = new Set(['t', 's', 'min', 'h']);
 
-/**
- * rateHTML renders a rate as a unit badge the viewer can switch between units.
- * Input: value ({ num, den } | { Num, Den } | number), unit ('t'|'s'|'min'|'h'),
- * isFluid (value is mB per unit), cls (extra class on the badge). Output: HTML string.
- */
+/** rateHTML renders a rate ({ num, den } | number per unit 't'|'s'|'min'|'h') as a switchable unit badge; isFluid means mB. */
 export function rateHTML(value, unit, { isFluid = false, cls = '' } = {}) {
-  const num = value?.num ?? value?.Num ?? value;
-  const den = value?.den ?? value?.Den ?? 1;
+  const num = value?.num ?? value;
+  const den = value?.den ?? 1;
   return uomHTML({
     value: den && den !== 1 ? `${num}/${den}` : String(num ?? 0),
     uom: isFluid ? 'volume' : '',
@@ -37,10 +33,7 @@ export function rateHTML(value, unit, { isFluid = false, cls = '' } = {}) {
 
 const _resources = new Set();
 
-/**
- * costHTML renders a plugin cost (a resource consumed per tick) as a unit badge.
- * Input: cost { resource, amount: { num, den } }, cls (extra class). Output: HTML string.
- */
+/** costHTML renders a plugin cost { resource, amount: { num, den } } per tick as a unit badge. */
 export function costHTML(cost, { cls = '' } = {}) {
   const name = `resource:${cost.resource}`;
   if (!_resources.has(name)) {

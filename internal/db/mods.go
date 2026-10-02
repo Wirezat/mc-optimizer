@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
 )
@@ -19,7 +20,7 @@ func strPtrOr(s string) *string {
 }
 
 // LookupItemNames resolves en_us display names for a batch of items/fluids.
-func (d *DB) LookupItemNames(ctx context.Context, items []solver.ItemRef) (map[string]string, error) {
+func (d *DB) LookupItemNames(ctx context.Context, items []solver.ResourceRef) (map[string]string, error) {
 	type cand struct {
 		langKey, itemKey string
 		pri              int
@@ -35,8 +36,8 @@ func (d *DB) LookupItemNames(ctx context.Context, items []solver.ItemRef) (map[s
 			continue
 		}
 		seen[k] = true
-		base := item.ModID + "." + item.ItemID
-		if item.IsFluid {
+		base := item.ModID + "." + item.ID
+		if item.Kind.Or() == resource.KindFluid {
 			cands = append(cands, cand{"fluid." + base, k, 0})
 			cands = append(cands, cand{"block." + base, k, 1})
 		} else {

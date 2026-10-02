@@ -4,12 +4,9 @@ import (
 	"testing"
 )
 
-// Test helpers for byproduct scenarios.
-
 func mod(s string) *string { return sp(s) }
 
-// makeRecipe builds a simple RecipeRow with given ID, machine, duration, item inputs and
-// item outputs.
+// makeRecipe builds a simple RecipeRow with given ID, machine, duration, item inputs and item outputs.
 func makeRecipe(id, machineMod, machineID string, durationTicks int) *RecipeRow {
 	return &RecipeRow{
 		ID:            id,
@@ -37,18 +34,18 @@ func withItemOutput(r *RecipeRow, modID, itemID string, amountNum, amountDen int
 	return r
 }
 
-func item(modID, itemID string) ItemRef {
-	return ItemRef{ModID: modID, ItemID: itemID}
+func item(modID, itemID string) ResourceRef {
+	return ResourceRef{ModID: modID, ID: itemID}
 }
 
 // buildGraph constructs a RecipeGraph directly without a DB, for unit testing.
-func buildGraph(root ItemRef, byItemMap map[string]*RecipeRow, overrides map[string]string) *RecipeGraph {
+func buildGraph(root ResourceRef, byItemMap map[string]*RecipeRow, overrides map[string]string) *RecipeGraph {
 	g := &RecipeGraph{
 		Nodes:          make(map[string]*RecipeNode),
 		Root:           root,
 		TagResolutions: make(map[string]TagResolution),
 	}
-	queue := []ItemRef{root}
+	queue := []ResourceRef{root}
 	visited := make(map[string]bool)
 
 	for qi := 0; qi < len(queue); qi++ {
@@ -61,16 +58,14 @@ func buildGraph(root ItemRef, byItemMap map[string]*RecipeRow, overrides map[str
 
 		node := &RecipeNode{Item: it}
 
-		r, ok := byItemMap[it.ModID+":"+it.ItemID]
+		r, ok := byItemMap[it.ModID+":"+it.ID]
 		if !ok {
 			node.IsRawMaterial = true
 			g.Nodes[key] = node
 			continue
 		}
 
-		// Respect overrides (select specific recipe by ID if provided).
 		if ov, hasOv := overrides[key]; hasOv && r.ID != ov {
-			// In tests we only have one recipe per item, so ignore mismatches.
 			_ = ov
 		}
 
@@ -109,8 +104,7 @@ func approxEq(a, b, eps float64) bool {
 
 // Byproduct not needed anywhere
 
-// Centrifuge: 1 ore → 2 sulfur_dust + 1 silicon_dust (byproduct, not in chain) Solve for
-// sulfur_dust at 2/s.
+// Centrifuge byproduct that nothing consumes.
 func TestByproduct_notNeeded(t *testing.T) {
 	centrifuge := makeRecipe("r:centrifuge", "mi", "centrifuge", 20)
 	withItemInput(centrifuge, "mi", "ore", 1, 1)
@@ -136,17 +130,16 @@ func TestByproduct_notNeeded(t *testing.T) {
 	}
 
 	// ore demand: 1 per centrifuge run → 1/20t
-	oreRate := rv.ItemRates[(&ItemRef{ModID: "mi", ItemID: "ore"}).Key()]
+	oreRate := rv.ItemRates[(&ResourceRef{ModID: "mi", ID: "ore"}).Key()]
 	if !approxEq(ratF(oreRate), 1.0/20, 1e-9) {
 		t.Errorf("ore itemRate: got %v, want 1/20", oreRate)
 	}
 
-	// silicon_dust has no node — not in g.Nodes, not in rv.ItemRates. It should appear as
-	// byproduct in ComputeIOProfile outputs.
+	// silicon_dust has no node — not in g.Nodes, not in rv.ItemRates.
 	profile := ComputeIOProfile(rv, g, FactoryState{}, "t")
 	var siliconOut *IOEntry
 	for i := range profile.Outputs {
-		if profile.Outputs[i].Item.ItemID == "silicon_dust" {
+		if profile.Outputs[i].Item.ID == "silicon_dust" {
 			siliconOut = &profile.Outputs[i]
 		}
 	}
@@ -157,10 +150,7 @@ func TestByproduct_notNeeded(t *testing.T) {
 	}
 }
 
-// Byproduct fully covers downstream silicon_dust demand   Chain:
-// sulfuric_acid ← chem_reactor ← (sulfur_dust, ethanol, glass) sulfur_dust ← centrifuge ←
-// ore (byproduct: 2 silicon_dust per run) glass ← furnace ← 2 silicon_dust centrifuge
-// byproduct exactly covers furnace's silicon_dust input.
+// Byproduct fully covers downstream silicon_dust demand.
 func TestByproduct_fullyCoversDemand(t *testing.T) {
 	chemReactor := makeRecipe("r:chem", "mi", "chem_reactor", 20)
 	withItemInput(chemReactor, "mi", "sulfur_dust", 1, 1)
@@ -200,19 +190,18 @@ func TestByproduct_fullyCoversDemand(t *testing.T) {
 	// IO balance: silicon_dust is an internal flux — must not appear as input or output.
 	profile := ComputeIOProfile(rv, g, FactoryState{}, "t")
 	for _, e := range profile.Inputs {
-		if e.Item.ItemID == "silicon_dust" {
+		if e.Item.ID == "silicon_dust" {
 			t.Errorf("silicon_dust should not appear as input (byproduct covers it), got rate %v", e.Rate)
 		}
 	}
 	for _, e := range profile.Outputs {
-		if e.Item.ItemID == "silicon_dust" {
+		if e.Item.ID == "silicon_dust" {
 			t.Errorf("silicon_dust should not appear as output (fully consumed by furnace), got rate %v", e.Rate)
 		}
 	}
 }
 
-// Byproduct partially covers demand   Same chain as
-// Test 2 but furnace needs 4 silicon_dust per run.
+// Byproduct partially covers demand   Same chain as Test 2 but furnace needs 4 silicon_dust per run.
 func TestByproduct_partiallyCoversDemand(t *testing.T) {
 	chemReactor := makeRecipe("r:chem", "mi", "chem_reactor", 20)
 	withItemInput(chemReactor, "mi", "sulfur_dust", 1, 1)
@@ -253,7 +242,7 @@ func TestByproduct_partiallyCoversDemand(t *testing.T) {
 	profile := ComputeIOProfile(rv, g, FactoryState{}, "t")
 	var siliconIn *IOEntry
 	for i := range profile.Inputs {
-		if profile.Inputs[i].Item.ItemID == "silicon_dust" {
+		if profile.Inputs[i].Item.ID == "silicon_dust" {
 			siliconIn = &profile.Inputs[i]
 		}
 	}
@@ -264,9 +253,7 @@ func TestByproduct_partiallyCoversDemand(t *testing.T) {
 	}
 }
 
-// Byproduct is a stop point (raw material override)   centrifuge:
-// ore → sulfur_dust + silicon_dust (byproduct) silicon_dust is a stop point (already
-// provided externally, no recipe).
+// Byproduct is a stop point (raw material override).
 func TestByproduct_stopPoint(t *testing.T) {
 	centrifuge := makeRecipe("r:centrifuge", "mi", "centrifuge", 20)
 	withItemInput(centrifuge, "mi", "ore", 1, 1)
@@ -286,11 +273,10 @@ func TestByproduct_stopPoint(t *testing.T) {
 	}
 
 	// silicon_dust is not in the graph as a node (buildGraph doesn't find a recipe for it).
-	// ComputeIOProfile should list it as a byproduct output.
 	profile := ComputeIOProfile(rv, g, FactoryState{}, "t")
 	found := false
 	for _, o := range profile.Outputs {
-		if o.Item.ItemID == "silicon_dust" {
+		if o.Item.ID == "silicon_dust" {
 			found = true
 			if !approxEq(ratF(o.Rate), 1.0/20, 1e-9) {
 				t.Errorf("silicon_dust byproduct rate: got %f, want %f", ratF(o.Rate), 1.0/20)
@@ -302,8 +288,7 @@ func TestByproduct_stopPoint(t *testing.T) {
 	}
 }
 
-// Linear system with byproduct   Same chain as
-// Test 2 via the stoichiometry matrix path.
+// Linear system with byproduct   Same chain as Test 2 via the stoichiometry matrix path.
 func TestByproduct_linearSystem(t *testing.T) {
 	chemReactor := makeRecipe("r:chem", "mi", "chem_reactor", 20)
 	withItemInput(chemReactor, "mi", "sulfur_dust", 1, 1)
@@ -364,12 +349,12 @@ func TestByproduct_linearSystem(t *testing.T) {
 	// IO balance should show silicon_dust as neither input nor output (net zero).
 	profile := ComputeIOProfile(rv, g, FactoryState{}, "t")
 	for _, e := range profile.Inputs {
-		if e.Item.ItemID == "silicon_dust" {
+		if e.Item.ID == "silicon_dust" {
 			t.Errorf("silicon_dust should not appear as input, got rate %v", e.Rate)
 		}
 	}
 	for _, e := range profile.Outputs {
-		if e.Item.ItemID == "silicon_dust" {
+		if e.Item.ID == "silicon_dust" {
 			t.Errorf("silicon_dust should not appear as output, got rate %v", e.Rate)
 		}
 	}

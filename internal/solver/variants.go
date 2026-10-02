@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Wirezat/production-optimizer/internal/plugins"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 // MaxVariantIterations bounds the fixed-point iteration that runs when a chosen variant
@@ -136,11 +137,11 @@ func catalogOutputs(r *RecipeRow) map[string]Rational {
 		if o.ItemModID == nil || o.ItemID == nil {
 			continue
 		}
-		ref := ItemRef{ModID: *o.ItemModID, ItemID: *o.ItemID}
+		ref := ResourceRef{ModID: *o.ItemModID, ID: *o.ItemID}
 		out[ref.Key()] = NewRational(o.AmountNum, o.AmountDen).Mul(NewRational(o.ProbabilityNum, o.ProbabilityDen))
 	}
 	for _, f := range r.FluidOutputs {
-		ref := ItemRef{ModID: f.FluidModID, ItemID: f.FluidID, IsFluid: true}
+		ref := ResourceRef{ModID: f.FluidModID, ID: f.FluidID, Kind: resource.KindFluid}
 		out[ref.Key()] = NewRational(f.AmountMB, 1).Mul(NewRational(f.ProbabilityNum, f.ProbabilityDen))
 	}
 	return out

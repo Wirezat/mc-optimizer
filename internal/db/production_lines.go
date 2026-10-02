@@ -24,7 +24,7 @@ func (d *DB) ListProductionLinesByFactory(ctx context.Context, factoryID uuid.UU
 		         (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||pl.target_mod_id||'.'||pl.target_item_id),
 		         ''
 		       ) AS target_item_name,
-		       EXISTS(SELECT 1 FROM fluids WHERE mod_id = pl.target_mod_id AND fluid_id = pl.target_item_id) AS target_is_fluid,
+		       CASE WHEN EXISTS(SELECT 1 FROM fluids WHERE mod_id = pl.target_mod_id AND fluid_id = pl.target_item_id) THEN 'fluid' ELSE 'item' END AS target_kind,
 		       -- True if any machine group's mod isn't active for this PL's save —
 		       -- surfaces a warning icon without touching the PL's own data.
 		       EXISTS(
@@ -54,7 +54,7 @@ func (d *DB) ListProductionLinesByFactory(ctx context.Context, factoryID uuid.UU
 			&pl.TargetModID, &pl.TargetItemID,
 			&pl.RateNum, &pl.RateDen, &pl.TimeUnit,
 			&pl.OptimizeMode, &pl.Status, &pl.PLGroupID, &pl.Position,
-			&pl.TargetItemName, &pl.TargetIsFluid, &pl.ModMissing,
+			&pl.TargetItemName, &pl.TargetKind, &pl.ModMissing,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan production line: %w", err)
 		}
@@ -77,7 +77,7 @@ func (d *DB) GetProductionLine(ctx context.Context, id uuid.UUID) (*model.Produc
 		         (SELECT name FROM translations WHERE lang='en_us' AND lang_key='block.'||target_mod_id||'.'||target_item_id),
 		         ''
 		       ),
-		       EXISTS(SELECT 1 FROM fluids WHERE mod_id = target_mod_id AND fluid_id = target_item_id)
+		       CASE WHEN EXISTS(SELECT 1 FROM fluids WHERE mod_id = target_mod_id AND fluid_id = target_item_id) THEN 'fluid' ELSE 'item' END
 		FROM production_lines
 		WHERE id = $1
 	`, id).Scan(
@@ -85,7 +85,7 @@ func (d *DB) GetProductionLine(ctx context.Context, id uuid.UUID) (*model.Produc
 		&pl.TargetModID, &pl.TargetItemID,
 		&pl.RateNum, &pl.RateDen, &pl.TimeUnit,
 		&pl.OptimizeMode, &pl.Status, &pl.PLGroupID, &pl.Position,
-		&pl.TargetItemName, &pl.TargetIsFluid,
+		&pl.TargetItemName, &pl.TargetKind,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound

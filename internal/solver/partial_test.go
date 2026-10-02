@@ -5,9 +5,7 @@ import (
 )
 
 func TestPartialMachineReduction(t *testing.T) {
-	// Reflects real redstone_battery chain: assembler ExactCount = 10 (ticks=200, rate=1/20)
-	// bending ExactCount = 10 (ticks=50, rate=1/5) compressor ExactCount = 25/2 (ticks=100,
-	// rate=1/4, output=2) Without partial: k=2, GCD=5 → 4/4/5 at 0.4/s
+	// Reflects the real redstone_battery chain.
 	assemblerID := "assembler-recipe"
 	bendingID := "bending-recipe"
 	compressorID := "compressor-recipe"
@@ -31,7 +29,7 @@ func TestPartialMachineReduction(t *testing.T) {
 		ItemRates:   map[string]Rational{"mi:redstone_battery": NewRational(1, 20)},
 		RecipeRates: map[string]Rational{},
 	}
-	root := ItemRef{ModID: "mi", ItemID: "redstone_battery"}
+	root := ResourceRef{ModID: "mi", ID: "redstone_battery"}
 
 	s := &Solver{AutoScaleMax: 500}
 
@@ -58,8 +56,7 @@ func TestPartialMachineReduction(t *testing.T) {
 		rateS := rate.Mul(NewRational(20, 1))
 		t.Logf("=== PARTIAL on compressor === Rate: %v/%v/s  %dx assembler util=%v, %dx bending util=%v, %dx compressor util=%v",
 			rateS.Num, rateS.Den, groups[0].Count, groups[0].Utilization, groups[1].Count, groups[1].Utilization, groups[2].Count, groups[2].Utilization)
-		// Non-partial (assembler, bending): LCM(1,1)=1, GCD(10,10)=10 → each ExactCount=1 at
-		// 100%.
+		// Non-partial groups: assembler, bending.
 		if groups[0].Count != 1 {
 			t.Errorf("assembler count=%d want 1", groups[0].Count)
 		}
@@ -93,8 +90,7 @@ func TestPartialMachineReduction(t *testing.T) {
 		rateS := rate.Mul(NewRational(20, 1))
 		t.Logf("=== PARTIAL on bending === Rate: %v/%v/s  %dx assembler util=%v, %dx bending util=%v, %dx compressor util=%v",
 			rateS.Num, rateS.Den, groups[0].Count, groups[0].Utilization, groups[1].Count, groups[1].Utilization, groups[2].Count, groups[2].Utilization)
-		// Non-partial (assembler, compressor): LCM(1,2)=2, GCD(20,25)=5 → assembler=4,
-		// compressor=5.
+		// Non-partial groups: assembler, compressor.
 		if groups[0].Count != 4 {
 			t.Errorf("assembler count=%d want 4", groups[0].Count)
 		}

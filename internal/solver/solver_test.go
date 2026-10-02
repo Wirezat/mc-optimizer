@@ -1,14 +1,10 @@
 package solver
 
-// Comprehensive solver tests covering all relevant recipe constellations. Uses buildGraph +
-// SolveDAG / SolveLinearSystem / ComputeIOProfile directly (no DB required) via the test
-// helpers in byproduct_test.go.
+// Comprehensive solver tests covering all relevant recipe constellations.
 
 import (
 	"testing"
 )
-
-// helpers
 
 func solveBoth(t *testing.T, g *RecipeGraph, target Rational) (dag RateVector, lin RateVector) {
 	t.Helper()
@@ -24,9 +20,7 @@ func solveBoth(t *testing.T, g *RecipeGraph, target Rational) (dag RateVector, l
 	return dag, lin
 }
 
-// rateFor looks up a rate by bare recipe ID, ignoring which machine it landed on —
-// RateVector is keyed by RecipeOptionKey(recipe, machine) now, but these fixture tests only
-// ever attach one machine per synthetic recipe id.
+// rateFor looks up a rate by bare recipe ID, ignoring which machine it landed on.
 func rateFor(rv RateVector, recipeID string) Rational {
 	for k, v := range rv.RecipeRates {
 		if id, _, _, ok := ParseRecipeOptionKey(k); ok && id == recipeID {
@@ -55,7 +49,7 @@ func assertDagLinMatch(t *testing.T, label string, dag, lin RateVector, recipeID
 
 func ioHasInput(profile IOProfile, itemID string) *IOEntry {
 	for i := range profile.Inputs {
-		if profile.Inputs[i].Item.ItemID == itemID {
+		if profile.Inputs[i].Item.ID == itemID {
 			return &profile.Inputs[i]
 		}
 	}
@@ -64,7 +58,7 @@ func ioHasInput(profile IOProfile, itemID string) *IOEntry {
 
 func ioHasOutput(profile IOProfile, itemID string) *IOEntry {
 	for i := range profile.Outputs {
-		if profile.Outputs[i].Item.ItemID == itemID {
+		if profile.Outputs[i].Item.ID == itemID {
 			return &profile.Outputs[i]
 		}
 	}
@@ -197,8 +191,7 @@ func TestChain_probabilisticOutput(t *testing.T) {
 	}
 	g := buildGraph(item("mi", "gem"), byItem, nil)
 
-	// OutputAmount for gem = 1 * 1/2 = 1/2 To get 1 gem/t: centrifuge rate = 1 / (1/2) = 2/t
-	// ore demand = 2/t; dust byproduct = 2/t
+	// OutputAmount for gem = 1/2, so 1 gem/t needs the centrifuge at 2/t.
 
 	target := NewRational(1, 1)
 	dag, err := SolveDAG(g, target)
@@ -314,12 +307,7 @@ func TestChain_factoryProvided(t *testing.T) {
 	}
 }
 
-// 6. Multiple byproducts, both consumed downstream   smelter: 2 ore
-// → 1 iron + 1 slag (byproduct) slag_press: 1 slag → 1 plate assembler: 1 iron + 1 plate →
-// 1 gear (root) Target: 1 gear/t assembler at 1/t needs 1 iron + 1 plate iron: smelter at
-// 1/t produces 1 iron + 1 slag as byproduct plate: slag_press at 1/t needs 1 slag — smelter
-// byproduct covers exactly slag: internal (produced 1/t, consumed 1/t) → not in IO balance
-// external inputs: only ore (2/t)
+// 6. Multiple byproducts, both consumed downstream.
 
 func TestChain_multipleByproducts_bothConsumed(t *testing.T) {
 	smelter := makeRecipe("r:smelter", "mi", "smelter", 20)
@@ -376,9 +364,7 @@ func TestChain_multipleByproducts_bothConsumed(t *testing.T) {
 	}
 }
 
-// 7. Byproduct excess: more produced than consumed   smelter: 1 ore
-// → 1 iron + 3 slag only 1 slag consumed by slag_press per gear assembler: 1 iron + 1 plate
-// → 1 gear slag produced: 3/t; consumed: 1/t → net export: 2/t in IO outputs
+// 7. Byproduct excess: more produced than consumed.
 
 func TestChain_byproductExcess(t *testing.T) {
 	smelter := makeRecipe("r:smelter", "mi", "smelter", 20)
@@ -510,16 +496,13 @@ func TestSolvers_dagLinalgParity(t *testing.T) {
 		}
 	}
 
-	// machine at 1/t → needs 4 circuits/t → circuit machine at 4/t, needs 8 plastic/t plastic
-	// at 8/t, chem outputs 3/run → chem at 8/3/t
+	// machine 1/t → 4 circuits/t → circuit machine 4/t → 8 plastic/t.
 	assertRate(t, "fabricator", rateFor(dag, "r:machine"), 1, 1)
 	assertRate(t, "circuit assembler", rateFor(dag, "r:circuit"), 4, 1)
 	assertRate(t, "chem plant", rateFor(dag, "r:chem"), 8, 3)
 }
 
-// 10. Zero-rate recipe when item is fully stop-pointed   If an item has
-// a recipe but is declared as a stop-point, the recipe must not appear in the rate vector
-// at all (or be zero).
+// 10. Zero-rate recipe when item is fully stop-pointed.
 
 func TestChain_stopPointZerosRecipe(t *testing.T) {
 	recipeA := makeRecipe("r:a", "mi", "m", 20)
@@ -542,7 +525,7 @@ func TestChain_stopPointZerosRecipe(t *testing.T) {
 		MachineMod: "mi", MachineID: "m",
 		OutputAmount: NewRational(1, 1),
 	}
-	appendRecipeEdges(rootNode, recipeRoot, &[]ItemRef{})
+	appendRecipeEdges(rootNode, recipeRoot, &[]ResourceRef{})
 	g.Nodes["mi:root"] = rootNode
 
 	// a as stop-point

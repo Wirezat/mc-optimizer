@@ -18,13 +18,13 @@ import (
 
 // named* wrappers embed solver types with display names resolved at the API layer.
 type namedItemRef struct {
-	solver.ItemRef
+	solver.ResourceRef
 	Name string `json:"name"`
 }
 
 type namedTagResolution struct {
-	Chosen  namedItemRef
-	Options []namedItemRef
+	Chosen  namedItemRef   `json:"chosen"`
+	Options []namedItemRef `json:"options"`
 }
 
 type namedChainItem struct {
@@ -40,7 +40,7 @@ type namedIOEntry struct {
 type namedMachineGroup struct {
 	solver.MachineGroupDraft
 	RecipeOutputName string `json:"recipe_output_name"`
-	MachineName      string `json:"MachineName"`
+	MachineName      string `json:"machine_name"`
 }
 
 func resolveTagResolutions(trs map[string]solver.TagResolution, names map[string]string) map[string]namedTagResolution {
@@ -48,10 +48,10 @@ func resolveTagResolutions(trs map[string]solver.TagResolution, names map[string
 	for k, tr := range trs {
 		opts := make([]namedItemRef, len(tr.Options))
 		for i, o := range tr.Options {
-			opts[i] = namedItemRef{ItemRef: o, Name: names[o.Key()]}
+			opts[i] = namedItemRef{ResourceRef: o, Name: names[o.Key()]}
 		}
 		out[k] = namedTagResolution{
-			Chosen:  namedItemRef{ItemRef: tr.Chosen, Name: names[tr.Chosen.Key()]},
+			Chosen:  namedItemRef{ResourceRef: tr.Chosen, Name: names[tr.Chosen.Key()]},
 			Options: opts,
 		}
 	}
@@ -61,10 +61,10 @@ func resolveTagResolutions(trs map[string]solver.TagResolution, names map[string
 // discoverRequest is the shared wire format for both the real (factory-scoped) and demo
 // discover endpoints.
 type discoverRequest struct {
-	TargetItem      solver.ItemRef    `json:"TargetItem"`
-	RecipeOverrides map[string]string `json:"RecipeOverrides"`
-	TagOverrides    map[string]string `json:"TagOverrides"`
-	StopPoints      map[string]bool   `json:"StopPoints"`
+	TargetItem      solver.ResourceRef `json:"target"`
+	RecipeOverrides map[string]string  `json:"recipe_overrides"`
+	TagOverrides    map[string]string  `json:"tag_overrides"`
+	StopPoints      map[string]bool    `json:"stop_points"`
 }
 
 func decodeDiscoverRequest(w http.ResponseWriter, r *http.Request) (discoverRequest, bool) {
@@ -72,8 +72,8 @@ func decodeDiscoverRequest(w http.ResponseWriter, r *http.Request) (discoverRequ
 	if !decodeJSON(w, r, &req) {
 		return req, false
 	}
-	if req.TargetItem.TagRef == "" && (req.TargetItem.ModID == "" || req.TargetItem.ItemID == "") {
-		errBadRequest(w, "target_item requires mod_id+item_id or tag_ref")
+	if req.TargetItem.TagRef == "" && (req.TargetItem.ModID == "" || req.TargetItem.ID == "") {
+		errBadRequest(w, "target requires mod_id+id or tag_ref")
 		return req, false
 	}
 	if req.RecipeOverrides == nil {
@@ -90,7 +90,7 @@ func decodeDiscoverRequest(w http.ResponseWriter, r *http.Request) (discoverRequ
 
 // respondDiscover resolves display names for a DiscoverResult and writes the JSON response.
 func respondDiscover(w http.ResponseWriter, r *http.Request, database *db.DB, result solver.DiscoverResult) {
-	var allRefs []solver.ItemRef
+	var allRefs []solver.ResourceRef
 	for _, ci := range result.Items {
 		allRefs = append(allRefs, ci.Item)
 	}
@@ -131,11 +131,11 @@ func respondDiscover(w http.ResponseWriter, r *http.Request, database *db.DB, re
 		namedItems[i] = namedChainItem{ChainItem: ci, Name: names[ci.Item.Key()]}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"Items":             namedItems,
-		"TagResolutions":    resolveTagResolutions(result.TagResolutions, names),
-		"Names":             names,
-		"MachineNames":      machineNames,
-		"MachinePluginMods": machinePluginMods,
+		"items":               namedItems,
+		"tag_resolutions":     resolveTagResolutions(result.TagResolutions, names),
+		"names":               names,
+		"machine_names":       machineNames,
+		"machine_plugin_mods": machinePluginMods,
 	})
 }
 
@@ -214,8 +214,8 @@ func decodeSolveRequest(w http.ResponseWriter, r *http.Request) (solver.SolveReq
 	if !decodeJSON(w, r, &req) {
 		return req, false
 	}
-	if req.TargetItem.TagRef == "" && (req.TargetItem.ModID == "" || req.TargetItem.ItemID == "") {
-		errBadRequest(w, "target_item requires mod_id+item_id or tag_ref")
+	if req.TargetItem.TagRef == "" && (req.TargetItem.ModID == "" || req.TargetItem.ID == "") {
+		errBadRequest(w, "target requires mod_id+id or tag_ref")
 		return req, false
 	}
 	if req.TimeUnit == "" {
@@ -275,7 +275,7 @@ func writeSolveError(w http.ResponseWriter, err error) bool {
 
 // respondSolve resolves display names for a SolveResult and writes the JSON response.
 func respondSolve(w http.ResponseWriter, r *http.Request, database *db.DB, result solver.SolveResult, draftID *uuid.UUID, expiresAt *time.Time) {
-	var allRefs []solver.ItemRef
+	var allRefs []solver.ResourceRef
 	for _, mg := range result.MachineGroups {
 		allRefs = append(allRefs, mg.RecipeOutput)
 	}
@@ -327,18 +327,18 @@ func respondSolve(w http.ResponseWriter, r *http.Request, database *db.DB, resul
 		namedOutputs[i] = namedIOEntry{IOEntry: e, Name: names[e.Item.Key()]}
 	}
 	resp := map[string]any{
-		"Names": names,
+		"names": names,
 		"result": map[string]any{
-			"MachineGroups": namedGroups,
-			"IOProfile": map[string]any{
-				"Inputs":  namedInputs,
-				"Outputs": namedOutputs,
+			"machine_groups": namedGroups,
+			"io_profile": map[string]any{
+				"inputs":  namedInputs,
+				"outputs": namedOutputs,
 			},
-			"ActualRate":     result.ActualRate,
-			"HadCycles":      result.HadCycles,
-			"ModeUsed":       result.ModeUsed,
-			"Warnings":       result.Warnings,
-			"TagResolutions": resolveTagResolutions(result.TagResolutions, names),
+			"actual_rate":     result.ActualRate,
+			"had_cycles":      result.HadCycles,
+			"mode_used":       result.ModeUsed,
+			"warnings":        result.Warnings,
+			"tag_resolutions": resolveTagResolutions(result.TagResolutions, names),
 		},
 	}
 	if draftID != nil {

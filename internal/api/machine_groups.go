@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/Wirezat/GoLog"
 	"github.com/Wirezat/production-optimizer/internal/db"
@@ -143,7 +142,7 @@ func baseVariant(vs []plugins.Variant) (plugins.Variant, bool) {
 func enrichGroupVariants(r *http.Request, database *db.DB, variants solver.VariantSource, mgs []*model.MachineGroup) map[uuid.UUID]float64 {
 	speed := make(map[uuid.UUID]float64, len(mgs))
 	perGroup := make([][]plugins.Variant, len(mgs))
-	var refs []solver.ItemRef
+	var refs []solver.ResourceRef
 	for i, mg := range mgs {
 		vs, err := groupVariants(r, database, variants, mg)
 		if err != nil {
@@ -153,7 +152,7 @@ func enrichGroupVariants(r *http.Request, database *db.DB, variants solver.Varia
 		perGroup[i] = vs
 		for _, v := range vs {
 			for _, it := range v.Items {
-				refs = append(refs, itemRefFromKey(it.Ref))
+				refs = append(refs, solver.RefFromKey(it.Ref))
 			}
 		}
 	}
@@ -191,14 +190,6 @@ func enrichGroupVariants(r *http.Request, database *db.DB, variants solver.Varia
 		}
 	}
 	return speed
-}
-
-// itemRefFromKey inverts solver.ItemRef.Key for item and fluid refs.
-func itemRefFromKey(key string) solver.ItemRef {
-	isFluid := strings.HasPrefix(key, "fluid:")
-	key = strings.TrimPrefix(key, "fluid:")
-	mod, id, _ := strings.Cut(key, ":")
-	return solver.ItemRef{ModID: mod, ItemID: id, IsFluid: isFluid}
 }
 
 // groupVariants evaluates the variants available to a machine group, under the config

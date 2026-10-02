@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
 )
@@ -181,14 +182,14 @@ func TestFluidTag_LoadsAndResolves(t *testing.T) {
 	if len(r.FluidInputs) != 1 || r.FluidInputs[0].TagName == nil || *r.FluidInputs[0].TagName != "r1test:honey" {
 		t.Fatalf("fluid inputs = %+v, want the tag r1test:honey", r.FluidInputs)
 	}
-	members, err := d.GetTagMembers(ctx, solver.ItemRef{TagRef: "r1test:honey", IsFluid: true})
+	members, err := d.GetTagMembers(ctx, solver.ResourceRef{TagRef: "r1test:honey", Kind: resource.KindFluid})
 	if err != nil {
 		t.Fatalf("GetTagMembers: %v", err)
 	}
 	if len(members) != 1 || members[0].Key() != "fluid:r1loadmod:honey" {
 		t.Errorf("members = %+v, want fluid r1loadmod:honey", members)
 	}
-	itemMembers, err := d.GetTagMembers(ctx, solver.ItemRef{TagRef: "r1test:honey"})
+	itemMembers, err := d.GetTagMembers(ctx, solver.ResourceRef{TagRef: "r1test:honey"})
 	if err != nil {
 		t.Fatalf("GetTagMembers item: %v", err)
 	}

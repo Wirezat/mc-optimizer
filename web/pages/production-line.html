@@ -302,7 +302,7 @@
   }
 
   function renderMeta() {
-    const isFluid    = !!_pl.target_is_fluid;
+    const isFluid    = _pl.target_kind === 'fluid';
     const rate       = rateHTML({ num: _pl.rate_num, den: _pl.rate_den }, _pl.time_unit, { isFluid });
     const targetName = _pl.target_item_name || (_pl.target_item_id.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()));
     const incomplete = _pl.status === 'active' && !isLineComplete();
@@ -310,7 +310,7 @@
     document.getElementById('pl-meta').innerHTML = `
       <div class="detail-row">
         <span class="detail-key">${esc(t('production_line.meta.target'))}</span>
-        ${iconTextHTML(_pl.target_mod_id, _pl.target_item_id, { isFluid: _pl.target_is_fluid, name: targetName, subtitle: _pl.target_mod_id, size: 'lg' })}
+        ${iconTextHTML(_pl.target_mod_id, _pl.target_item_id, { isFluid: _pl.target_kind === 'fluid', name: targetName, subtitle: _pl.target_mod_id, size: 'lg' })}
       </div>
       <div class="detail-row">
         <span class="detail-key">${esc(t('production_line.meta.mode'))}</span>
@@ -525,7 +525,7 @@
     const k = g(n, d);
 
     const res = await apiFetch('/api/production-lines/' + _plID + '/scale', {
-      method: 'POST', body: JSON.stringify({ factor: { Num: n / k, Den: d / k } }),
+      method: 'POST', body: JSON.stringify({ factor: { num: n / k, den: d / k } }),
     });
     if (res?.ok) { reload(); return; }
     const body = await res?.json().catch(() => ({}));

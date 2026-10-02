@@ -14,7 +14,7 @@ type RecipeStore interface {
 	GetRecipe(ctx context.Context, id string) (*RecipeRow, error)
 	GetMachinesForRecipe(ctx context.Context, recipeID string) ([]MachineRef, error)
 	GetMachineType(ctx context.Context, modID, machineID string) (*MachineSpec, error)
-	GetTagMembers(ctx context.Context, tag ItemRef) ([]ItemRef, error)
+	GetTagMembers(ctx context.Context, tag ResourceRef) ([]ResourceRef, error)
 }
 
 // Solver executes production line optimization.
@@ -146,7 +146,7 @@ func (s *Solver) solve(ctx context.Context, req SolveRequest) (SolveResult, erro
 // solveRates computes the rate vector for the graph as it currently stands, walking the DAG
 // or solving the linear system depending on hadCycles. Returns *ErrCycleBreakNeeded when a
 // cycle needs a user-chosen stop point.
-func (s *Solver) solveRates(g *RecipeGraph, targetRate Rational, hadCycles bool, root ItemRef) (RateVector, error) {
+func (s *Solver) solveRates(g *RecipeGraph, targetRate Rational, hadCycles bool, root ResourceRef) (RateVector, error) {
 	if !hadCycles {
 		rv, err := SolveDAG(g, targetRate)
 		if err != nil {

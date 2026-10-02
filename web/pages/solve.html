@@ -468,7 +468,7 @@
   // its own defaults.
   let _modConfigs   = {};
   let _existingPLRates = new Map(); // itemKey -> {Num,Den} real aggregate output rate/min across this factory's PLs
-  let _neededRates     = new Map(); // itemKey -> {Num,Den,TimeUnit} demand rate from the latest solve's IOProfile.Inputs
+  let _neededRates     = new Map(); // itemKey -> {Num,Den,TimeUnit} demand rate from the latest solve's IOProfile.inputs
   let _cycleNodes   = new Set();
   let _targetItem   = null;
   let _chainItems   = [];
@@ -545,11 +545,11 @@
 
   // The candidates for recipeID, base machine first - what the row runs unpinned.
   function machineCandidates(item, recipeID) {
-    return (item.Options || []).filter(o => o.RecipeID === recipeID);
+    return (item.options || []).filter(o => o.recipe_id === recipeID);
   }
 
   function machineLabel(opt) {
-    return _machineNames[opt.MachineMod + ':' + opt.MachineID] || opt.MachineID;
+    return _machineNames[opt.machine_mod + ':' + opt.machine_id] || opt.machine_id;
   }
 
   function machineIcon(mod, id, hidpiPx = 20) {
@@ -615,7 +615,7 @@
       // and picking an explicit recipe here still overrides it like any other item.
       for (const o of (balance?.outputs || [])) {
         const key = (o.io_type === 'fluid' ? 'fluid:' : '') + o.mod_id + ':' + o.item_fluid_id;
-        _existingPLRates.set(key, { Num: o.rate_num, Den: o.rate_den });
+        _existingPLRates.set(key, { num: o.rate_num, den: o.rate_den });
       }
     }
 
@@ -677,10 +677,10 @@
         });
       },
       onSelect(r) {
-        const isSameItem = _targetItem && !_targetItem.TagRef
-          && _targetItem.ModID === r.mod_id && _targetItem.ItemID === r.item_id && !!_targetItem.IsFluid === !!r._fluid;
+        const isSameItem = _targetItem && !_targetItem.tag_ref
+          && _targetItem.mod_id === r.mod_id && _targetItem.id === r.item_id && _targetItem.kind === (r._fluid ? 'fluid' : 'item');
         const matches = _nameMap.get(r.name.toLowerCase()) || [r];
-        _targetItem = { ModID: r.mod_id, ItemID: r.item_id, IsFluid: r._fluid, name: r.name };
+        _targetItem = { mod_id: r.mod_id, id: r.item_id, kind: r._fluid ? 'fluid' : 'item', name: r.name };
         document.getElementById('target-input').value = r.name;
         setModSelect(matches.map(m => ({ mod_id: m.mod_id, label: modName(m.mod_id) })), r.mod_id);
         // Actually switching items resets the working chain — re-selecting the
@@ -762,8 +762,8 @@
   }
 
   document.getElementById('target-mod').addEventListener('change', function() {
-    if (!_targetItem || _targetItem.TagRef) return;
-    _targetItem.ModID = this.value;
+    if (!_targetItem || _targetItem.tag_ref) return;
+    _targetItem.mod_id = this.value;
     _overrides    = {};
     _tagOverrides = {};
     _chainItems   = [];
@@ -778,7 +778,7 @@
     document.getElementById('rate-field').classList.toggle('rate-disabled', m === 'AUTO');
   }
 
-  // Keyed by RateKey: the solver may swap the group's recipe for a sibling.
+  // Keyed by rate_key: the solver may swap the group's recipe for a sibling.
   function togglePartial(rateKey) {
     if (_allowPartial.has(rateKey)) _allowPartial.delete(rateKey);
     else                            _allowPartial.add(rateKey);
@@ -791,9 +791,9 @@
 
   async function doDiscover() {
     if (!_targetItem) { showStatus('solve-status', 'err', t('msg.select_target')); return; }
-    const targetItem = _targetItem.TagRef
-      ? { TagRef: _targetItem.TagRef }
-      : { ModID: _targetItem.ModID, ItemID: _targetItem.ItemID, IsFluid: !!_targetItem.IsFluid };
+    const targetItem = _targetItem.tag_ref
+      ? { tag_ref: _targetItem.tag_ref }
+      : { mod_id: _targetItem.mod_id, id: _targetItem.id, kind: _targetItem.kind };
 
     const seq = ++_reqSeq;
 
@@ -805,10 +805,10 @@
     const res = await apiFetch(_discoverURL, {
       method: 'POST',
       body: JSON.stringify({
-        TargetItem:      targetItem,
-        RecipeOverrides: _overrides,
-        TagOverrides:    _tagOverrides,
-        StopPoints:      stops,
+        target:      targetItem,
+        recipe_overrides: _overrides,
+        tag_overrides:    _tagOverrides,
+        stop_points:      stops,
       }),
     });
 
@@ -818,12 +818,12 @@
 
     const data = await res.json();
     if (seq !== _reqSeq) return; // a newer discover/solve request has since started
-    _chainItems      = data.Items || [];
-    _tagResolutions  = data.TagResolutions || {};
+    _chainItems      = data.items || [];
+    _tagResolutions  = data.tag_resolutions || {};
     _solvedMachines  = {};
-    Object.assign(_names, data.Names || {});
-    Object.assign(_machineNames, data.MachineNames || {});
-    _pluginMods = data.MachinePluginMods || {};
+    Object.assign(_names, data.names || {});
+    Object.assign(_machineNames, data.machine_names || {});
+    _pluginMods = data.machine_plugin_mods || {};
     await ensureMachineHooks();
     if (seq !== _reqSeq) return; // a newer discover/solve request has since started
     showStatus('solve-status', '', '');
@@ -838,7 +838,7 @@
 
   // Compares this factory's real existing output rate for `key` (from the
   // balance, /min) against how much the current chain actually needs (from
-  // the latest solve's IOProfile.Inputs) — exact rational comparison, no
+  // the latest solve's IOProfile.inputs) — exact rational comparison, no
   // floating point. Returns null if the factory doesn't produce this item at
   // all; { partial: true } if it does but we don't have a demand figure yet
   // (before the first solve completes); otherwise { cmp, existingText, neededText }
@@ -848,10 +848,10 @@
     if (!existing) return null;
     const needed = _neededRates.get(key);
     if (!needed) return { partial: true };
-    const tpu = ticksPerUnit(needed.TimeUnit);
+    const tpu = ticksPerUnit(needed.time_unit);
     // existing is per-minute (tpu 1200); convert to needed's TimeUnit before comparing.
-    const existInUnit = { Num: existing.Num * tpu, Den: existing.Den * 1200 };
-    const cmp = existInUnit.Num * needed.Den - needed.Num * existInUnit.Den;
+    const existInUnit = { num: existing.num * tpu, den: existing.den * 1200 };
+    const cmp = existInUnit.num * needed.den - needed.num * existInUnit.den;
     return {
       cmp: cmp > 0 ? 1 : cmp < 0 ? -1 : 0,
       existingText: fmtR(existInUnit),
@@ -873,38 +873,38 @@
   }
 
   function _chainRecipeCell(item, key, withStop) {
-    const opts = item.Options || [];
-    if (item.ModRestricted) {
+    const opts = item.options || [];
+    if (item.mod_restricted) {
       return `<span style="color:var(--warn);font-size:var(--text-xs);">⚠ ${t('solve.chain.mod_restricted')}</span>`;
     }
-    if (item.IsRawMaterial || opts.length === 0) {
+    if (item.is_raw_material || opts.length === 0) {
       return `<span style="color:var(--text-faint);font-style:italic;font-size:var(--text-xs);">${t('solve.chain.raw_material')}</span>`;
     }
     const inCycle = _cycleNodes.has(key);
     const warnIcon = `<span class="cycle-warn${inCycle ? '' : ' cycle-warn-hidden'}"${inCycle ? ` title="${esc(t('solve.cycle_error.item_warn'))}"` : ''}>⚠</span>`;
     // Match on ChosenMachineID, not RecipeID alone: several machines share a
     // recipe.
-    const chosen = item.ChosenMachineID
-      ? opts.find(o => o.RecipeID === item.ChosenRecipeID && o.MachineID === item.ChosenMachineID)
-      : opts.find(o => o.RecipeID === item.ChosenRecipeID);
-    const chosenInputs = chosen ? (chosen.Inputs || []) : [];
+    const chosen = item.chosen_machine_id
+      ? opts.find(o => o.recipe_id === item.chosen_recipe_id && o.machine_id === item.chosen_machine_id)
+      : opts.find(o => o.recipe_id === item.chosen_recipe_id);
+    const chosenInputs = chosen ? (chosen.inputs || []) : [];
     const resolvedInputs = chosenInputs.map(k => _names[k]).filter(Boolean);
     const inputs = resolvedInputs.length ? resolvedInputs.join(', ') : '';
     const changeLabel = esc(t('solve.chain.change_recipe'));
     if (chosen) {
       // Unpinned the solver picks, and before the first solve there is no name.
-      const base = machineCandidates(item, chosen.RecipeID)[0];
-      const pinned = !!base && chosen.Key !== base.Key;
+      const base = machineCandidates(item, chosen.recipe_id)[0];
+      const pinned = !!base && chosen.key !== base.key;
       const solved = _solvedMachines[key];
       let machineText = t('solve.chain.machine_auto'), machineCls = ' chain-machine-auto', icon = '';
       if (pinned) {
         machineText = machineLabel(chosen);
         machineCls = ' chain-machine-pinned';
-        icon = machineIcon(chosen.MachineMod, chosen.MachineID, 16);
+        icon = machineIcon(chosen.machine_mod, chosen.machine_id, 16);
       } else if (solved) {
-        machineText = solved.Name || machineLabel(solved);
+        machineText = solved.name || machineLabel(solved);
         machineCls = '';
-        icon = machineIcon(solved.MachineMod, solved.MachineID, 16);
+        icon = machineIcon(solved.machine_mod, solved.machine_id, 16);
       }
       return warnIcon +
         `<button class="chain-machine${machineCls}" data-action="openMachinePicker"
@@ -932,13 +932,13 @@
   // machine belongs to another mod gets an empty cell in that mod's column.
   function _chainPluginCells(item) {
     if (!_machineColumns.length) return '';
-    const solved = _solvedMachines[itemKey(item.Item)];
-    const machineMod = solved ? solved.MachineMod : item.ChosenMachineMod;
-    const machineID  = solved ? solved.MachineID  : item.ChosenMachineID;
+    const solved = _solvedMachines[itemKey(item.ref)];
+    const machineMod = solved ? solved.machine_mod : item.chosen_machine_mod;
+    const machineID  = solved ? solved.machine_id  : item.chosen_machine_id;
     const pluginMod  = machineMod ? _pluginMods[`${machineMod}:${machineID}`] : '';
     return _machineColumns.map(col => {
       const text = (pluginMod && col.mods.includes(pluginMod))
-        ? cellText(_machineHooks, pluginMod, { mod_id: machineMod, machine_id: machineID }, col.columnID, solved?.Variant ?? null)
+        ? cellText(_machineHooks, pluginMod, { mod_id: machineMod, machine_id: machineID }, col.columnID, solved?.variant ?? null)
         : '';
       return `<td>${esc(text)}</td>`;
     }).join('');
@@ -949,33 +949,33 @@
 
     const rows = [];
 
-    const target = _chainItems.find(ci => ci.Level === 0);
+    const target = _chainItems.find(ci => ci.level === 0);
     if (target) {
-      const key      = itemKey(target.Item);
-      const isTagRow = !!(target.Item.TagRef || target.ResolvedTag);
-      const sub      = isTagRow ? '' : modName(target.Item.ModID);
+      const key      = itemKey(target.ref);
+      const isTagRow = !!(target.ref.tag_ref || target.resolved_tag);
+      const sub      = isTagRow ? '' : modName(target.ref.mod_id);
       rows.push(`<tr>
-        <td>${refIconTextHTML(target.Item, { name: nameOf(target.Item), subtitle: sub, size: 'sm', extraClass: 'chain-target-icontext', resolvedTag: target.ResolvedTag })}</td>
+        <td>${refIconTextHTML(target.ref, { name: nameOf(target.ref), subtitle: sub, size: 'sm', extraClass: 'chain-target-icontext', resolvedTag: target.resolved_tag })}</td>
         <td><div class="chain-cell-recipe">${_chainRecipeCell(target, key, false)}</div></td>
         ${_chainPluginCells(target)}
       </tr>`);
     }
 
-    const rest = _chainItems.filter(ci => ci.Level > 0);
+    const rest = _chainItems.filter(ci => ci.level > 0);
     const byLevel = new Map();
     for (const item of rest) {
-      if (!byLevel.has(item.Level)) byLevel.set(item.Level, []);
-      byLevel.get(item.Level).push(item);
+      if (!byLevel.has(item.level)) byLevel.set(item.level, []);
+      byLevel.get(item.level).push(item);
     }
     for (const [level, items] of [...byLevel.entries()].sort((a, b) => a[0] - b[0])) {
       rows.push(`<tr class="table-group-hd"><td colspan="${2 + _machineColumns.length}">${t('solve.chain.level').toUpperCase()} ${level}</td></tr>`);
       for (const item of items) {
-        const key      = itemKey(item.Item);
-        const isTagRow = !!(item.Item.TagRef || item.ResolvedTag);
-        const sub      = isTagRow ? '' : modName(item.Item.ModID);
-        const isStop   = item.IsStop && !item.IsRawMaterial;
+        const key      = itemKey(item.ref);
+        const isTagRow = !!(item.ref.tag_ref || item.resolved_tag);
+        const sub      = isTagRow ? '' : modName(item.ref.mod_id);
+        const isStop   = item.is_stop && !item.is_raw_material;
         rows.push(`<tr${isStop ? ' class="tc-stopped"' : ''}>
-          <td>${refIconTextHTML(item.Item, { name: nameOf(item.Item), subtitle: sub, size: 'sm', resolvedTag: item.ResolvedTag })}</td>
+          <td>${refIconTextHTML(item.ref, { name: nameOf(item.ref), subtitle: sub, size: 'sm', resolvedTag: item.resolved_tag })}</td>
           <td><div class="chain-cell-recipe">${_chainRecipeCell(item, key, true)}</div></td>
           ${_chainPluginCells(item)}
         </tr>`);
@@ -1008,51 +1008,51 @@
     const byItemId  = new Map();
     const byFluidId = new Map();
     for (const ci of _chainItems) {
-      if (ci.Item.TagRef) continue;
-      const m = ci.Item.IsFluid ? byFluidId : byItemId;
-      if (!m.has(ci.Item.ItemID)) m.set(ci.Item.ItemID, []);
-      m.get(ci.Item.ItemID).push(ci);
+      if (ci.ref.tag_ref) continue;
+      const m = ci.ref.kind === 'fluid' ? byFluidId : byItemId;
+      if (!m.has(ci.ref.id)) m.set(ci.ref.id, []);
+      m.get(ci.ref.id).push(ci);
     }
     // Prefer the candidate one level deeper than its consumer — that is where
     // BFS places a fresh input; shared nodes keep their earliest level.
     function pickCandidate(cands, consumerLevel) {
       if (!cands || !cands.length) return null;
-      return cands.find(c => c.Level === consumerLevel + 1) || cands[0];
+      return cands.find(c => c.level === consumerLevel + 1) || cands[0];
     }
 
-    const chainKeys = new Set(_chainItems.map(ci => itemKey(ci.Item)));
+    const chainKeys = new Set(_chainItems.map(ci => itemKey(ci.ref)));
     const nodes = [];
     for (const ci of _chainItems) {
-      const key = itemKey(ci.Item);
+      const key = itemKey(ci.ref);
 
-      const chosen = ci.ChosenMachineID
-        ? (ci.Options || []).find(o => o.RecipeID === ci.ChosenRecipeID && o.MachineID === ci.ChosenMachineID)
-        : (ci.Options || []).find(o => o.RecipeID === ci.ChosenRecipeID);
+      const chosen = ci.chosen_machine_id
+        ? (ci.options || []).find(o => o.recipe_id === ci.chosen_recipe_id && o.machine_id === ci.chosen_machine_id)
+        : (ci.options || []).find(o => o.recipe_id === ci.chosen_recipe_id);
 
       // Map chain-specific state to the graph component's generic visual roles:
       // primary = root, terminal = raw material or no known recipe (both are
       // dead ends — matches _chainRecipeCell's table-view treatment), muted =
       // stopped expansion, tagged = fluid (free-form marker, orthogonal to
       // the others).
-      const noOptions = (ci.Options || []).length === 0;
-      let kind = ci.Level === 0 ? 'primary' : '', badge = '';
-      if (ci.ModRestricted) {
+      const noOptions = (ci.options || []).length === 0;
+      let kind = ci.level === 0 ? 'primary' : '', badge = '';
+      if (ci.mod_restricted) {
         kind = 'terminal';
         badge = t('solve.chain.mod_restricted');
-      } else if (ci.IsRawMaterial || noOptions) {
+      } else if (ci.is_raw_material || noOptions) {
         kind = 'terminal';
         badge = t('solve.chain.raw_material');
-      } else if (_stopPoints.has(key) && !chosen && ci.Level !== 0) {
+      } else if (_stopPoints.has(key) && !chosen && ci.level !== 0) {
         kind = 'muted';
       }
-      if (ci.Item.IsFluid) kind = (kind ? kind + ' ' : '') + 'tagged';
+      if (ci.ref.kind === 'fluid') kind = (kind ? kind + ' ' : '') + 'tagged';
 
-      const pickable = !ci.IsRawMaterial && !noOptions;
+      const pickable = !ci.is_raw_material && !noOptions;
       // One clickable label: the machine name once a recipe is chosen, an
       // explicit prompt otherwise, or the already-in-factory tag.
       const tag = chosen ? null : alreadyInFactoryLabel(key);
       const labelText = chosen
-        ? (_machineNames[chosen.MachineMod + ':' + chosen.MachineID] || chosen.MachineID)
+        ? (_machineNames[chosen.machine_mod + ':' + chosen.machine_id] || chosen.machine_id)
         : tag ? tag.text
         : (_stopPoints.has(key) ? t('solve.chain.stopped') : t('solve.chain.pick_recipe'));
       // dependsOn replaces the old separate edges[] array — this node
@@ -1060,25 +1060,25 @@
       // renderGraph()'s per-node model (Task 11).
       const dependsOn = [];
       if (chosen) {
-        for (const inStr of (chosen.Inputs || [])) {
+        for (const inStr of (chosen.inputs || [])) {
           let toKey = null, title = '';
           if (parseTagKey(inStr)) {
             // Tag input — resolved to a concrete item by the backend. Drawn as a
             // normal solid edge (tag origin only via tooltip) so every input has
             // an unbroken line into its consumer.
             const res = _tagResolutions[inStr];
-            if (res?.Chosen) {
-              toKey = itemKey(res.Chosen);
+            if (res?.chosen) {
+              toKey = itemKey(res.chosen);
               title = inStr;
             } else if (chainKeys.has(inStr)) {
               toKey = inStr;
             }
           } else if (inStr.startsWith('~')) {
-            const cand = pickCandidate(byFluidId.get(inStr.slice(1)), ci.Level);
-            if (cand) toKey = itemKey(cand.Item);
+            const cand = pickCandidate(byFluidId.get(inStr.slice(1)), ci.level);
+            if (cand) toKey = itemKey(cand.ref);
           } else {
-            const cand = pickCandidate(byItemId.get(inStr), ci.Level);
-            if (cand) toKey = itemKey(cand.Item);
+            const cand = pickCandidate(byItemId.get(inStr), ci.level);
+            if (cand) toKey = itemKey(cand.ref);
           }
           if (toKey && toKey !== key) dependsOn.push({ to: toKey, title });
         }
@@ -1086,13 +1086,13 @@
 
       nodes.push({
         id: key,
-        level: ci.Level,
-        title: nameOf(ci.Item),
-        subtitle: ci.Item.TagRef ? '' : modName(ci.Item.ModID),
+        level: ci.level,
+        title: nameOf(ci.ref),
+        subtitle: ci.ref.tag_ref ? '' : modName(ci.ref.mod_id),
         badge,
         kind,
-        warn: _cycleNodes.has(key) || ci.ModRestricted,
-        labels: pickable ? [{ text: labelText, cls: tag ? 'badge ' + tag.cls : undefined, menu: buildRecipeMenu(ci, key, { withStop: ci.Level !== 0 }) }] : null,
+        warn: _cycleNodes.has(key) || ci.mod_restricted,
+        labels: pickable ? [{ text: labelText, cls: tag ? 'badge ' + tag.cls : undefined, menu: buildRecipeMenu(ci, key, { withStop: ci.level !== 0 }) }] : null,
         dependsOn,
       });
     }
@@ -1111,17 +1111,17 @@
   // a manual stop point — see selectChainOverride).
   function buildRecipeMenu(item, key, { withStop = true } = {}) {
     const items = [];
-    if (withStop && item.ChosenRecipeID) {
+    if (withStop && item.chosen_recipe_id) {
       items.push({ label: t('solve.chain.stop_action'), action: 'STOP', danger: true });
     }
     // One entry per I/O group - the solver picks between those. Machines are the
     // row's own menu.
     const byIO = new Map();
     const seen = new Set();
-    for (const opt of item.Options || []) {
-      if (seen.has(opt.RecipeID)) continue;
-      seen.add(opt.RecipeID);
-      const group = opt.IOKey || opt.RecipeID;
+    for (const opt of item.options || []) {
+      if (seen.has(opt.recipe_id)) continue;
+      seen.add(opt.recipe_id);
+      const group = opt.io_key || opt.recipe_id;
       if (!byIO.has(group)) byIO.set(group, []);
       byIO.get(group).push(opt);
     }
@@ -1130,15 +1130,15 @@
       // halve a furnace's) — sorting it first makes it the one name shown for
       // the whole group, deterministically, instead of whichever recipe's UUID
       // happened to sort first.
-      opts.sort((a, b) => (b.DurationTicks || 0) - (a.DurationTicks || 0) || a.Key.localeCompare(b.Key));
-      const ins = (opts[0].Inputs || []).join(', ');
+      opts.sort((a, b) => (b.duration_ticks || 0) - (a.duration_ticks || 0) || a.key.localeCompare(b.key));
+      const ins = (opts[0].inputs || []).join(', ');
       const hint = opts.length > 1 ? t('solve.chain.solver_picks') : '';
       items.push({
         label: machineLabel(opts[0]),
-        icon: machineIcon(opts[0].MachineMod, opts[0].MachineID),
+        icon: machineIcon(opts[0].machine_mod, opts[0].machine_id),
         subtitle: [ins ? '← ' + ins : '', hint].filter(Boolean).join(' · '),
-        action: opts[0].RecipeID,
-        active: opts.some(o => o.RecipeID === item.ChosenRecipeID),
+        action: opts[0].recipe_id,
+        active: opts.some(o => o.recipe_id === item.chosen_recipe_id),
       });
     }
     return items;
@@ -1147,30 +1147,30 @@
   // The machines for this row's recipe, "automatic" (no pin) first; action is
   // the RecipeOption key to override with.
   function buildMachineMenu(item) {
-    const cands = machineCandidates(item, item.ChosenRecipeID);
+    const cands = machineCandidates(item, item.chosen_recipe_id);
     if (!cands.length) return [];
     // The stored override tells the two apart: a bare recipe id leaves the
     // machine to the solver, a full option key pins the one it names.
-    const pinned = _overrides[itemKey(item.Item)];
+    const pinned = _overrides[itemKey(item.ref)];
     const items = [{
       label: t('solve.chain.machine_auto'),
-      action: item.ChosenRecipeID,
-      active: pinned === item.ChosenRecipeID,
+      action: item.chosen_recipe_id,
+      active: pinned === item.chosen_recipe_id,
     }];
     for (const opt of cands) {
       items.push({
         label: machineLabel(opt),
-        icon: machineIcon(opt.MachineMod, opt.MachineID),
-        subtitle: modName(opt.MachineMod),
-        action: opt.Key,
-        active: pinned === opt.Key,
+        icon: machineIcon(opt.machine_mod, opt.machine_id),
+        subtitle: modName(opt.machine_mod),
+        action: opt.key,
+        active: pinned === opt.key,
       });
     }
     return items;
   }
 
   function openChainPicker(btn, key) {
-    const item = _chainItems.find(ci => itemKey(ci.Item) === key);
+    const item = _chainItems.find(ci => itemKey(ci.ref) === key);
     if (!item) return;
 
     const wasOpen = _openChainPickerKey === key;
@@ -1186,8 +1186,8 @@
   }
 
   function openMachinePicker(btn, key) {
-    const item = _chainItems.find(ci => itemKey(ci.Item) === key);
-    if (!item || !item.ChosenRecipeID) return;
+    const item = _chainItems.find(ci => itemKey(ci.ref) === key);
+    if (!item || !item.chosen_recipe_id) return;
 
     const wasOpen = _openChainPickerKey === key;
     closeAllPickers();
@@ -1223,9 +1223,9 @@
 
   async function doSolve() {
     if (!_targetItem) { showStatus('solve-status','err', t('msg.select_target')); return; }
-    const targetItem = _targetItem.TagRef
-      ? { TagRef: _targetItem.TagRef }
-      : { ModID: _targetItem.ModID, ItemID: _targetItem.ItemID, IsFluid: !!_targetItem.IsFluid };
+    const targetItem = _targetItem.tag_ref
+      ? { tag_ref: _targetItem.tag_ref }
+      : { mod_id: _targetItem.mod_id, id: _targetItem.id, kind: _targetItem.kind };
 
     let rn = 1, rd = 1;
     if (_mode === 'TARGET') {
@@ -1238,8 +1238,8 @@
     const unit = document.getElementById('rate-unit').value;
     const stopPointsMap = {};
     for (const ci of _chainItems) {
-      if (ci.IsStop && !ci.IsRawMaterial) {
-        stopPointsMap[itemKey(ci.Item)] = true;
+      if (ci.is_stop && !ci.is_raw_material) {
+        stopPointsMap[itemKey(ci.ref)] = true;
       }
     }
 
@@ -1254,17 +1254,17 @@
     const res = await apiFetch(_solveURL, {
       method: 'POST',
       body: JSON.stringify({
-        TargetItem:           targetItem,
-        TargetRate:           { Num: rn, Den: rd },
-        TimeUnit:             unit,
-        Mode:                 _mode,
-        StopPoints:           stopPointsMap,
-        RecipeOverrides:      _overrides,
-        TagOverrides:         _tagOverrides,
-        FactoryState:         { ExistingOutputs: {} },
-        AllowPartialMachines: [..._allowPartial],
-        ModConfigs:           _modConfigs,
-        Factor:               factorRational(),
+        target:           targetItem,
+        target_rate:           { num: rn, den: rd },
+        time_unit:             unit,
+        mode:                 _mode,
+        stop_points:           stopPointsMap,
+        recipe_overrides:      _overrides,
+        tag_overrides:         _tagOverrides,
+        factory_state:         { existing_outputs: {} },
+        allow_partial_machines: [..._allowPartial],
+        mod_configs:           _modConfigs,
+        factor:               factorRational(),
       }),
     });
 
@@ -1296,29 +1296,29 @@
     const data = await res.json();
     if (seq !== _reqSeq) return; // a newer discover/solve request has since started
     _draftID = data.draft_id;
-    Object.assign(_names, data.Names || {});
+    Object.assign(_names, data.names || {});
     showStatus('solve-status', '', '');
 
-    // Refresh the "already in factory" have/need numbers from IOProfile.Inputs,
+    // Refresh the "already in factory" have/need numbers from IOProfile.inputs,
     // which only exists post-solve, and re-render so the labels pick them up.
     _neededRates = new Map();
-    for (const e of (data.result?.IOProfile?.Inputs || [])) {
-      _neededRates.set(itemKey(e.Item), { Num: e.Rate.Num, Den: e.Rate.Den, TimeUnit: e.TimeUnit });
+    for (const e of (data.result?.io_profile?.inputs || [])) {
+      _neededRates.set(itemKey(e.ref), { num: e.rate.num, den: e.rate.den, time_unit: e.time_unit });
     }
     _solvedMachines = {};
-    for (const mg of (data.result?.MachineGroups || [])) {
-      if (!mg.RecipeOutput) continue;
-      _solvedMachines[itemKey(mg.RecipeOutput)] = {
-        MachineMod: mg.MachineMod, MachineID: mg.MachineID, Name: mg.MachineName,
-        Variant: mg.VariantID ? { id: mg.VariantID, label: mg.Label || '' } : null,
+    for (const mg of (data.result?.machine_groups || [])) {
+      if (!mg.recipe_output) continue;
+      _solvedMachines[itemKey(mg.recipe_output)] = {
+        machine_mod: mg.machine_mod, machine_id: mg.machine_id, name: mg.machine_name,
+        variant: mg.variant_id ? { id: mg.variant_id, label: mg.label || '' } : null,
       };
     }
     renderChainConfig();
 
     const itemName = _targetItem?.name
-      || (_targetItem?.TagRef ? '#' + _targetItem.TagRef : '')
+      || (_targetItem?.tag_ref ? '#' + _targetItem.tag_ref : '')
       || _names[_targetItem ? itemKey(_targetItem) : '']
-      || _targetItem?.ItemID || '';
+      || _targetItem?.id || '';
     renderResult(data.result, unit, itemName);
 
     if (firstShow) {
@@ -1337,16 +1337,16 @@
   }
 
   function renderResult(r, unit, itemName) {
-    _tagResolutions = r.TagResolutions || {};
+    _tagResolutions = r.tag_resolutions || {};
     document.getElementById('result-card').style.display = '';
 
     document.getElementById('scale-factor').value = String(_factor);
-    const groups = (r.MachineGroups || []).slice().sort((a, b) => {
-      const an = nameOf(a.RecipeOutput) || a.RecipeID;
-      const bn = nameOf(b.RecipeOutput) || b.RecipeID;
-      return an.localeCompare(bn) || a.RecipeID.localeCompare(b.RecipeID);
+    const groups = (r.machine_groups || []).slice().sort((a, b) => {
+      const an = nameOf(a.recipe_output) || a.recipe_id;
+      const bn = nameOf(b.recipe_output) || b.recipe_id;
+      return an.localeCompare(bn) || a.recipe_id.localeCompare(b.recipe_id);
     });
-    const isFluid = !!_targetItem?.IsFluid;
+    const isFluid = _targetItem?.kind === 'fluid';
     const energy  = sumCosts(groups.flatMap(groupCosts));
     const tile = (label, value, sub = '', cls = '') => `<div class="stat-tile${cls ? ' ' + cls : ''}">
         <span class="stat-tile-label">${esc(label)}</span>
@@ -1354,15 +1354,15 @@
         ${sub ? `<span class="res-stat-sub">${esc(sub)}</span>` : ''}
       </div>`;
     document.getElementById('result-stats').innerHTML =
-      tile(t('solve.stats.actual_rate'), rateHTML(r.ActualRate, unit, { isFluid })) +
-      tile(t('solve.stats.machines'), esc(String(groups.reduce((n, g) => n + (g.Count || 0), 0))),
+      tile(t('solve.stats.actual_rate'), rateHTML(r.actual_rate, unit, { isFluid })) +
+      tile(t('solve.stats.machines'), esc(String(groups.reduce((n, g) => n + (g.count || 0), 0))),
         tCount(groups.length, 'solve.stats.in_groups')) +
       tile(t('solve.stats.energy'), energy.length ? energy.map(c => costHTML(c)).join('') : '—') +
-      tile(t('common.mode'), esc(r.ModeUsed || _mode)) +
-      (r.HadCycles ? tile(t('solve.cycles_detected'), '', '', 'res-stat-warn') : '');
+      tile(t('common.mode'), esc(r.mode_used || _mode)) +
+      (r.had_cycles ? tile(t('solve.cycles_detected'), '', '', 'res-stat-warn') : '');
 
     const warnEl = document.getElementById('result-warnings');
-    const warns = r.Warnings || [];
+    const warns = r.warnings || [];
     warnEl.innerHTML = warns.length
       ? `<div class="alert warn"><span class="alert-icon">⚠</span><span>${warns.map(w => esc(fmtWarning(w))).join('<br>')}</span></div>`
       : '';
@@ -1371,19 +1371,19 @@
     renderGroupTable();
 
     const ioEl    = document.getElementById('result-io');
-    const inputs  = r.IOProfile?.Inputs  || [];
-    const outputs = r.IOProfile?.Outputs || [];
+    const inputs  = r.io_profile?.inputs  || [];
+    const outputs = r.io_profile?.outputs || [];
     const ioRow = (e, sublabel = '') => `<div class="detail-row">
         <span class="detail-key">
-          ${refIconTextHTML(e.Item, { name: nameOf(e.Item), subtitle: e.Item.TagRef ? '' : modName(e.Item.ModID), size: 'sm' })}
+          ${refIconTextHTML(e.ref, { name: nameOf(e.ref), subtitle: e.ref.tag_ref ? '' : modName(e.ref.mod_id), size: 'sm' })}
           ${sublabel ? `<div class="io-sublabel">${esc(sublabel)}</div>` : ''}
         </span>
-        <span class="detail-val">${rateHTML(e.Rate, e.TimeUnit || unit, { isFluid: !!e.Item?.IsFluid })}</span>
+        <span class="detail-val">${rateHTML(e.rate, e.time_unit || unit, { isFluid: e.ref?.kind === 'fluid' })}</span>
       </div>`;
     let io = '';
     if (inputs.length) {
       io += `<div class="io-section-label">${esc(t('solve.inputs'))}</div><div class="detail-grid">` +
-        inputs.map(e => ioRow(e, e.IsFactoryProvided ? t('solve.stop_point.from_source') : '')).join('') + '</div>';
+        inputs.map(e => ioRow(e, e.is_factory_provided ? t('solve.stop_point.from_source') : '')).join('') + '</div>';
     }
     if (outputs.length) {
       io += `<div class="io-section-label">${esc(t('solve.outputs'))}</div><div class="detail-grid">` +
@@ -1439,10 +1439,10 @@
 
   // groupCosts scales a group's per-machine plugin costs by its machine count.
   function groupCosts(g) {
-    const costs = g.Costs || g.Variant?.costs || [];
+    const costs = g.costs || g.variant?.costs || [];
     return costs.map(c => ({
       resource: c.resource,
-      amount: { num: c.amount.num * (g.Count || 0), den: c.amount.den || 1 },
+      amount: { num: c.amount.num * (g.count || 0), den: c.amount.den || 1 },
     }));
   }
 
@@ -1462,43 +1462,43 @@
   }
 
   function groupRowHTML(g) {
-    const pct       = g.Utilization?.Den ? Math.round(g.Utilization.Num / g.Utilization.Den * 100) : 0;
-    const partial   = _allowPartial.has(g.RateKey);
-    const pluginMod = g.PluginMod || _pluginMods[`${g.MachineMod}:${g.MachineID}`] || '';
-    const variant   = g.VariantID ? { id: g.VariantID, label: g.Label || '' } : null;
-    const out       = g.RecipeOutput;
-    const items     = g.Variant?.items || [];
+    const pct       = g.utilization?.den ? Math.round(g.utilization.num / g.utilization.den * 100) : 0;
+    const partial   = _allowPartial.has(g.rate_key);
+    const pluginMod = g.plugin_mod || _pluginMods[`${g.machine_mod}:${g.machine_id}`] || '';
+    const variant   = g.variant_id ? { id: g.variant_id, label: g.label || '' } : null;
+    const out       = g.recipe_output;
+    const items     = g.variant?.items || [];
     const none      = '<span class="res-none">—</span>';
     const upgrades  = items.length
       ? `<div class="res-up">${items.map(it => {
           const [mod, ...rest] = String(it.ref).split(':');
           const id = rest.join(':');
-          return `<span class="res-up-item">${iconTextHTML(mod, id, { name: nameOf({ ModID: mod, ItemID: id }), size: 'sm' })}<span class="res-up-count">×${esc(String(it.count))}</span></span>`;
+          return `<span class="res-up-item">${iconTextHTML(mod, id, { name: nameOf({ mod_id: mod, id: id }), size: 'sm' })}<span class="res-up-count">×${esc(String(it.count))}</span></span>`;
         }).join('')}</div>`
       : none;
     const costs = groupCosts(g);
     const pluginCells = _machineColumns.map((col, i) => {
       const text = pluginMod && col.mods.includes(pluginMod)
-        ? cellText(_machineHooks, pluginMod, { mod_id: g.MachineMod, machine_id: g.MachineID }, col.columnID, variant)
+        ? cellText(_machineHooks, pluginMod, { mod_id: g.machine_mod, machine_id: g.machine_id }, col.columnID, variant)
         : '';
       return `<td class="res-c-plugin res-c-row2${i === 0 ? ' res-c-lead' : ''}" data-label="${esc(col.label)}">${text ? esc(text) : none}</td>`;
     }).join('');
     return `<tr>
-      <td class="res-c-count">${g.Count}×</td>
-      <td class="res-c-machine">${machineIconTextHTML(g.MachineMod, g.MachineID, {
-        name: g.MachineName || g.MachineID, subtitle: modName(g.MachineMod), size: 'lg', marquee: true,
+      <td class="res-c-count">${g.count}×</td>
+      <td class="res-c-machine">${machineIconTextHTML(g.machine_mod, g.machine_id, {
+        name: g.machine_name || g.machine_id, subtitle: modName(g.machine_mod), size: 'lg', marquee: true,
       })}</td>
       ${pluginCells}
       <td class="res-c-up res-c-row2${_machineColumns.length ? '' : ' res-c-lead'}" data-label="${esc(t('solve.col.upgrades'))}">${upgrades}</td>
-      <td class="res-c-recipe">${out ? iconTextHTML(out.ModID, out.ItemID, {
-        isFluid: out.IsFluid, name: nameOf(out), subtitle: modName(out.ModID), size: 'sm', marquee: true,
+      <td class="res-c-recipe">${out ? iconTextHTML(out.mod_id, out.id, {
+        isFluid: out.kind === 'fluid', name: nameOf(out), subtitle: modName(out.mod_id), size: 'sm', marquee: true,
       }) : none}</td>
       <td class="res-cost res-c-row2" data-label="${esc(t('solve.col.energy'))}">${costs.length ? costs.map(c => costHTML(c)).join(' ') : none}</td>
       <td class="res-c-util"><div class="res-util${pct >= 100 ? ' full' : ''}">
         <div class="wui-progress-track"><div class="wui-progress-fill" style="width:${Math.min(pct, 100)}%"></div></div>
         <span class="res-util-pct">${pct}%</span></div></td>
       <td class="res-c-half"><button class="btn btn-sm res-half${partial ? ' active' : ''}"
-        data-action="togglePartial" data-ratekey="${esc(g.RateKey)}"
+        data-action="togglePartial" data-ratekey="${esc(g.rate_key)}"
         title="${esc(partial ? t('solve.partial.active_title') : t('solve.partial.allow_title'))}">½</button></td>
     </tr>`;
   }
@@ -1519,15 +1519,15 @@
   document.getElementById('chain-card').appendChild(chainContainer.el);
 
   function itemKey(item) {
-    const prefix = item.IsFluid ? 'fluid:' : '';
-    if (item.TagRef) return prefix + '#' + item.TagRef;
-    return prefix + item.ModID + ':' + item.ItemID;
+    const prefix = item.kind === 'fluid' ? 'fluid:' : '';
+    if (item.tag_ref) return prefix + '#' + item.tag_ref;
+    return prefix + item.mod_id + ':' + item.id;
   }
 
   function nameOf(item) {
-    if (item.TagRef) return '#' + item.TagRef;
-    return lookupCatalog(item.ModID, item.ItemID, item.IsFluid)?.name
-      || _names[itemKey(item)] || item.ItemID || '';
+    if (item.tag_ref) return '#' + item.tag_ref;
+    return lookupCatalog(item.mod_id, item.id, item.kind === 'fluid')?.name
+      || _names[itemKey(item)] || item.id || '';
   }
 
   // A tag stands for any of its members — cycling through their icons (via
@@ -1600,15 +1600,15 @@
   }
 
   function fmtR(r) {
-    if (!r?.Den) return '0';
-    const v = r.Num / r.Den;
+    if (!r?.den) return '0';
+    const v = r.num / r.den;
     return Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/\.?0+$/,'');
   }
   // The manual override: the line is this multiple of what the solver found.
   // It rides along with the solve, so what step 3 shows is what gets saved.
   function factorRational() {
     const [n, d] = toFraction(_factor);
-    return { Num: n, Den: d };
+    return { num: n, den: d };
   }
 
   function toFraction(dec) {

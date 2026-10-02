@@ -34,8 +34,7 @@ type PLService struct {
 	variants     solver.VariantSource
 }
 
-// NewPLService creates a PLService with the given database, auto-scale cap and variant
-// source.
+// NewPLService creates a PLService with the given database, auto-scale cap and variant source.
 func NewPLService(database *db.DB, autoScaleMax int64, variants solver.VariantSource) *PLService {
 	return &PLService{db: database, autoScaleMax: autoScaleMax, variants: variants}
 }
@@ -66,7 +65,7 @@ type SolveOutput struct {
 // Solve runs the solver with the given request, persists a draft, and returns the result.
 func (s *PLService) Solve(ctx context.Context, factoryID, userID uuid.UUID, req solver.SolveRequest) (*SolveOutput, error) {
 	GoLog.Infof("solve: target=%s:%s mode=%s rate=%d/%d unit=%s stops=%d",
-		req.TargetItem.ModID, req.TargetItem.ItemID,
+		req.TargetItem.ModID, req.TargetItem.ID,
 		req.Mode, req.TargetRate.Num, req.TargetRate.Den, req.TimeUnit,
 		len(req.StopPoints))
 
@@ -104,8 +103,7 @@ type ConfirmInput struct {
 	DraftID uuid.UUID
 }
 
-// Confirm promotes a solver draft to a live production line. Returns ErrDraftNotFound if
-// the draft is missing or expired.
+// Confirm promotes a solver draft to a live production line.
 func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input ConfirmInput) (*model.ProductionLineDetail, error) {
 	draft, err := s.db.GetSolverDraft(ctx, input.DraftID)
 	if err != nil {
@@ -135,7 +133,7 @@ func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input Conf
 	pl := &model.ProductionLine{
 		FactoryID:    &factoryID,
 		TargetModID:  payload.Request.TargetItem.ModID,
-		TargetItemID: payload.Request.TargetItem.ItemID,
+		TargetItemID: payload.Request.TargetItem.ID,
 		RateNum:      int(payload.Request.TargetRate.Num),
 		RateDen:      int(payload.Request.TargetRate.Den),
 		TimeUnit:     payload.Request.TimeUnit,
@@ -153,23 +151,19 @@ func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input Conf
 	return s.db.ConfirmSolverDraft(ctx, pl, ios, groups, input.DraftID)
 }
 
-// solveResultToContents converts a solver result into the persistable PLIO and MachineGroup
-// rows.
+// solveResultToContents converts a solver result into the persistable PLIO and MachineGroup rows.
 func solveResultToContents(result solver.SolveResult, modConfigs map[string]json.RawMessage) ([]*model.PLIO, []*model.MachineGroup, error) {
 	totalIO := len(result.IOProfile.Inputs) + len(result.IOProfile.Outputs)
 	ios := make([]*model.PLIO, 0, totalIO)
-	ioType := func(item solver.ItemRef) string {
-		if item.IsFluid {
-			return "fluid"
-		}
-		return "item"
+	ioType := func(item solver.ResourceRef) string {
+		return string(item.Kind.Or())
 	}
 	for _, entry := range result.IOProfile.Inputs {
 		ios = append(ios, &model.PLIO{
 			Direction:   "input",
 			IOType:      ioType(entry.Item),
 			ModID:       entry.Item.ModID,
-			ItemFluidID: entry.Item.ItemID,
+			ItemFluidID: entry.Item.ID,
 			RateNum:     int(entry.Rate.Num),
 			RateDen:     int(entry.Rate.Den),
 			IsStopPoint: entry.IsStopPoint,
@@ -180,7 +174,7 @@ func solveResultToContents(result solver.SolveResult, modConfigs map[string]json
 			Direction:   "output",
 			IOType:      ioType(entry.Item),
 			ModID:       entry.Item.ModID,
-			ItemFluidID: entry.Item.ItemID,
+			ItemFluidID: entry.Item.ID,
 			RateNum:     int(entry.Rate.Num),
 			RateDen:     int(entry.Rate.Den),
 		})
@@ -212,9 +206,7 @@ func solveResultToContents(result solver.SolveResult, modConfigs map[string]json
 	return ios, groups, nil
 }
 
-// Scale resizes a saved line to k times its machines and rates, in place, so status and
-// built counts survive. Returns ErrBuiltCountExceeded when a group would end up smaller
-// than what is already built.
+// Scale resizes a saved line to k times its machines and rates, in place, so status and built counts survive.
 func (s *PLService) Scale(ctx context.Context, plID uuid.UUID, k solver.Rational) (*model.ProductionLineDetail, error) {
 	if k.Den == 0 || !k.IsPositive() {
 		return nil, fmt.Errorf("service: scale: factor must be positive")

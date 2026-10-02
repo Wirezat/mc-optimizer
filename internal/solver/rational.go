@@ -10,13 +10,11 @@ import (
 var (
 	// ErrRateOverflow reports a rate whose magnitude no longer fits into int64.
 	ErrRateOverflow = errors.New("solver: rate overflow")
-	// ErrRateDomain reports a rate this arithmetic cannot represent at all: a zero
-	// denominator, a division by zero, or MinInt64.
+	// ErrRateDomain reports a zero denominator, a division by zero, or MinInt64.
 	ErrRateDomain = errors.New("solver: invalid rate")
 )
 
-// rateArithmeticError classifies a recovered panic value as one raised by this file,
-// returning nil for anything else.
+// rateArithmeticError returns the panic value as a rate error, or nil if it is another panic.
 func rateArithmeticError(v any) error {
 	msg, ok := v.(string)
 	if !ok || (!strings.HasPrefix(msg, "rational: ") && !strings.HasPrefix(msg, "LCM: ")) {
@@ -28,12 +26,10 @@ func rateArithmeticError(v any) error {
 	return fmt.Errorf("%w: %s", ErrRateDomain, msg)
 }
 
-// GuardRateArithmetic exports guardRateArithmetic: a rate-arithmetic panic becomes *err,
-// anything else still panics.
+// GuardRateArithmetic turns a rate-arithmetic panic into *err.
 func GuardRateArithmetic(err *error) { guardRateArithmetic(err) }
 
-// guardRateArithmetic turns a panic from this file into *err and re-panics on anything
-// else.
+// guardRateArithmetic turns a panic from this file into *err and re-panics on anything else.
 func guardRateArithmetic(err *error) {
 	r := recover()
 	if r == nil {
@@ -47,7 +43,10 @@ func guardRateArithmetic(err *error) {
 }
 
 // Rational represents a fraction n/d in reduced form with d > 0.
-type Rational struct{ Num, Den int64 }
+type Rational struct {
+	Num int64 `json:"num"`
+	Den int64 `json:"den"`
+}
 
 // abs64u returns the absolute value of n as uint64.
 func abs64u(n int64) uint64 {
@@ -168,10 +167,8 @@ func RationalFromInt(n int64) Rational {
 	return Rational{n, 1}
 }
 
-// Neg returns -r.
 func (r Rational) Neg() Rational { return Rational{-r.Num, r.Den} }
 
-// Abs returns |r|.
 func (r Rational) Abs() Rational {
 	if r.Num < 0 {
 		return Rational{-r.Num, r.Den}
@@ -179,7 +176,6 @@ func (r Rational) Abs() Rational {
 	return r
 }
 
-// Add returns r + o.
 func (r Rational) Add(o Rational) Rational {
 	switch {
 	case r.Num == 0:
@@ -194,7 +190,6 @@ func (r Rational) Add(o Rational) Rational {
 	return normPos(sadd(smul(r.Num, od), smul(o.Num, rd)), smul(r.Den, od))
 }
 
-// Sub returns r - o.
 func (r Rational) Sub(o Rational) Rational {
 	switch {
 	case o.Num == 0:
@@ -209,7 +204,6 @@ func (r Rational) Sub(o Rational) Rational {
 	return normPos(sadd(smul(r.Num, od), smul(-o.Num, rd)), smul(r.Den, od))
 }
 
-// Mul returns r * o.
 func (r Rational) Mul(o Rational) Rational {
 	if r.Num == 0 || o.Num == 0 {
 		return Rational{0, 1}
@@ -226,16 +220,12 @@ func (r Rational) Div(o Rational) Rational {
 	return r.Mul(norm(o.Den, o.Num))
 }
 
-// IsZero reports whether r == 0.
 func (r Rational) IsZero() bool { return r.Num == 0 }
 
-// IsNegative reports whether r < 0.
 func (r Rational) IsNegative() bool { return r.Num < 0 }
 
-// IsPositive reports whether r > 0.
 func (r Rational) IsPositive() bool { return r.Num > 0 }
 
-// Eq reports whether r == o.
 func (r Rational) Eq(o Rational) bool { return r.Num == o.Num && r.Den == o.Den }
 
 // Cmp compares r and o, returning -1, 0, or 1.

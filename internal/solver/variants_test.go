@@ -371,7 +371,7 @@ func solveWithVariants(t *testing.T, src VariantSource, targetNum, targetDen int
 	s := NewSolver(newStub(20), 1000)
 	s.VariantSource = src
 	res, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+		TargetItem: ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
 		TargetRate: NewRational(targetNum, targetDen),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
@@ -439,8 +439,8 @@ func TestSolveWarnsWhenVariantOutputsOscillate(t *testing.T) {
 // reached through machine_interfaces, but on different machines, and only the bronze node's
 // variant overrides outputs.
 func TestSyncVariantOutputsKeysByNode(t *testing.T) {
-	iron := ItemRef{ModID: "mod", ItemID: "iron"}
-	copper := ItemRef{ModID: "mod", ItemID: "copper"}
+	iron := ResourceRef{ModID: "mod", ID: "iron"}
+	copper := ResourceRef{ModID: "mod", ID: "copper"}
 	one := NewRational(1, 1)
 	edges := func() []Edge {
 		return []Edge{
@@ -518,7 +518,7 @@ func TestSolveKeepsGraphAndGroupsConsistentAtTheIterationCap(t *testing.T) {
 	s := NewSolver(newByproductStub(), 1000)
 	s.VariantSource = src
 	res, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+		TargetItem: ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
 		TargetRate: NewRational(1, 10),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
@@ -585,7 +585,7 @@ func stubStoreFor(recipes []*RecipeRow, machines ...*MachineSpec) *stubStore {
 
 // chainStub is a chain of `stages` recipes: mc:t0 (raw) → mc:t1 → … → mc:tN, every step one
 // unit in, one unit out, on the same 20-tick machine.
-func chainStub(stages int) (*stubStore, ItemRef) {
+func chainStub(stages int) (*stubStore, ResourceRef) {
 	recipes := make([]*RecipeRow, 0, stages)
 	for i := 1; i <= stages; i++ {
 		recipes = append(recipes, stubRecipe(
@@ -593,7 +593,7 @@ func chainStub(stages int) (*stubStore, ItemRef) {
 			[]string{fmt.Sprintf("mc:t%d", i-1)}, []string{fmt.Sprintf("mc:t%d", i)}))
 	}
 	store := stubStoreFor(recipes, &MachineSpec{ModID: "minecraft", MachineID: "furnace", Name: "Furnace"})
-	return store, ItemRef{ModID: "mc", ItemID: fmt.Sprintf("t%d", stages)}
+	return store, ResourceRef{ModID: "mc", ID: fmt.Sprintf("t%d", stages)}
 }
 
 // overrideSource answers with a single variant that echoes the recipe's own output refs at
@@ -667,7 +667,7 @@ func TestSolveSurvivesOverflowInIOProfile(t *testing.T) {
 	}
 
 	_, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+		TargetItem: ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
 		TargetRate: NewRational(4, 1),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
@@ -708,7 +708,7 @@ func TestSolveSurvivesOverflowInLinearSystem(t *testing.T) {
 	}
 
 	_, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ItemRef{ModID: "mi", ItemID: "fuel_rod"},
+		TargetItem: ResourceRef{ModID: "mi", ID: "fuel_rod"},
 		TargetRate: NewRational(1, 1),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
@@ -805,7 +805,7 @@ func TestSolveWithTwoModsKeepsVariantsAndCostsApart(t *testing.T) {
 	s.VariantSource = src
 
 	res, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ItemRef{ModID: "mc", ItemID: "gear"},
+		TargetItem: ResourceRef{ModID: "mc", ID: "gear"},
 		TargetRate: NewRational(1, 10),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
@@ -906,7 +906,7 @@ func TestSolveDoesNotLaunderForeignPanics(t *testing.T) {
 	s := NewSolver(newStub(20), 1000)
 	s.VariantSource = panicSource{}
 	_, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+		TargetItem: ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
 		TargetRate: NewRational(1, 20),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,

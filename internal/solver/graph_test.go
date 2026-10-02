@@ -26,7 +26,7 @@ func TestBuildRecipeGraphOverrideSelectsInterfaceMachine(t *testing.T) {
 		},
 	}
 
-	target := ItemRef{ModID: "m", ItemID: "widget"}
+	target := ResourceRef{ModID: "m", ID: "widget"}
 	store := &stubStore{
 		byItem: map[string][]*RecipeRow{"m:widget": {base, tier}},
 	}
@@ -68,7 +68,7 @@ func interfaceCandidates(baseMod, tierMod string) (base, tier *RecipeRow) {
 // candidate and leave the base machine as the sole (and therefore default) pick.
 func TestBuildRecipeGraphActiveModsBaseSurvivesWhenImplementerInactive(t *testing.T) {
 	base, tier := interfaceCandidates("base_mod", "tier_mod")
-	target := ItemRef{ModID: "m", ItemID: "widget"}
+	target := ResourceRef{ModID: "m", ID: "widget"}
 	store := &stubStore{byItem: map[string][]*RecipeRow{"m:widget": {base, tier}}}
 	s := NewSolver(store, 1000)
 	s.ActiveMods = map[string]bool{"base_mod": true}
@@ -90,7 +90,7 @@ func TestBuildRecipeGraphActiveModsBaseSurvivesWhenImplementerInactive(t *testin
 // recipe must still resolve through the implementer - not collapse to a raw material.
 func TestBuildRecipeGraphActiveModsImplementerSurvivesWhenBaseInactive(t *testing.T) {
 	base, tier := interfaceCandidates("base_mod", "tier_mod")
-	target := ItemRef{ModID: "m", ItemID: "widget"}
+	target := ResourceRef{ModID: "m", ID: "widget"}
 	store := &stubStore{byItem: map[string][]*RecipeRow{"m:widget": {base, tier}}}
 	s := NewSolver(store, 1000)
 	s.ActiveMods = map[string]bool{"tier_mod": true}
@@ -113,7 +113,7 @@ func TestBuildRecipeGraphActiveModsImplementerSurvivesWhenBaseInactive(t *testin
 
 func TestBuildRecipeGraphActiveModsBothActiveKeepsBaseDefaultAndImplementerSelectable(t *testing.T) {
 	base, tier := interfaceCandidates("base_mod", "tier_mod")
-	target := ItemRef{ModID: "m", ItemID: "widget"}
+	target := ResourceRef{ModID: "m", ID: "widget"}
 	store := &stubStore{byItem: map[string][]*RecipeRow{"m:widget": {base, tier}}}
 	s := NewSolver(store, 1000)
 	s.ActiveMods = map[string]bool{"base_mod": true, "tier_mod": true}

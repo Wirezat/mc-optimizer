@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/jackc/pgx/v5"
 )
@@ -178,14 +179,14 @@ func (d *DB) GetMachineType(ctx context.Context, modID, machineID string) (*solv
 
 // GetTagMembers returns every item, or for a fluid tag every fluid, that satisfies tag,
 // ordered by mod and id.
-func (d *DB) GetTagMembers(ctx context.Context, tag solver.ItemRef) ([]solver.ItemRef, error) {
+func (d *DB) GetTagMembers(ctx context.Context, tag solver.ResourceRef) ([]solver.ResourceRef, error) {
 	query := `
 		SELECT DISTINCT tm.item_mod_id, tm.item_id
 		FROM tag_members tm
 		JOIN tags t ON t.id = tm.tag_id
 		WHERE t.kind = 'item' AND t.name = $1
 		ORDER BY 1, 2`
-	if tag.IsFluid {
+	if tag.Kind.Or() == resource.KindFluid {
 		query = `
 		SELECT DISTINCT tm.fluid_mod_id, tm.fluid_id
 		FROM tag_fluid_members tm
@@ -198,10 +199,10 @@ func (d *DB) GetTagMembers(ctx context.Context, tag solver.ItemRef) ([]solver.It
 		return nil, fmt.Errorf("db: get tag members: %w", err)
 	}
 	defer rows.Close()
-	var refs []solver.ItemRef
+	var refs []solver.ResourceRef
 	for rows.Next() {
-		r := solver.ItemRef{IsFluid: tag.IsFluid}
-		if err := rows.Scan(&r.ModID, &r.ItemID); err != nil {
+		r := solver.ResourceRef{Kind: tag.Kind}
+		if err := rows.Scan(&r.ModID, &r.ID); err != nil {
 			return nil, fmt.Errorf("db: get tag members: %w", err)
 		}
 		refs = append(refs, r)

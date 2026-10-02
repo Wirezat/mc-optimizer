@@ -1,36 +1,40 @@
 package solver
 
-import "context"
+import (
+	"context"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
+)
 
 // RecipeOption is a lightweight recipe summary for the discover UI.
 type RecipeOption struct {
-	RecipeID   string
-	MachineMod string
-	MachineID  string
+	RecipeID   string `json:"recipe_id"`
+	MachineMod string `json:"machine_mod"`
+	MachineID  string `json:"machine_id"`
 	// Key uniquely identifies this (recipe, machine) choice — use this, not RecipeID, as the
 	// override value sent back to the server.
-	Key     string
-	IOKey   string   // options with identical I/O; the solver picks between them
-	Inputs  []string // "item_id", "#tag_name", or "~fluid_id" — complete list;
-	Outputs []string // the graph view derives its edges from these, so no cap.
+	Key     string   `json:"key"`
+	IOKey   string   `json:"io_key"`  // options with identical I/O; the solver picks between them
+	Inputs  []string `json:"inputs"`  // "item_id", "#tag_name", or "~fluid_id" — complete list;
+	Outputs []string `json:"outputs"` // the graph view derives its edges from these, so no cap.
 	// DurationTicks orders an IOKey group's siblings for display: the longest duration is the
 	// recipe the others speed up (e.g.
-	DurationTicks int
+	DurationTicks int `json:"duration_ticks"`
 }
 
 // ChainItem is one node in the discovered production chain.
 type ChainItem struct {
-	Item             ItemRef
-	Level            int            // depth from root (root = 0)
-	Options          []RecipeOption // empty = raw material
-	ChosenRecipeID   string         // selected recipe (first or user override)
-	ChosenMachineMod string         // machine actually chosen to run it (may be a tier variant)
-	ChosenMachineID  string
-	IsStop           bool
-	IsRawMaterial    bool
-	ModRestricted    bool
+	Item             ResourceRef    `json:"ref"`
+	Level            int            `json:"level"`              // depth from root (root = 0)
+	Options          []RecipeOption `json:"options"`            // empty = raw material
+	ChosenRecipeID   string         `json:"chosen_recipe_id"`   // selected recipe (first or user override)
+	ChosenMachineMod string         `json:"chosen_machine_mod"` // machine actually chosen to run it (may be a tier variant)
+	ChosenMachineID  string         `json:"chosen_machine_id"`
+	IsStop           bool           `json:"is_stop"`
+	IsRawMaterial    bool           `json:"is_raw_material"`
+	ModRestricted    bool           `json:"mod_restricted"`
 	// Empty for chain items that a recipe names directly.
-	ResolvedTag string
+	ResolvedTag string `json:"resolved_tag"`
 }
 
 // DiscoverResult is the output of Discover.
@@ -43,7 +47,7 @@ type DiscoverResult struct {
 // with their available recipes, without computing any rates.
 func (s *Solver) Discover(
 	ctx context.Context,
-	targetItem ItemRef,
+	targetItem ResourceRef,
 	stopPoints map[string]bool,
 	factoryState FactoryState,
 	recipeOverrides map[string]string,
@@ -54,7 +58,7 @@ func (s *Solver) Discover(
 	}
 
 	type entry struct {
-		item        ItemRef
+		item        ResourceRef
 		level       int
 		resolvedTag string // set when item was queued by resolving this tag key
 	}
@@ -86,7 +90,7 @@ func (s *Solver) Discover(
 			chosen := members[0]
 			if ov, ok := tagOverrides[key]; ok {
 				for _, m := range members {
-					if m.ModID+":"+m.ItemID == ov {
+					if m.ModID+":"+m.ID == ov {
 						chosen = m
 						break
 					}
@@ -113,13 +117,13 @@ func (s *Solver) Discover(
 			continue
 		}
 
-		var recipes []*RecipeRow
-		var err error
-		if item.IsFluid {
-			recipes, err = s.DB.GetRecipesForFluid(ctx, item.ModID, item.ItemID)
-		} else {
-			recipes, err = s.DB.GetRecipesForItem(ctx, item.ModID, item.ItemID)
+		if resource.Expand(item.Kind) == resource.ExpandNever {
+			ci.IsRawMaterial = true
+			ci.IsStop = true
+			res.Items = append(res.Items, ci)
+			continue
 		}
+		recipes, err := s.recipesFor(ctx, item)
 		if err != nil {
 			return res, err
 		}
@@ -188,11 +192,11 @@ func (s *Solver) Discover(
 				ci.ChosenMachineMod = r.MachineMod
 				ci.ChosenMachineID = r.MachineID
 				for _, in := range r.ItemInputs {
-					var ref ItemRef
+					var ref ResourceRef
 					if in.TagName != nil {
-						ref = ItemRef{TagRef: *in.TagName}
+						ref = ResourceRef{TagRef: *in.TagName}
 					} else if in.ItemModID != nil && in.ItemID != nil {
-						ref = ItemRef{ModID: *in.ItemModID, ItemID: *in.ItemID}
+						ref = ResourceRef{ModID: *in.ItemModID, ID: *in.ItemID}
 					} else {
 						continue
 					}

@@ -3,6 +3,8 @@ package solver
 import (
 	"context"
 	"testing"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 // tagStub is a minimal RecipeStore for tag-resolution tests: one recipe whose input is a
@@ -10,7 +12,7 @@ import (
 type tagStub struct {
 	recipe  *RecipeRow
 	byItem  map[string][]*RecipeRow
-	members []ItemRef
+	members []ResourceRef
 }
 
 func (s *tagStub) GetRecipesForItem(_ context.Context, modID, itemID string) ([]*RecipeRow, error) {
@@ -31,8 +33,8 @@ func (s *tagStub) GetMachinesForRecipe(_ context.Context, _ string) ([]MachineRe
 func (s *tagStub) GetMachineType(_ context.Context, modID, machineID string) (*MachineSpec, error) {
 	return &MachineSpec{ModID: modID, MachineID: machineID, Name: machineID}, nil
 }
-func (s *tagStub) GetTagMembers(_ context.Context, tag ItemRef) ([]ItemRef, error) {
-	if tag.TagRef == "c:raw_materials/copper" && !tag.IsFluid {
+func (s *tagStub) GetTagMembers(_ context.Context, tag ResourceRef) ([]ResourceRef, error) {
+	if tag.TagRef == "c:raw_materials/copper" && tag.Kind.Or() == resource.KindItem {
 		return s.members, nil
 	}
 	return nil, nil
@@ -59,9 +61,9 @@ func newTagStub() *tagStub {
 	return &tagStub{
 		recipe: recipe,
 		byItem: map[string][]*RecipeRow{"minecraft:copper_dust": {recipe}},
-		members: []ItemRef{
-			{ModID: mc, ItemID: "raw_copper"},
-			{ModID: modb, ItemID: "raw_copper"},
+		members: []ResourceRef{
+			{ModID: mc, ID: "raw_copper"},
+			{ModID: modb, ID: "raw_copper"},
 		},
 	}
 }
@@ -75,7 +77,7 @@ func TestDiscover_TagResolvedItemCarriesOriginTag(t *testing.T) {
 	ctx := context.Background()
 
 	overrideKey := RecipeOptionKey("recipe:copper_dust", "modern_industrialization", "macerator")
-	res, err := s.Discover(ctx, ItemRef{ModID: "minecraft", ItemID: "copper_dust"},
+	res, err := s.Discover(ctx, ResourceRef{ModID: "minecraft", ID: "copper_dust"},
 		map[string]bool{}, FactoryState{},
 		map[string]string{"minecraft:copper_dust": overrideKey},
 		map[string]string{})
@@ -85,7 +87,7 @@ func TestDiscover_TagResolvedItemCarriesOriginTag(t *testing.T) {
 
 	var rawCopper *ChainItem
 	for i := range res.Items {
-		if res.Items[i].Item.ModID == "minecraft" && res.Items[i].Item.ItemID == "raw_copper" {
+		if res.Items[i].Item.ModID == "minecraft" && res.Items[i].Item.ID == "raw_copper" {
 			rawCopper = &res.Items[i]
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/Wirezat/production-optimizer/internal/plugins"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
 )
@@ -149,19 +150,19 @@ func absInt64(n int64) int64 {
 // enrichBalanceNames looks up display names for all entries in a factoryBalance and sets
 // Name.
 func enrichBalanceNames(ctx context.Context, database *db.DB, balance *factoryBalance) error {
-	collect := func(entries []balanceEntry) []solver.ItemRef {
-		refs := make([]solver.ItemRef, len(entries))
+	collect := func(entries []balanceEntry) []solver.ResourceRef {
+		refs := make([]solver.ResourceRef, len(entries))
 		for i, e := range entries {
-			refs[i] = solver.ItemRef{ModID: e.ModID, ItemID: e.ItemFluidID, IsFluid: e.IOType == "fluid"}
+			refs[i] = solver.ResourceRef{ModID: e.ModID, ID: e.ItemFluidID, Kind: resource.Kind(e.IOType)}
 		}
 		return refs
 	}
-	var refs []solver.ItemRef
+	var refs []solver.ResourceRef
 	refs = append(refs, collect(balance.ExternalInputs)...)
 	refs = append(refs, collect(balance.Outputs)...)
-	surplusRefs := make([]solver.ItemRef, len(balance.Surplus))
+	surplusRefs := make([]solver.ResourceRef, len(balance.Surplus))
 	for i, e := range balance.Surplus {
-		surplusRefs[i] = solver.ItemRef{ModID: e.ModID, ItemID: e.ItemFluidID, IsFluid: e.IOType == "fluid"}
+		surplusRefs[i] = solver.ResourceRef{ModID: e.ModID, ID: e.ItemFluidID, Kind: resource.Kind(e.IOType)}
 	}
 	refs = append(refs, surplusRefs...)
 

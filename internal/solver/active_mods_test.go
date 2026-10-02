@@ -53,7 +53,7 @@ func TestDiscover_modRestricted_whenOwningModInactive(t *testing.T) {
 	s := NewSolver(modRestrictedStub(), 0)
 	s.ActiveMods = map[string]bool{"minecraft": true} // powah not included
 
-	res, err := s.Discover(context.Background(), ItemRef{ModID: "powah", ItemID: "titanium_plate"},
+	res, err := s.Discover(context.Background(), ResourceRef{ModID: "powah", ID: "titanium_plate"},
 		map[string]bool{}, FactoryState{}, map[string]string{}, map[string]string{})
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
@@ -80,7 +80,7 @@ func TestDiscover_normal_whenOwningModActive(t *testing.T) {
 	s := NewSolver(modRestrictedStub(), 0)
 	s.ActiveMods = map[string]bool{"powah": true}
 
-	res, err := s.Discover(context.Background(), ItemRef{ModID: "powah", ItemID: "titanium_plate"},
+	res, err := s.Discover(context.Background(), ResourceRef{ModID: "powah", ID: "titanium_plate"},
 		map[string]bool{}, FactoryState{}, map[string]string{}, map[string]string{})
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
@@ -97,7 +97,7 @@ func TestDiscover_normal_whenOwningModActive(t *testing.T) {
 func TestDiscover_unrestricted_whenActiveModsNil(t *testing.T) {
 	s := NewSolver(modRestrictedStub(), 0) // ActiveMods left nil — demo mode
 
-	res, err := s.Discover(context.Background(), ItemRef{ModID: "powah", ItemID: "titanium_plate"},
+	res, err := s.Discover(context.Background(), ResourceRef{ModID: "powah", ID: "titanium_plate"},
 		map[string]bool{}, FactoryState{}, map[string]string{}, map[string]string{})
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
@@ -115,7 +115,7 @@ func TestDiscover_rawMaterial_unaffectedByModFilter(t *testing.T) {
 	s := NewSolver(&stubStore{}, 0) // no recipes registered at all
 	s.ActiveMods = map[string]bool{"minecraft": true}
 
-	res, err := s.Discover(context.Background(), ItemRef{ModID: "minecraft", ItemID: "iron_ore"},
+	res, err := s.Discover(context.Background(), ResourceRef{ModID: "minecraft", ID: "iron_ore"},
 		map[string]bool{}, FactoryState{}, map[string]string{}, map[string]string{})
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
@@ -135,7 +135,7 @@ func TestBuildRecipeGraph_modRestricted_fallsBackToRawMaterial(t *testing.T) {
 	s := NewSolver(modRestrictedStub(), 0)
 	s.ActiveMods = map[string]bool{"minecraft": true} // powah not included
 
-	g, err := s.BuildRecipeGraph(context.Background(), ItemRef{ModID: "powah", ItemID: "titanium_plate"},
+	g, err := s.BuildRecipeGraph(context.Background(), ResourceRef{ModID: "powah", ID: "titanium_plate"},
 		map[string]bool{}, FactoryState{}, map[string]string{}, map[string]string{})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
@@ -156,7 +156,7 @@ func TestBuildRecipeGraph_activeMod_selectsRecipe(t *testing.T) {
 	s := NewSolver(modRestrictedStub(), 0)
 	s.ActiveMods = map[string]bool{"powah": true}
 
-	g, err := s.BuildRecipeGraph(context.Background(), ItemRef{ModID: "powah", ItemID: "titanium_plate"},
+	g, err := s.BuildRecipeGraph(context.Background(), ResourceRef{ModID: "powah", ID: "titanium_plate"},
 		map[string]bool{}, FactoryState{}, map[string]string{}, map[string]string{})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
@@ -183,7 +183,7 @@ func TestBuildRecipeGraph_staleOverride_fallsBackToRawMaterial(t *testing.T) {
 	overrides := map[string]string{
 		"minecraft:iron_plate": RecipeOptionKey(overridden.ID, overridden.MachineMod, overridden.MachineID),
 	}
-	g, err := s.BuildRecipeGraph(context.Background(), ItemRef{ModID: "minecraft", ItemID: "iron_plate"},
+	g, err := s.BuildRecipeGraph(context.Background(), ResourceRef{ModID: "minecraft", ID: "iron_plate"},
 		map[string]bool{}, FactoryState{}, overrides, map[string]string{})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)

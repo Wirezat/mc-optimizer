@@ -3,9 +3,11 @@ package solver
 import (
 	"context"
 	"testing"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
-func honeyStore(members []ItemRef) *stubStore {
+func honeyStore(members []ResourceRef) *stubStore {
 	honey := "c:honey"
 	r := &RecipeRow{
 		ID: "canning", MachineMod: "mi", MachineID: "canning_machine", DurationTicks: 100,
@@ -22,13 +24,13 @@ func honeyStore(members []ItemRef) *stubStore {
 	return &stubStore{
 		recipes: map[string]*RecipeRow{r.ID: r},
 		byItem:  map[string][]*RecipeRow{"minecraft:honey_bottle": {r}},
-		tags:    map[string][]ItemRef{"fluid:#c:honey": members},
+		tags:    map[string][]ResourceRef{"fluid:#c:honey": members},
 	}
 }
 
 func TestItemRefKey_FluidTag(t *testing.T) {
-	fluidTag := ItemRef{TagRef: "c:honey", IsFluid: true}
-	itemTag := ItemRef{TagRef: "c:ingots"}
+	fluidTag := ResourceRef{TagRef: "c:honey", Kind: resource.KindFluid}
+	itemTag := ResourceRef{TagRef: "c:ingots"}
 	if got := fluidTag.Key(); got != "fluid:#c:honey" {
 		t.Errorf("fluid tag key = %q, want fluid:#c:honey", got)
 	}
@@ -38,9 +40,9 @@ func TestItemRefKey_FluidTag(t *testing.T) {
 }
 
 func TestBuildRecipeGraph_ResolvesFluidTagToAFluid(t *testing.T) {
-	store := honeyStore([]ItemRef{{ModID: "extended_industrialization", ItemID: "honey", IsFluid: true}})
+	store := honeyStore([]ResourceRef{{ModID: "extended_industrialization", ID: "honey", Kind: resource.KindFluid}})
 	g, err := NewSolver(store, 0).BuildRecipeGraph(context.Background(),
-		ItemRef{ModID: "minecraft", ItemID: "honey_bottle"}, nil, FactoryState{}, nil, nil)
+		ResourceRef{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{}, nil, nil)
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
 	}
@@ -50,7 +52,7 @@ func TestBuildRecipeGraph_ResolvesFluidTagToAFluid(t *testing.T) {
 	}
 	var fluidIn *Edge
 	for i, e := range g.Nodes["minecraft:honey_bottle"].Inputs {
-		if e.Item.IsFluid {
+		if e.Item.Kind == resource.KindFluid {
 			fluidIn = &g.Nodes["minecraft:honey_bottle"].Inputs[i]
 		}
 	}
@@ -67,7 +69,7 @@ func TestBuildRecipeGraph_ResolvesFluidTagToAFluid(t *testing.T) {
 
 func TestBuildRecipeGraph_FluidTagWithoutMembersIsRawMaterial(t *testing.T) {
 	g, err := NewSolver(honeyStore(nil), 0).BuildRecipeGraph(context.Background(),
-		ItemRef{ModID: "minecraft", ItemID: "honey_bottle"}, nil, FactoryState{}, nil, nil)
+		ResourceRef{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{}, nil, nil)
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
 	}
@@ -80,12 +82,12 @@ func TestBuildRecipeGraph_FluidTagWithoutMembersIsRawMaterial(t *testing.T) {
 }
 
 func TestBuildRecipeGraph_FluidTagOverridePicksMember(t *testing.T) {
-	store := honeyStore([]ItemRef{
-		{ModID: "create", ItemID: "honey", IsFluid: true},
-		{ModID: "extended_industrialization", ItemID: "honey", IsFluid: true},
+	store := honeyStore([]ResourceRef{
+		{ModID: "create", ID: "honey", Kind: resource.KindFluid},
+		{ModID: "extended_industrialization", ID: "honey", Kind: resource.KindFluid},
 	})
 	g, err := NewSolver(store, 0).BuildRecipeGraph(context.Background(),
-		ItemRef{ModID: "minecraft", ItemID: "honey_bottle"}, nil, FactoryState{}, nil,
+		ResourceRef{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{}, nil,
 		map[string]string{"fluid:#c:honey": "extended_industrialization:honey"})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
@@ -97,9 +99,9 @@ func TestBuildRecipeGraph_FluidTagOverridePicksMember(t *testing.T) {
 }
 
 func TestDiscover_FluidTagInputUsesItsKey(t *testing.T) {
-	store := honeyStore([]ItemRef{{ModID: "extended_industrialization", ItemID: "honey", IsFluid: true}})
+	store := honeyStore([]ResourceRef{{ModID: "extended_industrialization", ID: "honey", Kind: resource.KindFluid}})
 	res, err := NewSolver(store, 0).Discover(context.Background(),
-		ItemRef{ModID: "minecraft", ItemID: "honey_bottle"}, nil, FactoryState{},
+		ResourceRef{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{},
 		map[string]string{"minecraft:honey_bottle": "canning"}, nil)
 	if err != nil {
 		t.Fatalf("Discover: %v", err)

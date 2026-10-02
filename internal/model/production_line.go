@@ -14,7 +14,7 @@ type ProductionLine struct {
 	ParentPLID     *uuid.UUID      `json:"parent_pl_id,omitempty"`
 	TargetModID    string          `json:"target_mod_id"`
 	TargetItemID   string          `json:"target_item_id"`
-	TargetIsFluid  bool            `json:"target_is_fluid"`
+	TargetKind     string          `json:"target_kind"`
 	TargetItemName string          `json:"target_item_name"`
 	RateNum        int             `json:"rate_num"`
 	RateDen        int             `json:"rate_den"`
@@ -26,11 +26,9 @@ type ProductionLine struct {
 	ModMissing     bool            `json:"mod_missing"`
 	SolveRequest   json.RawMessage `json:"-"`
 	CurrentRate    float64         `json:"current_rate"`
-	// Costs is the line's total operating cost per tick, summed across its machine groups'
-	// chosen variants.
+	// Costs is the line's total operating cost per tick, summed across its machine groups' chosen variants.
 	Costs []plugins.Cost `json:"costs"`
-	// Machines is what the line runs on, one entry per machine kind with the counts of every
-	// group using it added up.
+	// Machines lists each machine kind the line runs, with the summed counts.
 	Machines []MachineUse `json:"machines"`
 }
 
@@ -55,11 +53,9 @@ type MachineGroup struct {
 	RecipeID     uuid.UUID `json:"recipe_id"`
 	Count        int       `json:"count"`
 	Status       string    `json:"status"`
-	// ModConfig overrides the save-wide plugin config for this group; an empty object means
-	// the save-wide config applies.
+	// ModConfig overrides the save-wide plugin config for this group; empty means none.
 	ModConfig json.RawMessage `json:"mod_config,omitempty"`
-	// VariantID is the operating variant this group targets, CurrentVariantID the one actually
-	// built in-game.
+	// VariantID is the operating variant this group targets, CurrentVariantID the one actually built in-game.
 	VariantID        string `json:"variant_id"`
 	CurrentVariantID string `json:"current_variant_id"`
 	ExactCountNum    int64  `json:"exact_count_num"`
@@ -67,15 +63,13 @@ type MachineGroup struct {
 	BuiltCount       int    `json:"built_count"`
 	// Costs is the chosen variant's operating cost per tick.
 	Costs []plugins.Cost `json:"costs,omitempty"`
-	// Variant and CurrentVariant describe the target and the built operating variant;
-	// VariantOptions lists every runnable one.
+	// Variant and CurrentVariant are the target and the built operating variant.
 	Variant        *VariantView  `json:"variant,omitempty"`
 	CurrentVariant *VariantView  `json:"current_variant,omitempty"`
 	VariantOptions []VariantView `json:"variant_options,omitempty"`
 }
 
-// VariantView is an operating variant as a client renders it: the plugin's label and the
-// items one machine needs installed.
+// VariantView is an operating variant as a client renders it.
 type VariantView struct {
 	ID    string        `json:"id"`
 	Label string        `json:"label"`

@@ -14,15 +14,14 @@ type nodeMatrix struct {
 	rateKey    string
 	recipeID   string
 	recipeRate Rational
-	item       ItemRef
+	item       ResourceRef
 	recipe     *RecipeRow
 	machine    *MachineSpec // the node's own, for the fallback
 	variants   []plugins.Variant
 	cells      []cell
 }
 
-// CalculateMachineGroups converts recipe rates into machine group drafts, one per graph
-// node, plus the warnings collected on the way.
+// CalculateMachineGroups converts recipe rates into machine group drafts, one per graph node.
 func (s *Solver) CalculateMachineGroups(ctx context.Context, g *RecipeGraph, rv RateVector, req SolveRequest) ([]MachineGroupDraft, []Warning, error) {
 	matrices, warnings, err := s.collectMatrices(ctx, g, rv, req)
 	if err != nil {
@@ -78,9 +77,7 @@ func (s *Solver) collectMatrices(ctx context.Context, g *RecipeGraph, rv RateVec
 			recipeRate: recipeRate,
 			recipe:     recipe,
 		}
-		// Only an override that names a machine pins one. Inferring the pin from "differs from
-		// the recipe's own machine" cannot express picking that own machine, which let an
-		// implementer take the row over.
+		// Only an override that names a machine pins one.
 		pinnedMachine := false
 		recipes := []*RecipeRow{recipe}
 		if node := byRateKey[rateKey]; node != nil {
@@ -234,11 +231,8 @@ func modAffinity(groups []MachineGroupDraft) map[string]int {
 	return out
 }
 
-// Partial machines (listed in allowPartial, keyed by RateKey) use ceil(ExactCount),
-// supplying at least as much as needed while leaving some idle capacity — all non-partial
-// machines still run at 100%. Returns scaled groups, actual rate, scale factor k, and
-// warnings.
-func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootItem ItemRef, maxScale int64, allowPartial map[string]bool) ([]MachineGroupDraft, Rational, int64, []Warning) {
+// Partial machines (allowPartial, keyed by RateKey) use ceil(ExactCount).
+func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootItem ResourceRef, maxScale int64, allowPartial map[string]bool) ([]MachineGroupDraft, Rational, int64, []Warning) {
 	var warnings []Warning
 
 	if len(groups) == 0 {
@@ -247,8 +241,7 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 
 	hasPartial := len(allowPartial) > 0
 
-	// LCM of non-partial machine denominators so their ExactCounts become integers (100%
-	// util). If all machines are partial, fall back to using all.
+	// LCM of non-partial machine denominators so their ExactCounts become integers (100% util).
 	fractions := make([]Rational, 0, len(groups))
 	for _, g := range groups {
 		if !hasPartial || !allowPartial[g.RateKey] {
@@ -268,8 +261,7 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 
 	k := safeLCMOfFractions(fractions, maxScale)
 	if k == 0 || k > maxScale {
-		// No integer scale ≤ maxScale makes every machine exactly 100% (the recipes' batch sizes
-		// are too mismatched).
+		// No integer scale ≤ maxScale makes every machine exactly 100% (the recipes' batch sizes are too mismatched).
 		maxExact := fractions[0]
 		maxV := float64(fractions[0].Num) / float64(fractions[0].Den)
 		for _, f := range fractions[1:] {
@@ -308,8 +300,7 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 	}
 	actualRate := rv.ItemRates[rootItem.Key()].Mul(kRat)
 
-	// GCD-reduce using non-partial counts (integers after LCM scaling) to find minimal
-	// solution.
+	// GCD-reduce using non-partial counts (integers after LCM scaling) to find minimal solution.
 	var g int64
 	for _, gr := range result {
 		if !hasPartial || !allowPartial[gr.RateKey] {
@@ -346,8 +337,7 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 		actualRate = actualRate.Div(gRat)
 	}
 
-	// Set counts: non-partial get ExactCount (exact integer → 100%), partial get
-	// ceil(ExactCount).
+	// Set counts: non-partial get ExactCount, partial get ceil(ExactCount).
 	for i := range result {
 		result[i].Count = max(result[i].ExactCount.CeilInt(), 1)
 		result[i].Utilization = result[i].ExactCount.Div(NewRational(result[i].Count, 1))
@@ -374,8 +364,7 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 	return result, actualRate, k, warnings
 }
 
-// safeLCMOfFractions computes the LCM of fraction denominators, returning 0 on int64
-// overflow.
+// safeLCMOfFractions computes the LCM of fraction denominators, returning 0 on int64 overflow.
 func safeLCMOfFractions(fractions []Rational, _ int64) (k int64) {
 	defer func() {
 		if recover() != nil {
@@ -409,8 +398,7 @@ func ComputeIOProfile(rv RateVector, g *RecipeGraph, factory FactoryState, timeU
 
 	var inputs, outputs []IOEntry
 
-	// Step 2: root output + external inputs (raw materials / stop points). For inputs consumed
-	// partly by byproducts, show only the net external demand.
+	// Step 2: root output plus external inputs (raw materials, stop points).
 	for key, node := range g.Nodes {
 		rawRate := rv.ItemRates[key]
 		if key == g.Root.Key() {
@@ -451,11 +439,11 @@ func ComputeIOProfile(rv RateVector, g *RecipeGraph, factory FactoryState, timeU
 		if net.IsZero() || net.Num <= 0 {
 			continue
 		}
-		var ref ItemRef
+		var ref ResourceRef
 		if node, ok := g.Nodes[bKey]; ok {
 			ref = node.Item
 		} else {
-			ref = itemRefFromKey(bKey)
+			ref = RefFromKey(bKey)
 		}
 		outputs = append(outputs, IOEntry{
 			Item:     ref,
@@ -467,26 +455,7 @@ func ComputeIOProfile(rv RateVector, g *RecipeGraph, factory FactoryState, timeU
 	return IOProfile{Inputs: inputs, Outputs: outputs}
 }
 
-// itemRefFromKey reconstructs an ItemRef from a graph key string.
-func itemRefFromKey(key string) ItemRef {
-	if len(key) > 6 && key[:6] == "fluid:" {
-		rest := key[6:]
-		for i := 0; i < len(rest); i++ {
-			if rest[i] == ':' {
-				return ItemRef{ModID: rest[:i], ItemID: rest[i+1:], IsFluid: true}
-			}
-		}
-	}
-	for i := 0; i < len(key); i++ {
-		if key[i] == ':' {
-			return ItemRef{ModID: key[:i], ItemID: key[i+1:]}
-		}
-	}
-	return ItemRef{ItemID: key}
-}
-
-// lcmOfFractions returns the least common multiple of the denominators of the given
-// fractions.
+// lcmOfFractions returns the least common multiple of the denominators of the given fractions.
 func lcmOfFractions(fs []Rational) int64 {
 	dens := make([]int64, len(fs))
 	for i, f := range fs {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/plugins"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
@@ -132,7 +133,7 @@ func steamRecipe() *solver.RecipeRow {
 }
 
 func steamKey() string {
-	ref := solver.ItemRef{ModID: "testmod", ItemID: "steam", IsFluid: true}
+	ref := solver.ResourceRef{ModID: "testmod", ID: "steam", Kind: resource.KindFluid}
 	return ref.Key()
 }
 
@@ -341,7 +342,7 @@ func (s *solveStore) GetMachineType(_ context.Context, modID, machineID string) 
 	return nil, nil
 }
 
-func (s *solveStore) GetTagMembers(_ context.Context, _ solver.ItemRef) ([]solver.ItemRef, error) {
+func (s *solveStore) GetTagMembers(_ context.Context, _ solver.ResourceRef) ([]solver.ResourceRef, error) {
 	return nil, nil
 }
 
@@ -356,7 +357,7 @@ func TestFluidOutputOverrideChangesTheSolvedMachineCount(t *testing.T) {
 	sv := solver.NewSolver(store, 0)
 	sv.VariantSource = resolver
 	res, err := sv.Solve(context.Background(), solver.SolveRequest{
-		TargetItem: solver.ItemRef{ModID: "testmod", ItemID: "steam", IsFluid: true},
+		TargetItem: solver.ResourceRef{ModID: "testmod", ID: "steam", Kind: resource.KindFluid},
 		TargetRate: solver.NewRational(10, 1),
 		TimeUnit:   "t",
 		Mode:       solver.SolveModeTarget,

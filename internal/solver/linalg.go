@@ -20,9 +20,9 @@ func (e *ErrNegativeRate) Error() string {
 
 // BuildStoichiometryMatrix creates the stoichiometry matrix S (items × recipes) from the
 // recipe graph. Returns S, the list of items, and the list of recipe IDs.
-func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ItemRef, []string) {
+func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ResourceRef, []string) {
 	itemIdx, recipeIdx := map[string]int{}, map[string]int{}
-	var items []ItemRef
+	var items []ResourceRef
 	var recipeIDs []string
 
 	for key, node := range g.Nodes {

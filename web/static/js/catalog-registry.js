@@ -237,7 +237,7 @@ export function tagIconTextHTML(tagRef, { size = null, extraClass = '', chosenRe
     const total = resolved?.total ?? 0;
 
     // chosenRef names the item a chain step resolved this tag to, and leads the cycle.
-    const chosenEntry = chosenRef ? lookupCatalog(chosenRef.ModID, chosenRef.ItemID, chosenRef.IsFluid) : null;
+    const chosenEntry = chosenRef ? lookupCatalog(chosenRef.mod_id, chosenRef.id, chosenRef.kind === 'fluid') : null;
     const icons = [...(resolved?.icons ?? [])];
     const chosenAt = chosenEntry ? icons.indexOf(chosenEntry) : -1;
     if (chosenAt > 0) icons.unshift(...icons.splice(chosenAt, 1));
@@ -266,10 +266,10 @@ export function tagIconTextHTML(tagRef, { size = null, extraClass = '', chosenRe
     return body + infocardHTML(first, { title: label, subtitle: '#' + tagRef, cycle: frames });
 }
 
-/** The single entry point for an ItemRef-shaped value as the solver returns it. Input: ref ({ ModID, ItemID, TagRef, IsFluid }), opts. Output: HTML string. */
+/** The single entry point for an ItemRef-shaped value as the solver returns it. Input: ref ({ mod_id, id, tag_ref, kind }), opts. Output: HTML string. */
 export function refIconTextHTML(ref, opts = {}) {
-    if (ref?.TagRef) return tagIconTextHTML(ref.TagRef, { ...opts, isFluid: !!ref.IsFluid });
+    if (ref?.tag_ref) return tagIconTextHTML(ref.tag_ref, { ...opts, isFluid: ref.kind === 'fluid' });
     const tag = opts.resolvedTag ? parseTagKey(opts.resolvedTag) : null;
     if (tag) return tagIconTextHTML(tag.name, { ...opts, isFluid: tag.isFluid, chosenRef: ref });
-    return iconTextHTML(ref?.ModID, ref?.ItemID, { ...opts, isFluid: ref?.IsFluid, hoverCard: true });
+    return iconTextHTML(ref?.mod_id, ref?.id, { ...opts, isFluid: ref?.kind === 'fluid', hoverCard: true });
 }

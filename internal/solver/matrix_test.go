@@ -48,7 +48,7 @@ func matrixGroupFor(t *testing.T, st *stubStore, src VariantSource, recipeID str
 		override = nodeKey
 	}
 	overrides := map[string]string{"minecraft:iron_ingot": override}
-	g, err := s.BuildRecipeGraph(ctx, ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+	g, err := s.BuildRecipeGraph(ctx, ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{},
 		overrides, map[string]string{})
 	if err != nil {
@@ -112,7 +112,7 @@ func TestMatrixSkipsInactiveMods(t *testing.T) {
 	s.VariantSource = src
 	s.ActiveMods = map[string]bool{"minecraft": true}
 	ctx := context.Background()
-	g, err := s.BuildRecipeGraph(ctx, ItemRef{ModID: "minecraft", ItemID: "iron_ingot"},
+	g, err := s.BuildRecipeGraph(ctx, ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{},
 		map[string]string{}, map[string]string{})
 	if err != nil {
@@ -301,14 +301,14 @@ func TestByproductValueOnlyWinsByAWholeMachine(t *testing.T) {
 }
 
 func TestIndexYields(t *testing.T) {
-	nickel := ItemRef{ModID: "minecraft", ItemID: "nickel"}
+	nickel := ResourceRef{ModID: "minecraft", ID: "nickel"}
 	g := &RecipeGraph{Nodes: map[string]*RecipeNode{
 		"minecraft:nickel": {Item: nickel, RecipeID: "r:nickel", OutputAmount: NewRational(2, 1)},
-		"minecraft:stone":  {Item: ItemRef{ModID: "minecraft", ItemID: "stone"}},
+		"minecraft:stone":  {Item: ResourceRef{ModID: "minecraft", ID: "stone"}},
 	}}
 	groups := []MachineGroupDraft{
 		{RecipeOutput: nickel, Variant: plugins.Variant{Rate: rate(1, 50)}},
-		{RecipeOutput: ItemRef{ModID: "minecraft", ItemID: "stone"}, Variant: plugins.Variant{Rate: rate(1, 10)}},
+		{RecipeOutput: ResourceRef{ModID: "minecraft", ID: "stone"}, Variant: plugins.Variant{Rate: rate(1, 10)}},
 	}
 	yi := indexYields(g, groups)
 	wantRational(t, "nickel per machine", yi["minecraft:nickel"], 1, 25)

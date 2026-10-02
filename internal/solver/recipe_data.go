@@ -1,6 +1,10 @@
 package solver
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
+)
 
 // RecipeRow is the lean recipe representation exchanged between the DB and solver.
 type RecipeRow struct {
@@ -38,11 +42,11 @@ type RecipeRowFluidIO struct {
 }
 
 // Ref is the fluid, or the fluid tag, this row names.
-func (f RecipeRowFluidIO) Ref() ItemRef {
+func (f RecipeRowFluidIO) Ref() ResourceRef {
 	if f.TagName != nil {
-		return ItemRef{TagRef: *f.TagName, IsFluid: true}
+		return ResourceRef{TagRef: *f.TagName, Kind: resource.KindFluid}
 	}
-	return ItemRef{ModID: f.FluidModID, ItemID: f.FluidID, IsFluid: true}
+	return ResourceRef{ModID: f.FluidModID, ID: f.FluidID, Kind: resource.KindFluid}
 }
 
 // MachineSpec holds the subset of machine properties the solver needs.

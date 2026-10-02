@@ -64,7 +64,7 @@ func BuildStoichiometryMatrix(g *RecipeGraph) ([][]resource.Rational, []resource
 			S[i][j] = S[i][j].Add(node.OutputAmount)
 		}
 		for _, e := range node.Inputs {
-			if i, ok := itemIdx[e.Item.Key()]; ok {
+			if i, ok := itemIdx[e.Item.Key()]; ok && e.Consumed {
 				S[i][j] = S[i][j].Sub(e.Amount.Mul(e.Probability))
 			}
 		}

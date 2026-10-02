@@ -174,6 +174,7 @@ CREATE TABLE recipe_fluid_inputs (
     amount_mb       BIGINT NOT NULL,
     probability_num INT    NOT NULL DEFAULT 1,
     probability_den INT    NOT NULL DEFAULT 1,
+    non_consuming   BOOLEAN NOT NULL DEFAULT FALSE,
     CONSTRAINT recipe_fluid_inputs_ref_check CHECK (
         (fluid_mod_id IS NOT NULL AND fluid_id IS NOT NULL AND tag_id IS NULL) OR
         (fluid_mod_id IS NULL     AND fluid_id IS NULL     AND tag_id IS NOT NULL)

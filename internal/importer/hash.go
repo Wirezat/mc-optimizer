@@ -17,12 +17,14 @@ func ContentHash(n model.NormalizedRecipe) string {
 		Amount  int    `json:"a"`
 		ProbNum int    `json:"pn"`
 		ProbDen int    `json:"pd"`
+		Tool    bool   `json:"nc,omitempty"`
 	}
 	type fluidEntry struct {
 		Fluid   string `json:"f"`
 		Amount  int64  `json:"a"`
 		ProbNum int    `json:"pn"`
 		ProbDen int    `json:"pd"`
+		Tool    bool   `json:"nc,omitempty"`
 	}
 	type canonical struct {
 		Mod      string       `json:"m"`
@@ -43,9 +45,9 @@ func ContentHash(n model.NormalizedRecipe) string {
 		for _, io := range ios {
 			switch io.Ref.Kind.Or() {
 			case resource.KindFluid:
-				*fluids = append(*fluids, fluidEntry{hashRef(io.Ref), io.Amount.Num, int(io.Prob.Num), int(io.Prob.Den)})
+				*fluids = append(*fluids, fluidEntry{hashRef(io.Ref), io.Amount.Num, int(io.Prob.Num), int(io.Prob.Den), !io.Consumed})
 			default:
-				*items = append(*items, itemEntry{hashRef(io.Ref), int(io.Amount.Num), int(io.Prob.Num), int(io.Prob.Den)})
+				*items = append(*items, itemEntry{hashRef(io.Ref), int(io.Amount.Num), int(io.Prob.Num), int(io.Prob.Den), !io.Consumed})
 			}
 		}
 	}

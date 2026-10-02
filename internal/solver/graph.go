@@ -14,6 +14,7 @@ type Edge struct {
 	Item        resource.Ref
 	Amount      resource.Rational
 	Probability resource.Rational
+	Consumed    bool
 }
 
 // RecipeNode represents a single item in the recipe graph, optionally bound to a specific recipe.
@@ -250,14 +251,14 @@ func writeIOSignature(b *strings.Builder, ios []resource.IO) {
 // appendRecipeEdges populates node.Inputs and node.Outputs from a recipe and extends the BFS queue.
 func appendRecipeEdges(node *RecipeNode, r *RecipeRow, queue *[]resource.Ref) {
 	for _, in := range r.Inputs {
-		node.Inputs = append(node.Inputs, Edge{Item: in.Ref, Amount: in.Amount, Probability: in.Prob})
+		node.Inputs = append(node.Inputs, Edge{Item: in.Ref, Amount: in.Amount, Probability: in.Prob, Consumed: in.Consumed})
 		*queue = append(*queue, in.Ref)
 	}
 	for _, out := range r.Outputs {
 		if out.Ref.TagRef != "" {
 			continue
 		}
-		node.Outputs = append(node.Outputs, Edge{Item: out.Ref, Amount: out.Amount.Mul(out.Prob), Probability: out.Prob})
+		node.Outputs = append(node.Outputs, Edge{Item: out.Ref, Amount: out.Amount.Mul(out.Prob), Probability: out.Prob, Consumed: true})
 	}
 }
 

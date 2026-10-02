@@ -87,3 +87,74 @@ func TestRefFromKeyInvertsKey(t *testing.T) {
 		}
 	}
 }
+
+func toolChainStore() *stubStore {
+	press := &RecipeRow{
+		ID: "press", MachineMod: "mi", MachineID: "packer", DurationTicks: 20,
+		Inputs: []resource.IO{
+			itemIO("mi", "ingot", 9, 1),
+			{Ref: resource.Ref{ModID: "mi", ID: "template"}, Amount: resource.NewRational(1, 1), Prob: resource.NewRational(1, 1), Consumed: false},
+		},
+		Outputs: []resource.IO{itemIO("mi", "block", 1, 1)},
+	}
+	return &stubStore{
+		recipes: map[string]*RecipeRow{press.ID: press},
+		byItem:  map[string][]*RecipeRow{"mi:block": {press}},
+	}
+}
+
+func TestToolIsNotConsumed(t *testing.T) {
+	g, err := NewSolver(toolChainStore(), 0).BuildRecipeGraph(context.Background(),
+		resource.Ref{ModID: "mi", ID: "block"}, nil, FactoryState{}, nil, nil)
+	if err != nil {
+		t.Fatalf("BuildRecipeGraph: %v", err)
+	}
+	got, err := SolveDAG(g, resource.NewRational(1, 20))
+	if err != nil {
+		t.Fatalf("SolveDAG: %v", err)
+	}
+	inputs := map[string]resource.Rational{}
+	for _, e := range ComputeIOProfile(got, g, FactoryState{}, "t").Inputs {
+		inputs[e.Item.Key()] = e.Rate
+	}
+	if r, ok := inputs["mi:template"]; ok && !r.IsZero() {
+		t.Errorf("template input = %s, want none for a tool", r)
+	}
+	if r := inputs["mi:ingot"]; !r.Eq(resource.NewRational(9, 20)) {
+		t.Errorf("ingot input = %s, want 9/20", r)
+	}
+}
+
+func TestToolHasNoStoichiometryCoefficient(t *testing.T) {
+	store := toolChainStore()
+	cut := &RecipeRow{
+		ID: "cut", MachineMod: "mi", MachineID: "cutter", DurationTicks: 20,
+		Inputs:  []resource.IO{itemIO("mi", "plate", 1, 1)},
+		Outputs: []resource.IO{itemIO("mi", "template", 1, 1)},
+	}
+	store.recipes[cut.ID] = cut
+	store.byItem["mi:template"] = []*RecipeRow{cut}
+	g, err := NewSolver(store, 0).BuildRecipeGraph(context.Background(),
+		resource.Ref{ModID: "mi", ID: "block"}, nil, FactoryState{}, nil, nil)
+	if err != nil {
+		t.Fatalf("BuildRecipeGraph: %v", err)
+	}
+	S, items, recipes := BuildStoichiometryMatrix(g)
+	row, col := -1, -1
+	for i, it := range items {
+		if it.Key() == "mi:template" {
+			row = i
+		}
+	}
+	for j, r := range recipes {
+		if r == g.Nodes["mi:block"].RateKey() {
+			col = j
+		}
+	}
+	if row < 0 || col < 0 {
+		t.Fatalf("template row %d, press column %d not in the matrix", row, col)
+	}
+	if !S[row][col].IsZero() {
+		t.Errorf("S[template][press] = %s, want 0 for a tool", S[row][col])
+	}
+}

@@ -121,10 +121,11 @@ func recipeOutputs(recipe *solver.RecipeRow) []plugins.Output {
 	return out
 }
 
-func recipeInputs(recipe *solver.RecipeRow) []plugins.Output {
-	in := make([]plugins.Output, 0, len(recipe.Inputs))
+func recipeInputs(recipe *solver.RecipeRow) []plugins.Input {
+	in := make([]plugins.Input, 0, len(recipe.Inputs))
 	for _, i := range recipe.Inputs {
-		in = append(in, pluginIO(i))
+		o := pluginIO(i)
+		in = append(in, plugins.Input{Ref: o.Ref, Amount: o.Amount, Probability: o.Probability, Consumed: i.Consumed})
 	}
 	return in
 }

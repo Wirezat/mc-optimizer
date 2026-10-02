@@ -79,27 +79,39 @@ func TestParseModFile_ExactAmounts(t *testing.T) {
 	}
 }
 
-func TestParseModFile_InputProbabilityZeroIsATool(t *testing.T) {
+func TestParseModFile_ConsumedFalseIsATool(t *testing.T) {
 	got := parseOneRecipe(t, `
   - machine: m
     duration_ticks: 10
     inputs:
       items:
         - item: tool
-          probability: 0.0
+          consumed: false
+        - item: ore
       fluids:
         - fluid: catalyst
           amount_mb: 10
-          probability: 0
+          consumed: false
     outputs:
       items:
         - item: e
 `)
-	if got.itemIn[0].Prob.Num != 0 || got.itemIn[0].Prob.Den != 1 {
-		t.Errorf("item input probability = %d/%d, want 0/1", got.itemIn[0].Prob.Num, got.itemIn[0].Prob.Den)
+	one := resource.NewRational(1, 1)
+	if got.itemIn[0].Consumed || !got.itemIn[0].Prob.Eq(one) {
+		t.Errorf("tool = %+v, want consumed false with probability 1", got.itemIn[0])
 	}
-	if got.fluidIn[0].Prob.Num != 0 || got.fluidIn[0].Prob.Den != 1 {
-		t.Errorf("fluid input probability = %d/%d, want 0/1", got.fluidIn[0].Prob.Num, got.fluidIn[0].Prob.Den)
+	if !got.itemIn[1].Consumed {
+		t.Errorf("ore = %+v, want consumed by default", got.itemIn[1])
+	}
+	if got.fluidIn[0].Consumed || !got.fluidIn[0].Prob.Eq(one) {
+		t.Errorf("fluid tool = %+v, want consumed false with probability 1", got.fluidIn[0])
+	}
+}
+
+func TestParseModFile_ToolErrorsNameWhere(t *testing.T) {
+	_, err := ParseModFile([]byte(quantityHead + "  - machine: m\n    duration_ticks: 1\n    inputs:\n      items:\n        - item: hammer\n          probability: 0\n"))
+	if err == nil || !strings.Contains(err.Error(), "line 9") || !strings.Contains(err.Error(), "consumed: false") {
+		t.Errorf("error = %v, want line 9 and a hint at consumed: false", err)
 	}
 }
 
@@ -115,6 +127,9 @@ func TestParseModFile_RejectsBadQuantities(t *testing.T) {
 		"negative den":          "    duration_ticks: 1\n    inputs:\n      items:\n        - item: a\n          amount_num: 1\n          amount_den: -2\n",
 		"probability above one": "    duration_ticks: 1\n    outputs:\n      items:\n        - item: a\n          probability: 1.5\n",
 		"negative probability":  "    duration_ticks: 1\n    inputs:\n      items:\n        - item: a\n          probability: -0.1\n",
+		"input probability 0":   "    duration_ticks: 1\n    inputs:\n      items:\n        - item: a\n          probability: 0\n",
+		"fluid input prob 0":    "    duration_ticks: 1\n    inputs:\n      fluids:\n        - fluid: water\n          amount_mb: 5\n          probability: 0\n",
+		"consumed on output":    "    duration_ticks: 1\n    outputs:\n      items:\n        - item: a\n          consumed: false\n",
 		"output probability 0":  "    duration_ticks: 1\n    outputs:\n      items:\n        - item: a\n          probability: 0\n",
 		"fluid without amount":  "    duration_ticks: 1\n    inputs:\n      fluids:\n        - fluid: water\n",
 		"fluid zero amount":     "    duration_ticks: 1\n    inputs:\n      fluids:\n        - fluid: water\n          amount_mb: 0\n",

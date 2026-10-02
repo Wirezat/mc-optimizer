@@ -144,6 +144,7 @@ type rawItemIO struct {
 	AmountNum   *int         `yaml:"amount_num"`
 	AmountDen   *int         `yaml:"amount_den"`
 	Probability *exactNumber `yaml:"probability"`
+	Consumed    *bool        `yaml:"consumed"`
 	line        int
 }
 
@@ -161,6 +162,7 @@ type rawFluidIO struct {
 	Tag         string       `yaml:"tag"`
 	AmountMB    *int64       `yaml:"amount_mb"`
 	Probability *exactNumber `yaml:"probability"`
+	Consumed    *bool        `yaml:"consumed"`
 	line        int
 }
 
@@ -498,7 +500,11 @@ func parseItemIO(io rawItemIO, output bool, defaultMod string) (*resource.IO, er
 	if err != nil {
 		return nil, err
 	}
-	return &resource.IO{Ref: ref, Amount: resource.NewRational(int64(num), int64(den)), Prob: prob, Consumed: true}, nil
+	consumed, err := parseConsumed(io.Consumed, output)
+	if err != nil {
+		return nil, err
+	}
+	return &resource.IO{Ref: ref, Amount: resource.NewRational(int64(num), int64(den)), Prob: prob, Consumed: consumed}, nil
 }
 
 func parseFluidIO(io rawFluidIO, output bool, defaultMod string) (*resource.IO, error) {
@@ -519,7 +525,11 @@ func parseFluidIO(io rawFluidIO, output bool, defaultMod string) (*resource.IO, 
 	if err != nil {
 		return nil, err
 	}
-	return &resource.IO{Ref: ref, Amount: resource.NewRational(*io.AmountMB, 1), Prob: prob, Consumed: true}, nil
+	consumed, err := parseConsumed(io.Consumed, output)
+	if err != nil {
+		return nil, err
+	}
+	return &resource.IO{Ref: ref, Amount: resource.NewRational(*io.AmountMB, 1), Prob: prob, Consumed: consumed}, nil
 }
 
 func ioRef(name, tag string, kind resource.Kind, defaultMod string) (resource.Ref, error) {
@@ -538,10 +548,23 @@ func parseProbability(p *exactNumber, output bool) (resource.Rational, error) {
 	if p != nil {
 		num, den = p.num, p.den
 	}
-	if err := checkProbability(int64(num), int64(den), !output); err != nil {
+	if num == 0 && !output {
+		return resource.Rational{}, fmt.Errorf("probability of an input must be above 0; mark a tool with consumed: false")
+	}
+	if err := checkProbability(int64(num), int64(den), false); err != nil {
 		return resource.Rational{}, err
 	}
 	return resource.NewRational(int64(num), int64(den)), nil
+}
+
+func parseConsumed(c *bool, output bool) (bool, error) {
+	if c == nil {
+		return true, nil
+	}
+	if output {
+		return false, fmt.Errorf("consumed applies to inputs only")
+	}
+	return *c, nil
 }
 
 func isSentinel(s string) bool {

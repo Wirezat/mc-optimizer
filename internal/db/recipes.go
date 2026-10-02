@@ -232,7 +232,7 @@ func (d *DB) loadRecipeIO(ctx context.Context, r *solver.RecipeRow) error {
 			WHERE io.recipe_id = $1 ORDER BY io.sort_index`},
 		{resource.KindFluid, false, `
 			SELECT COALESCE(io.fluid_mod_id, ''), COALESCE(io.fluid_id, ''), COALESCE(t.name, ''),
-			       io.amount_mb, 1, io.probability_num, io.probability_den, false
+			       io.amount_mb, 1, io.probability_num, io.probability_den, io.non_consuming
 			FROM recipe_fluid_inputs io LEFT JOIN tags t ON t.id = io.tag_id
 			WHERE io.recipe_id = $1 ORDER BY io.sort_index`},
 		{resource.KindItem, true, `

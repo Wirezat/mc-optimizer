@@ -424,3 +424,16 @@ func TestVariantsSurvivesACacheWriteFailure(t *testing.T) {
 		t.Errorf("PutVariants called %d times, want 1", store.putCalls)
 	}
 }
+
+func TestRecipeInputsCarryConsumed(t *testing.T) {
+	recipe := steamRecipe()
+	recipe.Inputs = append(recipe.Inputs, resource.IO{Ref: resource.Ref{ModID: "testmod", ID: "template"}, Amount: resource.NewRational(1, 1), Prob: resource.NewRational(1, 1), Consumed: false})
+	ins := recipeInputs(recipe)
+	last := ins[len(ins)-1]
+	if last.Ref != "testmod:template" || last.Consumed || last.Probability.Num != 1 {
+		t.Errorf("tool input = %+v, want consumed false with probability 1", last)
+	}
+	if !ins[0].Consumed {
+		t.Errorf("first input = %+v, want consumed", ins[0])
+	}
+}

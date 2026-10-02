@@ -220,11 +220,19 @@ func insertRecipeIO(ctx context.Context, tx pgx.Tx, recipeID uuid.UUID, ios []re
 			if io.Amount.Den != 1 {
 				return fmt.Errorf("db: import recipe: fluid amount %s is not whole mB", io.Amount)
 			}
+			if output {
+				_, err = tx.Exec(ctx, `
+					INSERT INTO recipe_fluid_outputs
+						(id, recipe_id, sort_index, fluid_mod_id, fluid_id, tag_id, amount_mb, probability_num, probability_den)
+					VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+				`, recipeID, i, nullIfEmpty(io.Ref.ModID), nullIfEmpty(io.Ref.ID), tagID, io.Amount.Num, io.Prob.Num, io.Prob.Den)
+				break
+			}
 			_, err = tx.Exec(ctx, `
-				INSERT INTO recipe_fluid_`+side+`s
-					(id, recipe_id, sort_index, fluid_mod_id, fluid_id, tag_id, amount_mb, probability_num, probability_den)
-				VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
-			`, recipeID, i, nullIfEmpty(io.Ref.ModID), nullIfEmpty(io.Ref.ID), tagID, io.Amount.Num, io.Prob.Num, io.Prob.Den)
+				INSERT INTO recipe_fluid_inputs
+					(id, recipe_id, sort_index, fluid_mod_id, fluid_id, tag_id, amount_mb, probability_num, probability_den, non_consuming)
+				VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
+			`, recipeID, i, nullIfEmpty(io.Ref.ModID), nullIfEmpty(io.Ref.ID), tagID, io.Amount.Num, io.Prob.Num, io.Prob.Den, !io.Consumed)
 		default:
 			return fmt.Errorf("db: import recipe: no table for kind %q", kind)
 		}

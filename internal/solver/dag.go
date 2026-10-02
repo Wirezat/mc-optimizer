@@ -163,7 +163,10 @@ func SolveDAG(g *RecipeGraph, targetRatePerTick resource.Rational) (RateVector, 
 
 		for _, edge := range node.Inputs {
 			edgeKey := edge.Item.Key()
-			needed := recipeRate.Mul(edge.Amount).Mul(edge.Probability)
+			needed := resource.NewRational(0, 1)
+			if edge.Consumed {
+				needed = recipeRate.Mul(edge.Amount).Mul(edge.Probability)
+			}
 			if existing, ok := rv.ItemRates[edgeKey]; ok {
 				rv.ItemRates[edgeKey] = existing.Add(needed)
 			} else {

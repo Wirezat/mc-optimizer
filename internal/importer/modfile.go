@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"gopkg.in/yaml.v3"
 )
 
@@ -308,7 +309,7 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 				return nil, ioErr(io.line, "input", itemName(io), err)
 			}
 			if d != nil {
-				rec.ItemInputs = append(rec.ItemInputs, *d)
+				rec.Inputs = append(rec.Inputs, *d)
 			}
 		}
 		for _, io := range r.Outputs.Items {
@@ -317,7 +318,7 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 				return nil, ioErr(io.line, "output", itemName(io), err)
 			}
 			if d != nil {
-				rec.ItemOutputs = append(rec.ItemOutputs, *d)
+				rec.Outputs = append(rec.Outputs, *d)
 			}
 		}
 		for _, io := range r.Inputs.Fluids {
@@ -326,7 +327,7 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 				return nil, ioErr(io.line, "fluid input", fluidName(io), err)
 			}
 			if d != nil {
-				rec.FluidInputs = append(rec.FluidInputs, *d)
+				rec.Inputs = append(rec.Inputs, *d)
 			}
 		}
 		for _, io := range r.Outputs.Fluids {
@@ -335,7 +336,7 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 				return nil, ioErr(io.line, "fluid output", fluidName(io), err)
 			}
 			if d != nil {
-				rec.FluidOutputs = append(rec.FluidOutputs, *d)
+				rec.Outputs = append(rec.Outputs, *d)
 			}
 		}
 		def.Recipes = append(def.Recipes, rec)
@@ -468,21 +469,15 @@ func fluidName(io rawFluidIO) string {
 	return io.Fluid
 }
 
-func parseItemIO(io rawItemIO, output bool, defaultMod string) (*model.ModIODef, error) {
+func parseItemIO(io rawItemIO, output bool, defaultMod string) (*resource.IO, error) {
 	if isSentinel(io.Item) && isSentinel(io.Tag) {
 		return nil, nil
 	}
-	d := &model.ModIODef{AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1}
-	if !isSentinel(io.Tag) {
-		d.TagName = ptr(io.Tag)
-	} else {
-		modID, id, err := splitRef(io.Item, defaultMod)
-		if err != nil {
-			return nil, err
-		}
-		d.ItemModID = ptr(modID)
-		d.ItemID = ptr(id)
+	ref, err := ioRef(io.Item, io.Tag, resource.KindItem, defaultMod)
+	if err != nil {
+		return nil, err
 	}
+	num, den := 1, 1
 	switch {
 	case io.Amount != nil && (io.AmountNum != nil || io.AmountDen != nil):
 		return nil, fmt.Errorf("give either amount or amount_num/amount_den")
@@ -492,36 +487,27 @@ func parseItemIO(io rawItemIO, output bool, defaultMod string) (*model.ModIODef,
 		if !fitsInt32(int64(*io.AmountNum), true) || !fitsInt32(int64(*io.AmountDen), true) {
 			return nil, fmt.Errorf("amount %d/%d is out of range", *io.AmountNum, *io.AmountDen)
 		}
-		d.AmountNum, d.AmountDen = *io.AmountNum, *io.AmountDen
+		num, den = *io.AmountNum, *io.AmountDen
 	case io.Amount != nil:
-		d.AmountNum, d.AmountDen = io.Amount.num, io.Amount.den
+		num, den = io.Amount.num, io.Amount.den
 	}
-	if err := checkAmount(int64(d.AmountNum), int64(d.AmountDen)); err != nil {
+	if err := checkAmount(int64(num), int64(den)); err != nil {
 		return nil, err
 	}
-	if io.Probability != nil {
-		d.ProbNum, d.ProbDen = io.Probability.num, io.Probability.den
-	}
-	if err := checkProbability(int64(d.ProbNum), int64(d.ProbDen), !output); err != nil {
+	prob, err := parseProbability(io.Probability, output)
+	if err != nil {
 		return nil, err
 	}
-	return d, nil
+	return &resource.IO{Ref: ref, Amount: resource.NewRational(int64(num), int64(den)), Prob: prob, Consumed: true}, nil
 }
 
-func parseFluidIO(io rawFluidIO, output bool, defaultMod string) (*model.ModFluidIODef, error) {
+func parseFluidIO(io rawFluidIO, output bool, defaultMod string) (*resource.IO, error) {
 	if isSentinel(io.Fluid) && isSentinel(io.Tag) {
 		return nil, nil
 	}
-	d := &model.ModFluidIODef{ProbNum: 1, ProbDen: 1}
-	if !isSentinel(io.Tag) {
-		d.TagName = ptr(io.Tag)
-	} else {
-		modID, id, err := splitRef(io.Fluid, defaultMod)
-		if err != nil {
-			return nil, err
-		}
-		d.FluidModID = ptr(modID)
-		d.FluidID = ptr(id)
+	ref, err := ioRef(io.Fluid, io.Tag, resource.KindFluid, defaultMod)
+	if err != nil {
+		return nil, err
 	}
 	if io.AmountMB == nil {
 		return nil, fmt.Errorf("amount_mb is required")
@@ -529,14 +515,33 @@ func parseFluidIO(io rawFluidIO, output bool, defaultMod string) (*model.ModFlui
 	if err := checkAmount(*io.AmountMB, 1); err != nil {
 		return nil, err
 	}
-	d.AmountMB = *io.AmountMB
-	if io.Probability != nil {
-		d.ProbNum, d.ProbDen = io.Probability.num, io.Probability.den
-	}
-	if err := checkProbability(int64(d.ProbNum), int64(d.ProbDen), !output); err != nil {
+	prob, err := parseProbability(io.Probability, output)
+	if err != nil {
 		return nil, err
 	}
-	return d, nil
+	return &resource.IO{Ref: ref, Amount: resource.NewRational(*io.AmountMB, 1), Prob: prob, Consumed: true}, nil
+}
+
+func ioRef(name, tag string, kind resource.Kind, defaultMod string) (resource.Ref, error) {
+	if !isSentinel(tag) {
+		return resource.Ref{TagRef: tag, Kind: kind}, nil
+	}
+	modID, id, err := splitRef(name, defaultMod)
+	if err != nil {
+		return resource.Ref{}, err
+	}
+	return resource.Ref{ModID: modID, ID: id, Kind: kind}, nil
+}
+
+func parseProbability(p *exactNumber, output bool) (resource.Rational, error) {
+	num, den := 1, 1
+	if p != nil {
+		num, den = p.num, p.den
+	}
+	if err := checkProbability(int64(num), int64(den), !output); err != nil {
+		return resource.Rational{}, err
+	}
+	return resource.NewRational(int64(num), int64(den)), nil
 }
 
 func isSentinel(s string) bool {

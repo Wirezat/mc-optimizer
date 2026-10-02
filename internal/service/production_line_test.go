@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
@@ -21,14 +22,14 @@ func TestSolveResultToContentsFreezesTheConfigPerGroup(t *testing.T) {
 				RecipeID:  "11111111-1111-1111-1111-111111111111",
 				PluginMod: "modern_industrialization",
 				VariantID: "modern_industrialization:advanced_upgrade-x3",
-				Count:     2, ExactCount: solver.NewRational(3, 2),
+				Count:     2, ExactCount: resource.NewRational(3, 2),
 			},
 			{
 				MachineMod: "minecraft", MachineID: "furnace",
 				RecipeID:  "22222222-2222-2222-2222-222222222222",
 				PluginMod: "minecraft",
 				VariantID: "default",
-				Count:     1, ExactCount: solver.NewRational(1, 1),
+				Count:     1, ExactCount: resource.NewRational(1, 1),
 			},
 		},
 	}
@@ -62,7 +63,7 @@ func TestScalePLRows(t *testing.T) {
 	}
 	ios := []*model.PLIO{{ID: uuid.New(), RateNum: 1, RateDen: 2}}
 
-	rateNum, rateDen, sg, sio, err := scalePLRows(4, 1, groups, ios, solver.RationalFromInt(2))
+	rateNum, rateDen, sg, sio, err := scalePLRows(4, 1, groups, ios, resource.RationalFromInt(2))
 	if err != nil {
 		t.Fatalf("scalePLRows: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestScalePLRows_RefusesToShrinkBelowBuilt(t *testing.T) {
 		{ID: uuid.New(), MachineID: "macerator", Count: 4, ExactCountNum: 4, ExactCountDen: 1, BuiltCount: 3},
 	}
 
-	_, _, _, _, err := scalePLRows(4, 1, groups, nil, solver.NewRational(1, 2))
+	_, _, _, _, err := scalePLRows(4, 1, groups, nil, resource.NewRational(1, 2))
 
 	if !errors.Is(err, ErrBuiltCountExceeded) {
 		t.Fatalf("err = %v, want ErrBuiltCountExceeded", err)

@@ -11,6 +11,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/fracidx"
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
 )
@@ -155,7 +156,7 @@ func (s *PLService) Confirm(ctx context.Context, factoryID uuid.UUID, input Conf
 func solveResultToContents(result solver.SolveResult, modConfigs map[string]json.RawMessage) ([]*model.PLIO, []*model.MachineGroup, error) {
 	totalIO := len(result.IOProfile.Inputs) + len(result.IOProfile.Outputs)
 	ios := make([]*model.PLIO, 0, totalIO)
-	ioType := func(item solver.ResourceRef) string {
+	ioType := func(item resource.Ref) string {
 		return string(item.Kind.Or())
 	}
 	for _, entry := range result.IOProfile.Inputs {
@@ -207,7 +208,7 @@ func solveResultToContents(result solver.SolveResult, modConfigs map[string]json
 }
 
 // Scale resizes a saved line to k times its machines and rates, in place, so status and built counts survive.
-func (s *PLService) Scale(ctx context.Context, plID uuid.UUID, k solver.Rational) (*model.ProductionLineDetail, error) {
+func (s *PLService) Scale(ctx context.Context, plID uuid.UUID, k resource.Rational) (*model.ProductionLineDetail, error) {
 	if k.Den == 0 || !k.IsPositive() {
 		return nil, fmt.Errorf("service: scale: factor must be positive")
 	}

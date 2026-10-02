@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Wirezat/production-optimizer/internal/plugins"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 func TestDefaultVariantUsesNominalDuration(t *testing.T) {
@@ -67,7 +68,7 @@ func TestLadderMinimisesMachineCount(t *testing.T) {
 		plugins.Variant{ID: "fast", Rate: rate(1, 10), Valid: true,
 			Items: []plugins.Item{{Ref: "m:upg", Count: 2}}},
 	)
-	got, ok := pickCell(cells, NewRational(1, 10), nil)
+	got, ok := pickCell(cells, resource.NewRational(1, 10), nil)
 	if !ok {
 		t.Fatal("ok = false, want true")
 	}
@@ -92,13 +93,12 @@ func TestLadderStagesTwoAndThree(t *testing.T) {
 	}
 	tests := []struct {
 		name   string
-		demand Rational
+		demand resource.Rational
 		want   string
 		count  int64
 	}{
-		// Every cell fits one machine, so stage 2 ties and stage 3 decides.
-		{"reserve picks fuel efficiency", NewRational(1, 200), "fuel", 1},
-		{"bottleneck picks speed", NewRational(1, 50), "speed", 2},
+		{"reserve picks fuel efficiency", resource.NewRational(1, 200), "fuel", 1},
+		{"bottleneck picks speed", resource.NewRational(1, 50), "speed", 2},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -124,14 +124,14 @@ func TestStage5ComparesPerResource(t *testing.T) {
 		Costs: []plugins.Cost{{Resource: "j", Amount: rate(400, 1)}}}
 
 	cells := append(cellsOn("a_mod", "burner", dear, cheap), cellsOn("z_mod", "smelter", joule)...)
-	got, ok := pickCell(cells, NewRational(1, 100), nil)
+	got, ok := pickCell(cells, resource.NewRational(1, 100), nil)
 	if !ok {
 		t.Fatal("ok = false, want true")
 	}
 	if got.variant.ID != "cheap" {
 		t.Errorf("ID = %q, want %q: the joule cell must not switch the coal comparison off", got.variant.ID, "cheap")
 	}
-	if _, ok := pickCell(cellsOn("z_mod", "smelter", joule), NewRational(1, 100), nil); !ok {
+	if _, ok := pickCell(cellsOn("z_mod", "smelter", joule), resource.NewRational(1, 100), nil); !ok {
 		t.Error("a lone joule cell must still be selectable")
 	}
 }
@@ -141,11 +141,11 @@ func TestLadderPrefersTheModTheChainAlreadyUses(t *testing.T) {
 	v := plugins.Variant{ID: "plain", Rate: rate(1, 100), Valid: true}
 	cells := append(cellsOn("a_mod", "one", v), cellsOn("z_mod", "two", v)...)
 
-	got, _ := pickCell(cells, NewRational(1, 100), &ladderCtx{affinity: map[string]int{"z_mod": 3}})
+	got, _ := pickCell(cells, resource.NewRational(1, 100), &ladderCtx{affinity: map[string]int{"z_mod": 3}})
 	if got.machine.ModID != "z_mod" {
 		t.Errorf("mod = %q, want %q", got.machine.ModID, "z_mod")
 	}
-	got, _ = pickCell(cells, NewRational(1, 100), nil)
+	got, _ = pickCell(cells, resource.NewRational(1, 100), nil)
 	if got.machine.ModID != "a_mod" {
 		t.Errorf("without affinity: mod = %q, want the lexicographic winner %q", got.machine.ModID, "a_mod")
 	}
@@ -156,13 +156,13 @@ func TestLadderRankDecidesOnlyWithinOnePlugin(t *testing.T) {
 	kanthal := plugins.Variant{ID: "kanthal", Rate: rate(1, 100), Valid: true, Rank: 1}
 	cupro := plugins.Variant{ID: "zcupronickel", Rate: rate(1, 100), Valid: true, Rank: 0}
 
-	got, _ := pickCell(cellsOn("mi", "ebf", kanthal, cupro), NewRational(1, 100), nil)
+	got, _ := pickCell(cellsOn("mi", "ebf", kanthal, cupro), resource.NewRational(1, 100), nil)
 	if got.variant.ID != "zcupronickel" {
 		t.Errorf("ID = %q, want %q: the lower rank wins inside one plugin", got.variant.ID, "zcupronickel")
 	}
 
 	mixed := append(cellsOn("a_mod", "one", kanthal), cellsOn("z_mod", "two", cupro)...)
-	got, _ = pickCell(mixed, NewRational(1, 100), nil)
+	got, _ = pickCell(mixed, resource.NewRational(1, 100), nil)
 	if got.machine.ModID != "a_mod" {
 		t.Errorf("mod = %q, want %q: rank must not be compared across plugins", got.machine.ModID, "a_mod")
 	}
@@ -174,10 +174,10 @@ func TestLadderIsOrderIndependent(t *testing.T) {
 		return plugins.Variant{ID: id, Rate: rate(1, 100), Valid: true}
 	}
 	cells := append(cellsOn("a_mod", "one", v("x"), v("y")), cellsOn("z_mod", "two", v("x"))...)
-	want, _ := pickCell(cells, NewRational(1, 100), nil)
+	want, _ := pickCell(cells, resource.NewRational(1, 100), nil)
 	for i := range cells {
 		rotated := append(append([]cell{}, cells[i:]...), cells[:i]...)
-		got, _ := pickCell(rotated, NewRational(1, 100), nil)
+		got, _ := pickCell(rotated, resource.NewRational(1, 100), nil)
 		if got.machine.ModID != want.machine.ModID || got.variant.ID != want.variant.ID {
 			t.Fatalf("rotation %d picked %s/%s, want %s/%s",
 				i, got.machine.ModID, got.variant.ID, want.machine.ModID, want.variant.ID)
@@ -187,14 +187,13 @@ func TestLadderIsOrderIndependent(t *testing.T) {
 
 func TestLadderSkipsInvalid(t *testing.T) {
 	cells := cellsOn("minecraft", "furnace",
-		// "impossible" is far faster than "base": if the skip guard let it through, it would need
 		// strictly fewer machines (1 vs 2), not just tie with "base". That makes the result
 		// independent of list order, unlike a tie where a disabled guard could still
 		// "accidentally" produce the expected winner depending on which entry comes first.
 		plugins.Variant{ID: "impossible", Rate: rate(1, 1), Valid: false},
 		plugins.Variant{ID: "base", Rate: rate(1, 20), Valid: true},
 	)
-	got, ok := pickCell(cells, NewRational(1, 10), nil)
+	got, ok := pickCell(cells, resource.NewRational(1, 10), nil)
 	if !ok {
 		t.Fatal("ok = false, want true")
 	}
@@ -206,7 +205,7 @@ func TestLadderSkipsInvalid(t *testing.T) {
 func TestLadderReportsNoValidOption(t *testing.T) {
 	cells := cellsOn("minecraft", "furnace",
 		plugins.Variant{ID: "impossible", Rate: rate(1, 1), Valid: false})
-	if _, ok := pickCell(cells, NewRational(1, 20), nil); ok {
+	if _, ok := pickCell(cells, resource.NewRational(1, 20), nil); ok {
 		t.Error("ok = true, want false when no cell is valid")
 	}
 }
@@ -353,14 +352,14 @@ func TestCalculateMachineGroupsReportsRateOverflow(t *testing.T) {
 		{ID: "slow", Rate: plugins.Rational{Num: 1, Den: math.MaxInt32}, Valid: true},
 	}}
 	s, g, rv := newVariantTestSolver(t, src)
-	rv.RecipeRates[RecipeOptionKey("recipe:iron_ingot", "minecraft", "furnace")] = NewRational(1<<34, 1)
+	rv.RecipeRates[RecipeOptionKey("recipe:iron_ingot", "minecraft", "furnace")] = resource.NewRational(1<<34, 1)
 
 	_, _, err := s.CalculateMachineGroups(context.Background(), g, rv, SolveRequest{})
 	if err == nil {
 		t.Fatal("err = nil, want an overflow error for a rate that cannot be represented")
 	}
-	if !errors.Is(err, ErrRateOverflow) {
-		t.Errorf("err = %v, want ErrRateOverflow", err)
+	if !errors.Is(err, resource.ErrRateOverflow) {
+		t.Errorf("err = %v, want resource.ErrRateOverflow", err)
 	}
 }
 
@@ -371,8 +370,8 @@ func solveWithVariants(t *testing.T, src VariantSource, targetNum, targetDen int
 	s := NewSolver(newStub(20), 1000)
 	s.VariantSource = src
 	res, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
-		TargetRate: NewRational(targetNum, targetDen),
+		TargetItem: resource.Ref{ModID: "minecraft", ID: "iron_ingot"},
+		TargetRate: resource.NewRational(targetNum, targetDen),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
 	})
@@ -439,9 +438,9 @@ func TestSolveWarnsWhenVariantOutputsOscillate(t *testing.T) {
 // reached through machine_interfaces, but on different machines, and only the bronze node's
 // variant overrides outputs.
 func TestSyncVariantOutputsKeysByNode(t *testing.T) {
-	iron := ResourceRef{ModID: "mod", ID: "iron"}
-	copper := ResourceRef{ModID: "mod", ID: "copper"}
-	one := NewRational(1, 1)
+	iron := resource.Ref{ModID: "mod", ID: "iron"}
+	copper := resource.Ref{ModID: "mod", ID: "copper"}
+	one := resource.NewRational(1, 1)
 	edges := func() []Edge {
 		return []Edge{
 			{Item: iron, Amount: one, Probability: one},
@@ -479,19 +478,15 @@ func TestSyncVariantOutputsKeysByNode(t *testing.T) {
 // newByproductStub is the iron-ingot fixture with a second output: 1 iron ore → 1 iron
 // ingot + 1 slag in a 20-tick furnace.
 func newByproductStub() *stubStore {
-	mc := "minecraft"
-	ore := "iron_ore"
 	recipe := &RecipeRow{
 		ID:            "recipe:iron_ingot",
 		MachineMod:    "minecraft",
 		MachineID:     "furnace",
 		DurationTicks: 20,
-		ItemInputs: []RecipeRowItemIO{
-			{ItemModID: &mc, ItemID: &ore, AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
-		},
-		ItemOutputs: []RecipeRowItemIO{
-			{ItemModID: &mc, ItemID: sp("iron_ingot"), AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
-			{ItemModID: &mc, ItemID: sp("slag"), AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
+		Inputs:        []resource.IO{itemIO("minecraft", "iron_ore", 1, 1)},
+		Outputs: []resource.IO{
+			itemIO("minecraft", "iron_ingot", 1, 1),
+			itemIO("minecraft", "slag", 1, 1),
 		},
 	}
 	return &stubStore{
@@ -518,8 +513,8 @@ func TestSolveKeepsGraphAndGroupsConsistentAtTheIterationCap(t *testing.T) {
 	s := NewSolver(newByproductStub(), 1000)
 	s.VariantSource = src
 	res, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
-		TargetRate: NewRational(1, 10),
+		TargetItem: resource.Ref{ModID: "minecraft", ID: "iron_ingot"},
+		TargetRate: resource.NewRational(1, 10),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
 	})
@@ -548,17 +543,11 @@ func stubRecipe(id, machineMod, machineID string, durationTicks int, inputs, out
 	r := &RecipeRow{ID: id, MachineMod: machineMod, MachineID: machineID, DurationTicks: durationTicks}
 	for _, ref := range inputs {
 		mod, item, _ := strings.Cut(ref, ":")
-		r.ItemInputs = append(r.ItemInputs, RecipeRowItemIO{
-			ItemModID: &mod, ItemID: &item,
-			AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1,
-		})
+		r.Inputs = append(r.Inputs, itemIO(mod, item, 1, 1))
 	}
 	for _, ref := range outputs {
 		mod, item, _ := strings.Cut(ref, ":")
-		r.ItemOutputs = append(r.ItemOutputs, RecipeRowItemIO{
-			ItemModID: &mod, ItemID: &item,
-			AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1,
-		})
+		r.Outputs = append(r.Outputs, itemIO(mod, item, 1, 1))
 	}
 	return r
 }
@@ -572,8 +561,8 @@ func stubStoreFor(recipes []*RecipeRow, machines ...*MachineSpec) *stubStore {
 	}
 	for _, r := range recipes {
 		st.recipes[r.ID] = r
-		for _, out := range r.ItemOutputs {
-			key := *out.ItemModID + ":" + *out.ItemID
+		for _, out := range r.Outputs {
+			key := out.Ref.ModID + ":" + out.Ref.ID
 			st.byItem[key] = append(st.byItem[key], r)
 		}
 	}
@@ -585,7 +574,7 @@ func stubStoreFor(recipes []*RecipeRow, machines ...*MachineSpec) *stubStore {
 
 // chainStub is a chain of `stages` recipes: mc:t0 (raw) → mc:t1 → … → mc:tN, every step one
 // unit in, one unit out, on the same 20-tick machine.
-func chainStub(stages int) (*stubStore, ResourceRef) {
+func chainStub(stages int) (*stubStore, resource.Ref) {
 	recipes := make([]*RecipeRow, 0, stages)
 	for i := 1; i <= stages; i++ {
 		recipes = append(recipes, stubRecipe(
@@ -593,7 +582,7 @@ func chainStub(stages int) (*stubStore, ResourceRef) {
 			[]string{fmt.Sprintf("mc:t%d", i-1)}, []string{fmt.Sprintf("mc:t%d", i)}))
 	}
 	store := stubStoreFor(recipes, &MachineSpec{ModID: "minecraft", MachineID: "furnace", Name: "Furnace"})
-	return store, ResourceRef{ModID: "mc", ID: fmt.Sprintf("t%d", stages)}
+	return store, resource.Ref{ModID: "mc", ID: fmt.Sprintf("t%d", stages)}
 }
 
 // overrideSource answers with a single variant that echoes the recipe's own output refs at
@@ -611,9 +600,9 @@ func (o *overrideSource) Variants(_ context.Context, _ *MachineSpec, r *RecipeRo
 		rate = got
 	}
 	v := plugins.Variant{ID: "override", Rate: rate, Valid: true}
-	for _, out := range r.ItemOutputs {
-		ref := *out.ItemModID + ":" + *out.ItemID
-		amount := plugins.Rational{Num: out.AmountNum, Den: out.AmountDen}
+	for _, out := range r.Outputs {
+		ref := out.Ref.Key()
+		amount := plugins.Rational{Num: out.Amount.Num, Den: out.Amount.Den}
 		if o.all != nil {
 			amount = *o.all
 		}
@@ -640,15 +629,15 @@ func TestSolveSurvivesOverflowInRateSolving(t *testing.T) {
 
 	_, err := s.Solve(context.Background(), SolveRequest{
 		TargetItem: target,
-		TargetRate: NewRational(1, 1),
+		TargetRate: resource.NewRational(1, 1),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
 	})
 	if err == nil {
 		t.Fatal("err = nil, want an arithmetic error for a rate that cannot be represented")
 	}
-	if !errors.Is(err, ErrRateOverflow) {
-		t.Errorf("err = %v, want ErrRateOverflow", err)
+	if !errors.Is(err, resource.ErrRateOverflow) {
+		t.Errorf("err = %v, want resource.ErrRateOverflow", err)
 	}
 }
 
@@ -667,16 +656,16 @@ func TestSolveSurvivesOverflowInIOProfile(t *testing.T) {
 	}
 
 	_, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
-		TargetRate: NewRational(4, 1),
+		TargetItem: resource.Ref{ModID: "minecraft", ID: "iron_ingot"},
+		TargetRate: resource.NewRational(4, 1),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
 	})
 	if err == nil {
 		t.Fatal("err = nil, want an arithmetic error from the IO profile")
 	}
-	if !errors.Is(err, ErrRateOverflow) {
-		t.Errorf("err = %v, want ErrRateOverflow", err)
+	if !errors.Is(err, resource.ErrRateOverflow) {
+		t.Errorf("err = %v, want resource.ErrRateOverflow", err)
 	}
 }
 
@@ -685,7 +674,7 @@ func TestSolveSurvivesOverflowInIOProfile(t *testing.T) {
 func TestSolveSurvivesOverflowInLinearSystem(t *testing.T) {
 	reactor := stubRecipe("recipe:reactor", "mi", "reactor", 100,
 		[]string{"mi:enriched_uranium", "mi:coolant"}, []string{"mi:depleted_cell"})
-	reactor.ItemOutputs[0].AmountNum = 2 // surplus per run: this is what makes the cycle solvable
+	reactor.Outputs[0].Amount = resource.NewRational(2, 1) // surplus per run: this is what makes the cycle solvable
 	store := stubStoreFor([]*RecipeRow{
 		stubRecipe("recipe:packager", "mi", "packager", 20,
 			[]string{"mi:depleted_cell"}, []string{"mi:fuel_rod"}),
@@ -708,16 +697,16 @@ func TestSolveSurvivesOverflowInLinearSystem(t *testing.T) {
 	}
 
 	_, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ResourceRef{ModID: "mi", ID: "fuel_rod"},
-		TargetRate: NewRational(1, 1),
+		TargetItem: resource.Ref{ModID: "mi", ID: "fuel_rod"},
+		TargetRate: resource.NewRational(1, 1),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
 	})
 	if err == nil {
 		t.Fatal("err = nil, want an arithmetic error from the linear system")
 	}
-	if !errors.Is(err, ErrRateOverflow) {
-		t.Errorf("err = %v, want ErrRateOverflow", err)
+	if !errors.Is(err, resource.ErrRateOverflow) {
+		t.Errorf("err = %v, want resource.ErrRateOverflow", err)
 	}
 }
 
@@ -733,15 +722,15 @@ func TestSolveSurvivesOverflowInIntegerScaling(t *testing.T) {
 
 	_, err := s.Solve(context.Background(), SolveRequest{
 		TargetItem: target,
-		TargetRate: NewRational(10000000000000001, 1),
+		TargetRate: resource.NewRational(10000000000000001, 1),
 		TimeUnit:   "t",
 		Mode:       SolveModeAuto,
 	})
 	if err == nil {
 		t.Fatal("err = nil, want an arithmetic error from the integer scaling")
 	}
-	if !errors.Is(err, ErrRateOverflow) {
-		t.Errorf("err = %v, want ErrRateOverflow", err)
+	if !errors.Is(err, resource.ErrRateOverflow) {
+		t.Errorf("err = %v, want resource.ErrRateOverflow", err)
 	}
 }
 
@@ -805,8 +794,8 @@ func TestSolveWithTwoModsKeepsVariantsAndCostsApart(t *testing.T) {
 	s.VariantSource = src
 
 	res, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ResourceRef{ModID: "mc", ID: "gear"},
-		TargetRate: NewRational(1, 10),
+		TargetItem: resource.Ref{ModID: "mc", ID: "gear"},
+		TargetRate: resource.NewRational(1, 10),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
 		ModConfigs: map[string]json.RawMessage{
@@ -852,7 +841,7 @@ func TestCalculateMachineGroupsWarnsOncePerFailingMod(t *testing.T) {
 
 	res, err := s.Solve(context.Background(), SolveRequest{
 		TargetItem: target,
-		TargetRate: NewRational(1, 20),
+		TargetRate: resource.NewRational(1, 20),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
 	})
@@ -906,8 +895,8 @@ func TestSolveDoesNotLaunderForeignPanics(t *testing.T) {
 	s := NewSolver(newStub(20), 1000)
 	s.VariantSource = panicSource{}
 	_, err := s.Solve(context.Background(), SolveRequest{
-		TargetItem: ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
-		TargetRate: NewRational(1, 20),
+		TargetItem: resource.Ref{ModID: "minecraft", ID: "iron_ingot"},
+		TargetRate: resource.NewRational(1, 20),
 		TimeUnit:   "t",
 		Mode:       SolveModeTarget,
 	})
@@ -922,7 +911,7 @@ func TestChooseCellHonoursPin(t *testing.T) {
 		{ID: "slow", Rate: plugins.Rational{Num: 1, Den: 4}, Valid: true,
 			Items: []plugins.Item{{Ref: "mod:upgrade", Count: 3}}},
 	}
-	c, runnable, err := chooseCell(matrixOn(vs...), NewRational(1, 4), nil, "slow")
+	c, runnable, err := chooseCell(matrixOn(vs...), resource.NewRational(1, 4), nil, "slow")
 	if err != nil {
 		t.Fatalf("chooseCell: %v", err)
 	}
@@ -942,7 +931,7 @@ func TestChooseCellIgnoresUnknownPin(t *testing.T) {
 		{ID: "worse", Rate: plugins.Rational{Num: 1, Den: 4}, Valid: true},
 		{ID: "base", Rate: plugins.Rational{Num: 1, Den: 2}, Valid: true},
 	}
-	c, _, err := chooseCell(matrixOn(vs...), NewRational(1, 2), nil, "no_such_variant")
+	c, _, err := chooseCell(matrixOn(vs...), resource.NewRational(1, 2), nil, "no_such_variant")
 	if err != nil {
 		t.Fatalf("chooseCell: %v", err)
 	}
@@ -962,7 +951,7 @@ func TestChooseCellIgnoresInvalidPin(t *testing.T) {
 		{ID: "banned", Rate: plugins.Rational{Num: 1, Den: 4}, Valid: false},
 		{ID: "fast", Rate: plugins.Rational{Num: 1, Den: 2}, Valid: true},
 	}
-	c, _, err := chooseCell(matrixOn(vs...), NewRational(1, 2), nil, "banned")
+	c, _, err := chooseCell(matrixOn(vs...), resource.NewRational(1, 2), nil, "banned")
 	if err != nil {
 		t.Fatalf("chooseCell: %v", err)
 	}
@@ -1004,7 +993,7 @@ func TestSolveAutoRepicksVariantsAfterScaling(t *testing.T) {
 	s.VariantSource = src
 	res, err := s.Solve(context.Background(), SolveRequest{
 		TargetItem: target,
-		TargetRate: NewRational(1, 100),
+		TargetRate: resource.NewRational(1, 100),
 		TimeUnit:   "t",
 		Mode:       SolveModeAuto,
 	})

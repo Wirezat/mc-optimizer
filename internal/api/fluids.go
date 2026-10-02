@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/Wirezat/production-optimizer/internal/db"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 // GetFluidRecipesHandler handles GET /api/fluids/{mod_id}/{fluid_id}/recipes. Returns all
@@ -17,7 +18,7 @@ func GetFluidRecipesHandler(database *db.DB) http.HandlerFunc {
 			errBadRequest(w, "mod_id and fluid_id are required")
 			return
 		}
-		rows, err := database.GetRecipesForFluid(r.Context(), modID, fluidID)
+		rows, err := database.GetRecipesFor(r.Context(), resource.Ref{ModID: modID, ID: fluidID, Kind: resource.KindFluid})
 		if err != nil {
 			errInternal(w, err)
 			return

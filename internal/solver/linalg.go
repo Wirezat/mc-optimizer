@@ -3,6 +3,8 @@ package solver
 import (
 	"errors"
 	"fmt"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 var (
@@ -20,9 +22,9 @@ func (e *ErrNegativeRate) Error() string {
 
 // BuildStoichiometryMatrix creates the stoichiometry matrix S (items × recipes) from the
 // recipe graph. Returns S, the list of items, and the list of recipe IDs.
-func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ResourceRef, []string) {
+func BuildStoichiometryMatrix(g *RecipeGraph) ([][]resource.Rational, []resource.Ref, []string) {
 	itemIdx, recipeIdx := map[string]int{}, map[string]int{}
-	var items []ResourceRef
+	var items []resource.Ref
 	var recipeIDs []string
 
 	for key, node := range g.Nodes {
@@ -45,11 +47,11 @@ func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ResourceRef, []st
 	}
 
 	m, n := len(items), len(recipeIDs)
-	S := make([][]Rational, m)
+	S := make([][]resource.Rational, m)
 	for i := range S {
-		S[i] = make([]Rational, n)
+		S[i] = make([]resource.Rational, n)
 		for j := range S[i] {
-			S[i][j] = NewRational(0, 1)
+			S[i][j] = resource.NewRational(0, 1)
 		}
 	}
 
@@ -81,16 +83,16 @@ func BuildStoichiometryMatrix(g *RecipeGraph) ([][]Rational, []ResourceRef, []st
 
 // GaussJordanRational performs Gauss‑Jordan elimination on the augmented matrix [S|b] over
 // rationals. Returns a solution vector x or an error (ErrNoSolution, ErrUnderDetermined).
-func GaussJordanRational(S [][]Rational, b []Rational) ([]Rational, error) {
+func GaussJordanRational(S [][]resource.Rational, b []resource.Rational) ([]resource.Rational, error) {
 	m := len(S)
 	if m == 0 {
 		return nil, ErrNoSolution
 	}
 	n := len(S[0])
 
-	aug := make([][]Rational, m)
+	aug := make([][]resource.Rational, m)
 	for i := range aug {
-		aug[i] = make([]Rational, n+1)
+		aug[i] = make([]resource.Rational, n+1)
 		copy(aug[i], S[i])
 		aug[i][n] = b[i]
 	}
@@ -138,7 +140,7 @@ func GaussJordanRational(S [][]Rational, b []Rational) ([]Rational, error) {
 		return nil, ErrUnderDetermined
 	}
 
-	r := make([]Rational, n)
+	r := make([]resource.Rational, n)
 	for i, col := range pivotCols {
 		r[col] = aug[i][n]
 	}
@@ -147,7 +149,7 @@ func GaussJordanRational(S [][]Rational, b []Rational) ([]Rational, error) {
 
 // SolveLinearSystem solves the stoichiometry matrix for the recipe graph given a target
 // rate per tick. Returns a RateVector mapping recipe IDs and item keys to rational rates.
-func SolveLinearSystem(g *RecipeGraph, targetRatePerTick Rational) (RateVector, error) {
+func SolveLinearSystem(g *RecipeGraph, targetRatePerTick resource.Rational) (RateVector, error) {
 	S, items, recipeIDs := BuildStoichiometryMatrix(g)
 	if len(recipeIDs) == 0 {
 		return RateVector{}, fmt.Errorf("solver: no recipes in graph")
@@ -155,18 +157,18 @@ func SolveLinearSystem(g *RecipeGraph, targetRatePerTick Rational) (RateVector, 
 	m, n := len(items), len(recipeIDs)
 	rootKey := g.Root.Key()
 
-	b := make([]Rational, m)
+	b := make([]resource.Rational, m)
 	for i, item := range items {
 		if item.Key() == rootKey {
 			b[i] = targetRatePerTick
 		} else {
-			b[i] = NewRational(0, 1)
+			b[i] = resource.NewRational(0, 1)
 		}
 	}
 
-	Sred := make([][]Rational, m)
+	Sred := make([][]resource.Rational, m)
 	for i := range Sred {
-		Sred[i] = make([]Rational, n)
+		Sred[i] = make([]resource.Rational, n)
 		copy(Sred[i], S[i])
 	}
 
@@ -185,7 +187,7 @@ func SolveLinearSystem(g *RecipeGraph, targetRatePerTick Rational) (RateVector, 
 		rv.RecipeRates[id] = r[j]
 	}
 	for i, item := range items {
-		net := NewRational(0, 1)
+		net := resource.NewRational(0, 1)
 		for j := range recipeIDs {
 			net = net.Add(S[i][j].Mul(r[j]))
 		}

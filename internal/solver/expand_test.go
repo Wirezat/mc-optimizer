@@ -21,13 +21,13 @@ func withKinds(t *testing.T, item, fluid resource.ExpandRule) {
 func steamChainStore() *stubStore {
 	steam := &RecipeRow{
 		ID: "boil", MachineMod: "mi", MachineID: "boiler", DurationTicks: 20,
-		ItemInputs:   []RecipeRowItemIO{{ItemModID: sp("minecraft"), ItemID: sp("coal"), AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1}},
-		FluidOutputs: []RecipeRowFluidIO{{FluidModID: "mi", FluidID: "steam", AmountMB: 100, ProbabilityNum: 1, ProbabilityDen: 1}},
+		Inputs:  []resource.IO{itemIO("minecraft", "coal", 1, 1)},
+		Outputs: []resource.IO{fluidIO("mi", "steam", 100)},
 	}
 	turbine := &RecipeRow{
 		ID: "spin", MachineMod: "mi", MachineID: "turbine", DurationTicks: 20,
-		FluidInputs: []RecipeRowFluidIO{{FluidModID: "mi", FluidID: "steam", AmountMB: 100, ProbabilityNum: 1, ProbabilityDen: 1}},
-		ItemOutputs: []RecipeRowItemIO{{ItemModID: sp("mi"), ItemID: sp("power"), AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1}},
+		Inputs:  []resource.IO{fluidIO("mi", "steam", 100)},
+		Outputs: []resource.IO{itemIO("mi", "power", 1, 1)},
 	}
 	return &stubStore{
 		recipes: map[string]*RecipeRow{steam.ID: steam, turbine.ID: turbine},
@@ -39,7 +39,7 @@ func steamChainStore() *stubStore {
 func buildPowerGraph(t *testing.T, overrides map[string]string) *RecipeGraph {
 	t.Helper()
 	g, err := NewSolver(steamChainStore(), 0).BuildRecipeGraph(context.Background(),
-		ResourceRef{ModID: "mi", ID: "power"}, nil, FactoryState{}, overrides, nil)
+		resource.Ref{ModID: "mi", ID: "power"}, nil, FactoryState{}, overrides, nil)
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
 	}
@@ -75,15 +75,15 @@ func TestExpand_ItemNeverIsARawMaterial(t *testing.T) {
 }
 
 func TestRefFromKeyInvertsKey(t *testing.T) {
-	for _, r := range []ResourceRef{
+	for _, r := range []resource.Ref{
 		{ModID: "minecraft", ID: "stone"},
 		{ModID: "mi", ID: "steam", Kind: resource.KindFluid},
 		{TagRef: "c:ingots"},
 		{TagRef: "c:honey", Kind: resource.KindFluid},
 	} {
-		got := RefFromKey(r.Key())
+		got := resource.RefFromKey(r.Key())
 		if got.Key() != r.Key() || got.Kind.Or() != r.Kind.Or() {
-			t.Errorf("RefFromKey(%q) = %+v", r.Key(), got)
+			t.Errorf("resource.RefFromKey(%q) = %+v", r.Key(), got)
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -42,65 +43,34 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 		return false, fmt.Errorf("machine %s:%s is not declared by any mod", rec.ModID, rec.MachineID)
 	}
 
-	// 2. Upsert items referenced.
-	for _, io := range rec.ItemInputs {
-		if io.ModID != nil {
-			if err := upsertItem(ctx, tx, *io.ModID, *io.ID); err != nil {
-				return false, err
-			}
-		}
-	}
-	for _, io := range rec.ItemOutputs {
-		if io.ModID != nil {
-			if err := upsertItem(ctx, tx, *io.ModID, *io.ID); err != nil {
-				return false, err
-			}
-		}
-	}
-
-	// 3. Upsert fluids referenced (skip tag-only references).
-	for _, io := range rec.FluidInputs {
-		if io.ModID != nil {
-			if err := upsertFluid(ctx, tx, *io.ModID, *io.ID); err != nil {
-				return false, err
-			}
-		}
-	}
-	for _, io := range rec.FluidOutputs {
-		if io.ModID != nil {
-			if err := upsertFluid(ctx, tx, *io.ModID, *io.ID); err != nil {
-				return false, err
-			}
-		}
-	}
-
-	// 4. Upsert tags and build (kind, name)→UUID map.
+	// 2. Upsert the items, fluids and tags the recipe references.
 	tagIDs := make(map[tagKey]uuid.UUID)
-	upsertTagsOf := func(kind string, ios []model.NormalizedIO) error {
-		for _, io := range ios {
-			if io.TagName == nil {
-				continue
-			}
-			k := tagKey{kind, *io.TagName}
+	for _, io := range append(append([]resource.IO{}, rec.Inputs...), rec.Outputs...) {
+		kind := io.Ref.Kind.Or()
+		if io.Ref.TagRef != "" {
+			k := tagKey{string(kind), io.Ref.TagRef}
 			if _, ok := tagIDs[k]; ok {
 				continue
 			}
-			id, err := upsertTag(ctx, tx, kind, *io.TagName)
+			id, err := upsertTag(ctx, tx, string(kind), io.Ref.TagRef)
 			if err != nil {
-				return err
+				return false, err
 			}
 			tagIDs[k] = id
+			continue
 		}
-		return nil
-	}
-	if err := upsertTagsOf(model.TagKindItem, rec.ItemInputs); err != nil {
-		return false, err
-	}
-	if err := upsertTagsOf(model.TagKindFluid, rec.FluidInputs); err != nil {
-		return false, err
-	}
-	if err := upsertTagsOf(model.TagKindFluid, rec.FluidOutputs); err != nil {
-		return false, err
+		var err error
+		switch kind {
+		case resource.KindItem:
+			err = upsertItem(ctx, tx, io.Ref.ModID, io.Ref.ID)
+		case resource.KindFluid:
+			err = upsertFluid(ctx, tx, io.Ref.ModID, io.Ref.ID)
+		default:
+			err = fmt.Errorf("db: import recipe: no table for kind %q", kind)
+		}
+		if err != nil {
+			return false, err
+		}
 	}
 
 	// 5.
@@ -150,75 +120,12 @@ func (d *DB) ImportRecipe(ctx context.Context, rec model.NormalizedRecipe) (impo
 		return false, fmt.Errorf("db: import recipe: insert recipe: %w", err)
 	}
 
-	// 7. Insert item inputs.
-	for i, io := range rec.ItemInputs {
-		var tagID *uuid.UUID
-		if io.TagName != nil {
-			id := tagIDs[tagKey{model.TagKindItem, *io.TagName}]
-			tagID = &id
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO recipe_item_inputs
-				(id, recipe_id, sort_index, item_mod_id, item_id, tag_id,
-				 amount_num, amount_den, probability_num, probability_den, non_consuming)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		`, recipeID, i, io.ModID, io.ID, tagID,
-			io.AmountNum, io.AmountDen, io.ProbNum, io.ProbDen, io.NonConsuming,
-		); err != nil {
-			return false, fmt.Errorf("db: import recipe: insert item input: %w", err)
-		}
+	// 7. Insert inputs and outputs, each kind into its table with its own sort order.
+	if err := insertRecipeIO(ctx, tx, recipeID, rec.Inputs, false, tagIDs); err != nil {
+		return false, err
 	}
-
-	// 8. Insert item outputs.
-	for i, io := range rec.ItemOutputs {
-		// parseItemIO produces one whenever a recipe names a tag on the output side.
-		if io.ModID == nil || io.ID == nil {
-			return false, fmt.Errorf("db: import recipe: output %d is a tag, which cannot be produced", i)
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO recipe_item_outputs
-				(id, recipe_id, sort_index, item_mod_id, item_id,
-				 amount_num, amount_den, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
-		`, recipeID, i, *io.ModID, *io.ID,
-			io.AmountNum, io.AmountDen, io.ProbNum, io.ProbDen,
-		); err != nil {
-			return false, fmt.Errorf("db: import recipe: insert item output: %w", err)
-		}
-	}
-
-	// 9. Insert fluid inputs.
-	for i, io := range rec.FluidInputs {
-		var tagID *uuid.UUID
-		if io.TagName != nil {
-			id := tagIDs[tagKey{model.TagKindFluid, *io.TagName}]
-			tagID = &id
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO recipe_fluid_inputs
-				(id, recipe_id, sort_index, fluid_mod_id, fluid_id, tag_id, amount_mb, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
-		`, recipeID, i, io.ModID, io.ID, tagID, io.AmountMB, io.ProbNum, io.ProbDen,
-		); err != nil {
-			return false, fmt.Errorf("db: import recipe: insert fluid input: %w", err)
-		}
-	}
-
-	// 10. Insert fluid outputs.
-	for i, io := range rec.FluidOutputs {
-		var tagID *uuid.UUID
-		if io.TagName != nil {
-			id := tagIDs[tagKey{model.TagKindFluid, *io.TagName}]
-			tagID = &id
-		}
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO recipe_fluid_outputs
-				(id, recipe_id, sort_index, fluid_mod_id, fluid_id, tag_id, amount_mb, probability_num, probability_den)
-			VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
-		`, recipeID, i, io.ModID, io.ID, tagID, io.AmountMB, io.ProbNum, io.ProbDen,
-		); err != nil {
-			return false, fmt.Errorf("db: import recipe: insert fluid output: %w", err)
-		}
+	if err := insertRecipeIO(ctx, tx, recipeID, rec.Outputs, true, tagIDs); err != nil {
+		return false, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -271,6 +178,68 @@ func upsertFluid(ctx context.Context, tx pgx.Tx, modID, fluidID string) error {
 		return fmt.Errorf("db: upsert fluid %s:%s: %w", modID, fluidID, err)
 	}
 	return nil
+}
+
+// insertRecipeIO writes ios into the input or output table of each io's kind.
+func insertRecipeIO(ctx context.Context, tx pgx.Tx, recipeID uuid.UUID, ios []resource.IO, output bool, tagIDs map[tagKey]uuid.UUID) error {
+	side := "input"
+	if output {
+		side = "output"
+	}
+	next := map[resource.Kind]int{}
+	for _, io := range ios {
+		kind := io.Ref.Kind.Or()
+		i := next[kind]
+		next[kind]++
+		var tagID *uuid.UUID
+		if io.Ref.TagRef != "" {
+			id := tagIDs[tagKey{string(kind), io.Ref.TagRef}]
+			tagID = &id
+		}
+		var err error
+		switch {
+		case kind == resource.KindItem && output:
+			if tagID != nil {
+				return fmt.Errorf("db: import recipe: output %d is a tag, which cannot be produced", i)
+			}
+			_, err = tx.Exec(ctx, `
+				INSERT INTO recipe_item_outputs
+					(id, recipe_id, sort_index, item_mod_id, item_id,
+					 amount_num, amount_den, probability_num, probability_den)
+				VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+			`, recipeID, i, io.Ref.ModID, io.Ref.ID, io.Amount.Num, io.Amount.Den, io.Prob.Num, io.Prob.Den)
+		case kind == resource.KindItem:
+			_, err = tx.Exec(ctx, `
+				INSERT INTO recipe_item_inputs
+					(id, recipe_id, sort_index, item_mod_id, item_id, tag_id,
+					 amount_num, amount_den, probability_num, probability_den, non_consuming)
+				VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			`, recipeID, i, nullIfEmpty(io.Ref.ModID), nullIfEmpty(io.Ref.ID), tagID,
+				io.Amount.Num, io.Amount.Den, io.Prob.Num, io.Prob.Den, !io.Consumed)
+		case kind == resource.KindFluid:
+			if io.Amount.Den != 1 {
+				return fmt.Errorf("db: import recipe: fluid amount %s is not whole mB", io.Amount)
+			}
+			_, err = tx.Exec(ctx, `
+				INSERT INTO recipe_fluid_`+side+`s
+					(id, recipe_id, sort_index, fluid_mod_id, fluid_id, tag_id, amount_mb, probability_num, probability_den)
+				VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+			`, recipeID, i, nullIfEmpty(io.Ref.ModID), nullIfEmpty(io.Ref.ID), tagID, io.Amount.Num, io.Prob.Num, io.Prob.Den)
+		default:
+			return fmt.Errorf("db: import recipe: no table for kind %q", kind)
+		}
+		if err != nil {
+			return fmt.Errorf("db: import recipe: insert %s %s: %w", kind, side, err)
+		}
+	}
+	return nil
+}
+
+func nullIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 type tagKey struct{ kind, name string }
@@ -436,22 +405,10 @@ func collectMods(rec model.NormalizedRecipe) map[string]struct{} {
 	mods := map[string]struct{}{
 		rec.ModID: {},
 	}
-	add := func(modID *string) {
-		if modID != nil {
-			mods[*modID] = struct{}{}
+	for _, io := range append(append([]resource.IO{}, rec.Inputs...), rec.Outputs...) {
+		if io.Ref.ModID != "" {
+			mods[io.Ref.ModID] = struct{}{}
 		}
-	}
-	for _, io := range rec.ItemInputs {
-		add(io.ModID)
-	}
-	for _, io := range rec.ItemOutputs {
-		add(io.ModID)
-	}
-	for _, io := range rec.FluidInputs {
-		add(io.ModID)
-	}
-	for _, io := range rec.FluidOutputs {
-		add(io.ModID)
 	}
 	return mods
 }

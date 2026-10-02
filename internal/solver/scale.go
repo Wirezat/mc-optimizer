@@ -1,16 +1,16 @@
 package solver
 
-// ScaleCount scales one machine group's exact count by k and returns the new exact count
-// together with the whole machines that need building and the utilisation that follows.
-func ScaleCount(exact, k Rational) (scaled Rational, count int64, utilization Rational) {
+import "github.com/Wirezat/production-optimizer/internal/resource"
+
+// ScaleCount scales an exact machine count by k: new exact count, whole machines, utilisation.
+func ScaleCount(exact, k resource.Rational) (scaled resource.Rational, count int64, utilization resource.Rational) {
 	scaled = exact.Mul(k)
 	count = max(scaled.CeilInt(), 1)
-	return scaled, count, scaled.Div(RationalFromInt(count))
+	return scaled, count, scaled.Div(resource.RationalFromInt(count))
 }
 
-// ScaleResult returns result multiplied by k: machine counts follow from the scaled exact
-// counts, every rate scales with it.
-func ScaleResult(result SolveResult, k Rational) SolveResult {
+// ScaleResult returns result multiplied by k.
+func ScaleResult(result SolveResult, k resource.Rational) SolveResult {
 	out := result
 	out.MachineGroups = make([]MachineGroupDraft, len(result.MachineGroups))
 	copy(out.MachineGroups, result.MachineGroups)

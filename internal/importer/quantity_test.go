@@ -5,11 +5,22 @@ import (
 	"testing"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 type recipeUnderTest struct {
-	itemIn, itemOut   []model.ModIODef
-	fluidIn, fluidOut []model.ModFluidIODef
+	itemIn, itemOut   []resource.IO
+	fluidIn, fluidOut []resource.IO
+}
+
+func byKind(ios []resource.IO, k resource.Kind) []resource.IO {
+	var out []resource.IO
+	for _, io := range ios {
+		if io.Ref.Kind.Or() == k {
+			out = append(out, io)
+		}
+	}
+	return out
 }
 
 const quantityHead = "mod_id: qmod\nmachines:\n  - id: m\nrecipes:\n"
@@ -24,7 +35,7 @@ func parseOneRecipe(t *testing.T, recipe string) *recipeUnderTest {
 		t.Fatalf("recipes = %d, want 1", len(def.Recipes))
 	}
 	r := def.Recipes[0]
-	return &recipeUnderTest{r.ItemInputs, r.ItemOutputs, r.FluidInputs, r.FluidOutputs}
+	return &recipeUnderTest{byKind(r.Inputs, resource.KindItem), byKind(r.Outputs, resource.KindItem), byKind(r.Inputs, resource.KindFluid), byKind(r.Outputs, resource.KindFluid)}
 }
 
 func TestParseModFile_ExactAmounts(t *testing.T) {
@@ -50,21 +61,21 @@ func TestParseModFile_ExactAmounts(t *testing.T) {
         - item: g
           probability: "1/3"
 `)
-	want := [][2]int{{3, 2}, {1, 2}, {1, 3}, {2, 4}, {1, 1}}
+	want := [][2]int64{{3, 2}, {1, 2}, {1, 3}, {1, 2}, {1, 1}}
 	for i, w := range want {
 		in := got.itemIn[i]
-		if in.AmountNum != w[0] || in.AmountDen != w[1] {
-			t.Errorf("input %d amount = %d/%d, want %d/%d", i, in.AmountNum, in.AmountDen, w[0], w[1])
+		if in.Amount.Num != w[0] || in.Amount.Den != w[1] {
+			t.Errorf("input %d amount = %s, want %d/%d", i, in.Amount, w[0], w[1])
 		}
 	}
-	if out := got.itemOut[0]; out.ProbNum != 33 || out.ProbDen != 50 {
-		t.Errorf("output 0 probability = %d/%d, want 33/50", out.ProbNum, out.ProbDen)
+	if out := got.itemOut[0]; out.Prob.Num != 33 || out.Prob.Den != 50 {
+		t.Errorf("output 0 probability = %d/%d, want 33/50", out.Prob.Num, out.Prob.Den)
 	}
-	if out := got.itemOut[1]; out.ProbNum != 1 || out.ProbDen != 3 {
-		t.Errorf("output 1 probability = %d/%d, want 1/3", out.ProbNum, out.ProbDen)
+	if out := got.itemOut[1]; out.Prob.Num != 1 || out.Prob.Den != 3 {
+		t.Errorf("output 1 probability = %d/%d, want 1/3", out.Prob.Num, out.Prob.Den)
 	}
-	if out := got.itemOut[0]; out.AmountNum != 1 || out.AmountDen != 1 {
-		t.Errorf("output amount = %d/%d, want the default 1/1", out.AmountNum, out.AmountDen)
+	if out := got.itemOut[0]; out.Amount.Num != 1 || out.Amount.Den != 1 {
+		t.Errorf("output amount = %d/%d, want the default 1/1", out.Amount.Num, out.Amount.Den)
 	}
 }
 
@@ -84,11 +95,11 @@ func TestParseModFile_InputProbabilityZeroIsATool(t *testing.T) {
       items:
         - item: e
 `)
-	if got.itemIn[0].ProbNum != 0 || got.itemIn[0].ProbDen != 1 {
-		t.Errorf("item input probability = %d/%d, want 0/1", got.itemIn[0].ProbNum, got.itemIn[0].ProbDen)
+	if got.itemIn[0].Prob.Num != 0 || got.itemIn[0].Prob.Den != 1 {
+		t.Errorf("item input probability = %d/%d, want 0/1", got.itemIn[0].Prob.Num, got.itemIn[0].Prob.Den)
 	}
-	if got.fluidIn[0].ProbNum != 0 || got.fluidIn[0].ProbDen != 1 {
-		t.Errorf("fluid input probability = %d/%d, want 0/1", got.fluidIn[0].ProbNum, got.fluidIn[0].ProbDen)
+	if got.fluidIn[0].Prob.Num != 0 || got.fluidIn[0].Prob.Den != 1 {
+		t.Errorf("fluid input probability = %d/%d, want 0/1", got.fluidIn[0].Prob.Num, got.fluidIn[0].Prob.Den)
 	}
 }
 

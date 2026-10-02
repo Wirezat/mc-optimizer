@@ -11,9 +11,19 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// GetRecipesForItem returns every (recipe, machine) candidate that outputs this item: the
-// recipe's own machine, plus each machine that implements it via machine_interfaces.
-func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([]*solver.RecipeRow, error) {
+// GetRecipesFor returns every (recipe, machine) candidate that outputs ref: the recipe's own
+// machine, plus each machine that implements it via machine_interfaces.
+func (d *DB) GetRecipesFor(ctx context.Context, ref resource.Ref) ([]*solver.RecipeRow, error) {
+	switch ref.Kind.Or() {
+	case resource.KindItem:
+		return d.getRecipesForItem(ctx, ref.ModID, ref.ID)
+	case resource.KindFluid:
+		return d.getRecipesForFluid(ctx, ref.ModID, ref.ID)
+	}
+	return nil, fmt.Errorf("db: no recipe lookup for kind %q", ref.Kind)
+}
+
+func (d *DB) getRecipesForItem(ctx context.Context, itemModID, itemID string) ([]*solver.RecipeRow, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT id, machine_mod_id, machine_id, duration_ticks, mod_data
 		FROM (
@@ -44,9 +54,7 @@ func (d *DB) GetRecipesForItem(ctx context.Context, itemModID, itemID string) ([
 	return d.scanRecipeRows(ctx, rows, "get recipes for item")
 }
 
-// GetRecipesForFluid returns every (recipe, machine) candidate that outputs this fluid: the
-// recipe's own machine, plus each machine that implements it via machine_interfaces.
-func (d *DB) GetRecipesForFluid(ctx context.Context, fluidModID, fluidID string) ([]*solver.RecipeRow, error) {
+func (d *DB) getRecipesForFluid(ctx context.Context, fluidModID, fluidID string) ([]*solver.RecipeRow, error) {
 	rows, err := d.Pool.Query(ctx, `
 		SELECT id, machine_mod_id, machine_id, duration_ticks, mod_data
 		FROM (
@@ -179,7 +187,7 @@ func (d *DB) GetMachineType(ctx context.Context, modID, machineID string) (*solv
 
 // GetTagMembers returns every item, or for a fluid tag every fluid, that satisfies tag,
 // ordered by mod and id.
-func (d *DB) GetTagMembers(ctx context.Context, tag solver.ResourceRef) ([]solver.ResourceRef, error) {
+func (d *DB) GetTagMembers(ctx context.Context, tag resource.Ref) ([]resource.Ref, error) {
 	query := `
 		SELECT DISTINCT tm.item_mod_id, tm.item_id
 		FROM tag_members tm
@@ -199,9 +207,9 @@ func (d *DB) GetTagMembers(ctx context.Context, tag solver.ResourceRef) ([]solve
 		return nil, fmt.Errorf("db: get tag members: %w", err)
 	}
 	defer rows.Close()
-	var refs []solver.ResourceRef
+	var refs []resource.Ref
 	for rows.Next() {
-		r := solver.ResourceRef{Kind: tag.Kind}
+		r := resource.Ref{Kind: tag.Kind}
 		if err := rows.Scan(&r.ModID, &r.ID); err != nil {
 			return nil, fmt.Errorf("db: get tag members: %w", err)
 		}
@@ -212,106 +220,57 @@ func (d *DB) GetTagMembers(ctx context.Context, tag solver.ResourceRef) ([]solve
 
 // loadRecipeIO loads all item and fluid inputs/outputs for r into its slice fields.
 func (d *DB) loadRecipeIO(ctx context.Context, r *solver.RecipeRow) error {
-	rows, err := d.Pool.Query(ctx, `
-		SELECT COALESCE(rii.item_mod_id, ''), COALESCE(rii.item_id, ''),
-		       COALESCE(rii.tag_id::text, ''), COALESCE(t.name, ''),
-		       rii.amount_num, rii.amount_den, rii.probability_num, rii.probability_den,
-		       rii.non_consuming
-		FROM recipe_item_inputs rii
-		LEFT JOIN tags t ON t.id = rii.tag_id
-		WHERE rii.recipe_id = $1
-		ORDER BY rii.sort_index
-	`, r.ID)
-	if err != nil {
-		return fmt.Errorf("db: load recipe io: %w", err)
+	queries := []struct {
+		kind   resource.Kind
+		output bool
+		sql    string
+	}{
+		{resource.KindItem, false, `
+			SELECT COALESCE(io.item_mod_id, ''), COALESCE(io.item_id, ''), COALESCE(t.name, ''),
+			       io.amount_num, io.amount_den, io.probability_num, io.probability_den, io.non_consuming
+			FROM recipe_item_inputs io LEFT JOIN tags t ON t.id = io.tag_id
+			WHERE io.recipe_id = $1 ORDER BY io.sort_index`},
+		{resource.KindFluid, false, `
+			SELECT COALESCE(io.fluid_mod_id, ''), COALESCE(io.fluid_id, ''), COALESCE(t.name, ''),
+			       io.amount_mb, 1, io.probability_num, io.probability_den, false
+			FROM recipe_fluid_inputs io LEFT JOIN tags t ON t.id = io.tag_id
+			WHERE io.recipe_id = $1 ORDER BY io.sort_index`},
+		{resource.KindItem, true, `
+			SELECT io.item_mod_id, io.item_id, '',
+			       io.amount_num, io.amount_den, io.probability_num, io.probability_den, false
+			FROM recipe_item_outputs io
+			WHERE io.recipe_id = $1 ORDER BY io.sort_index`},
+		{resource.KindFluid, true, `
+			SELECT COALESCE(io.fluid_mod_id, ''), COALESCE(io.fluid_id, ''), COALESCE(t.name, ''),
+			       io.amount_mb, 1, io.probability_num, io.probability_den, false
+			FROM recipe_fluid_outputs io LEFT JOIN tags t ON t.id = io.tag_id
+			WHERE io.recipe_id = $1 ORDER BY io.sort_index`},
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var in solver.RecipeRowItemIO
-		var modID, itemID, tagID, tagName string
-		if err := rows.Scan(&modID, &itemID, &tagID, &tagName,
-			&in.AmountNum, &in.AmountDen, &in.ProbabilityNum, &in.ProbabilityDen,
-			&in.NonConsuming); err != nil {
+	for _, q := range queries {
+		rows, err := d.Pool.Query(ctx, q.sql, r.ID)
+		if err != nil {
 			return fmt.Errorf("db: load recipe io: %w", err)
 		}
-		in.ItemModID = strPtrOr(modID)
-		in.ItemID = strPtrOr(itemID)
-		in.TagID = strPtrOr(tagID)
-		in.TagName = strPtrOr(tagName)
-		r.ItemInputs = append(r.ItemInputs, in)
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("db: load recipe io: %w", err)
-	}
-
-	// Item Outputs
-	rows2, err := d.Pool.Query(ctx, `
-		SELECT item_mod_id, item_id, amount_num, amount_den, probability_num, probability_den
-		FROM recipe_item_outputs WHERE recipe_id = $1
-		ORDER BY sort_index
-	`, r.ID)
-	if err != nil {
-		return fmt.Errorf("db: load recipe io: %w", err)
-	}
-	defer rows2.Close()
-	for rows2.Next() {
-		var out solver.RecipeRowItemIO
-		if err := rows2.Scan(&out.ItemModID, &out.ItemID,
-			&out.AmountNum, &out.AmountDen, &out.ProbabilityNum, &out.ProbabilityDen); err != nil {
+		for rows.Next() {
+			var ref resource.Ref
+			var amountNum, amountDen, probNum, probDen int64
+			var tool bool
+			if err := rows.Scan(&ref.ModID, &ref.ID, &ref.TagRef, &amountNum, &amountDen, &probNum, &probDen, &tool); err != nil {
+				rows.Close()
+				return fmt.Errorf("db: load recipe io: %w", err)
+			}
+			ref.Kind = q.kind
+			io := resource.IO{Ref: ref, Amount: resource.NewRational(amountNum, amountDen), Prob: resource.NewRational(probNum, probDen), Consumed: !tool}
+			if q.output {
+				r.Outputs = append(r.Outputs, io)
+			} else {
+				r.Inputs = append(r.Inputs, io)
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
 			return fmt.Errorf("db: load recipe io: %w", err)
 		}
-		r.ItemOutputs = append(r.ItemOutputs, out)
-	}
-	if err := rows2.Err(); err != nil {
-		return fmt.Errorf("db: load recipe io: %w", err)
-	}
-
-	// Fluid Inputs
-	rows3, err := d.Pool.Query(ctx, `
-		SELECT COALESCE(rfi.fluid_mod_id, ''), COALESCE(rfi.fluid_id, ''), t.name,
-		       rfi.amount_mb, rfi.probability_num, rfi.probability_den
-		FROM recipe_fluid_inputs rfi
-		LEFT JOIN tags t ON t.id = rfi.tag_id
-		WHERE rfi.recipe_id = $1
-		ORDER BY rfi.sort_index
-	`, r.ID)
-	if err != nil {
-		return fmt.Errorf("db: load recipe io: %w", err)
-	}
-	defer rows3.Close()
-	for rows3.Next() {
-		var fi solver.RecipeRowFluidIO
-		if err := rows3.Scan(&fi.FluidModID, &fi.FluidID, &fi.TagName,
-			&fi.AmountMB, &fi.ProbabilityNum, &fi.ProbabilityDen); err != nil {
-			return fmt.Errorf("db: load recipe io: %w", err)
-		}
-		r.FluidInputs = append(r.FluidInputs, fi)
-	}
-	if err := rows3.Err(); err != nil {
-		return fmt.Errorf("db: load recipe io: %w", err)
-	}
-
-	// Fluid Outputs
-	rows4, err := d.Pool.Query(ctx, `
-		SELECT COALESCE(fluid_mod_id, ''), COALESCE(fluid_id, ''),
-		       amount_mb, probability_num, probability_den
-		FROM recipe_fluid_outputs WHERE recipe_id = $1
-		ORDER BY sort_index
-	`, r.ID)
-	if err != nil {
-		return fmt.Errorf("db: load recipe io: %w", err)
-	}
-	defer rows4.Close()
-	for rows4.Next() {
-		var fo solver.RecipeRowFluidIO
-		if err := rows4.Scan(&fo.FluidModID, &fo.FluidID,
-			&fo.AmountMB, &fo.ProbabilityNum, &fo.ProbabilityDen); err != nil {
-			return fmt.Errorf("db: load recipe io: %w", err)
-		}
-		r.FluidOutputs = append(r.FluidOutputs, fo)
-	}
-	if err := rows4.Err(); err != nil {
-		return fmt.Errorf("db: load recipe io: %w", err)
 	}
 	return nil
 }

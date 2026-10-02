@@ -20,7 +20,7 @@ func strPtrOr(s string) *string {
 }
 
 // LookupItemNames resolves en_us display names for a batch of items/fluids.
-func (d *DB) LookupItemNames(ctx context.Context, items []solver.ResourceRef) (map[string]string, error) {
+func (d *DB) LookupItemNames(ctx context.Context, items []resource.Ref) (map[string]string, error) {
 	type cand struct {
 		langKey, itemKey string
 		pri              int

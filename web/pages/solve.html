@@ -1003,23 +1003,6 @@
   function renderChainGraph() {
     if (!_chainItems.length) { chainContainer.setContent(''); return; }
 
-    // Index chain items for input-string matching: bare item_id ("iron_ore"),
-    // fluid id ("~water"), or tag ("#c:iron_ores" via TagResolutions).
-    const byItemId  = new Map();
-    const byFluidId = new Map();
-    for (const ci of _chainItems) {
-      if (ci.ref.tag_ref) continue;
-      const m = ci.ref.kind === 'fluid' ? byFluidId : byItemId;
-      if (!m.has(ci.ref.id)) m.set(ci.ref.id, []);
-      m.get(ci.ref.id).push(ci);
-    }
-    // Prefer the candidate one level deeper than its consumer — that is where
-    // BFS places a fresh input; shared nodes keep their earliest level.
-    function pickCandidate(cands, consumerLevel) {
-      if (!cands || !cands.length) return null;
-      return cands.find(c => c.level === consumerLevel + 1) || cands[0];
-    }
-
     const chainKeys = new Set(_chainItems.map(ci => itemKey(ci.ref)));
     const nodes = [];
     for (const ci of _chainItems) {
@@ -1073,12 +1056,8 @@
             } else if (chainKeys.has(inStr)) {
               toKey = inStr;
             }
-          } else if (inStr.startsWith('~')) {
-            const cand = pickCandidate(byFluidId.get(inStr.slice(1)), ci.level);
-            if (cand) toKey = itemKey(cand.ref);
-          } else {
-            const cand = pickCandidate(byItemId.get(inStr), ci.level);
-            if (cand) toKey = itemKey(cand.ref);
+          } else if (chainKeys.has(inStr)) {
+            toKey = inStr;
           }
           if (toKey && toKey !== key) dependsOn.push({ to: toKey, title });
         }
@@ -1131,7 +1110,7 @@
       // the whole group, deterministically, instead of whichever recipe's UUID
       // happened to sort first.
       opts.sort((a, b) => (b.duration_ticks || 0) - (a.duration_ticks || 0) || a.key.localeCompare(b.key));
-      const ins = (opts[0].inputs || []).join(', ');
+      const ins = (opts[0].inputs || []).map(inputLabel).join(', ');
       const hint = opts.length > 1 ? t('solve.chain.solver_picks') : '';
       items.push({
         label: machineLabel(opts[0]),
@@ -1522,6 +1501,15 @@
     const prefix = item.kind === 'fluid' ? 'fluid:' : '';
     if (item.tag_ref) return prefix + '#' + item.tag_ref;
     return prefix + item.mod_id + ':' + item.id;
+  }
+
+  function inputLabel(key) {
+    const tag = parseTagKey(key);
+    if (tag) return '#' + tag.name;
+    const isFluid = key.startsWith('fluid:');
+    const rest = isFluid ? key.slice('fluid:'.length) : key;
+    const sep = rest.indexOf(':');
+    return _names[key] || (sep >= 0 && lookupCatalog(rest.slice(0, sep), rest.slice(sep + 1), isFluid)?.name) || key;
   }
 
   function nameOf(item) {

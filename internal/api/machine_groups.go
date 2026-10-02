@@ -8,6 +8,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/Wirezat/production-optimizer/internal/plugins"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
 )
@@ -142,7 +143,7 @@ func baseVariant(vs []plugins.Variant) (plugins.Variant, bool) {
 func enrichGroupVariants(r *http.Request, database *db.DB, variants solver.VariantSource, mgs []*model.MachineGroup) map[uuid.UUID]float64 {
 	speed := make(map[uuid.UUID]float64, len(mgs))
 	perGroup := make([][]plugins.Variant, len(mgs))
-	var refs []solver.ResourceRef
+	var refs []resource.Ref
 	for i, mg := range mgs {
 		vs, err := groupVariants(r, database, variants, mg)
 		if err != nil {
@@ -152,7 +153,7 @@ func enrichGroupVariants(r *http.Request, database *db.DB, variants solver.Varia
 		perGroup[i] = vs
 		for _, v := range vs {
 			for _, it := range v.Items {
-				refs = append(refs, solver.RefFromKey(it.Ref))
+				refs = append(refs, resource.RefFromKey(it.Ref))
 			}
 		}
 	}
@@ -303,7 +304,7 @@ func SetGroupVariantHandler(database *db.DB, variants solver.VariantSource) http
 		}
 
 		count, exact, err := solver.RecountForVariant(
-			solver.NewRational(mg.ExactCountNum, exactCountDen(mg)), from, to)
+			resource.NewRational(mg.ExactCountNum, exactCountDen(mg)), from, to)
 		if err != nil {
 			errBadRequest(w, err.Error())
 			return

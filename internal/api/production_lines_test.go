@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
@@ -14,7 +15,7 @@ import (
 // the client needs a structured code (not a raw Go error string) so it can show translated
 // text instead of an opaque 500.
 func TestWriteSolveErrorRateOverflow(t *testing.T) {
-	for _, err := range []error{solver.ErrRateOverflow, solver.ErrRateDomain} {
+	for _, err := range []error{resource.ErrRateOverflow, resource.ErrRateDomain} {
 		w := httptest.NewRecorder()
 		if !writeSolveError(w, err) {
 			t.Fatalf("writeSolveError(%v) = false, want true", err)

@@ -1,5 +1,7 @@
 package model
 
+import "github.com/Wirezat/production-optimizer/internal/resource"
+
 // ModDef holds all data parsed from a mod YAML file.
 type ModDef struct {
 	ModID        string
@@ -49,12 +51,11 @@ type TagDef struct {
 }
 
 type MachineTypeDef struct {
-	ModID     string
-	MachineID string
-	Name      string // resolved from lang key at import time
-	LangKey   string
-	Slots     []MachineSlotDef
-	// Implements lists base machine refs whose recipes this machine can also run.
+	ModID      string
+	MachineID  string
+	Name       string // resolved from lang key at import time
+	LangKey    string
+	Slots      []MachineSlotDef
 	Implements []string
 	// Ecosystem names the plugin's mod_id; empty means the machine's own.
 	Ecosystem string
@@ -77,32 +78,10 @@ type ModRecipeDef struct {
 	MachineModID  string
 	MachineID     string
 	DurationTicks int
-	ItemInputs    []ModIODef
-	ItemOutputs   []ModIODef
-	FluidInputs   []ModFluidIODef
-	FluidOutputs  []ModFluidIODef
+	Inputs        []resource.IO
+	Outputs       []resource.IO
 	// Shape is a row-major 3×3 grid of item ids or tag names, "" for an empty cell.
 	Shape []string
 	// ModData holds every mod-specific field from the recipe entry, keyed as written.
 	ModData map[string]any
-}
-
-type ModIODef struct {
-	// Either ItemModID+ItemID or TagName is set.
-	ItemModID *string
-	ItemID    *string
-	TagName   *string
-	AmountNum int
-	AmountDen int
-	ProbNum   int
-	ProbDen   int
-}
-
-type ModFluidIODef struct {
-	FluidModID *string
-	FluidID    *string
-	TagName    *string
-	AmountMB   int64
-	ProbNum    int
-	ProbDen    int
 }

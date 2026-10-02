@@ -6,6 +6,7 @@ import (
 
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
@@ -14,8 +15,8 @@ import (
 var ErrBuiltCountExceeded = errors.New("scale would drop a group below its built machine count")
 
 // scalePLRows computes what a saved line looks like at k times its size.
-func scalePLRows(rateNum, rateDen int, groups []*model.MachineGroup, ios []*model.PLIO, k solver.Rational) (int, int, []db.ScaledGroup, []db.ScaledIO, error) {
-	rate := solver.NewRational(int64(rateNum), int64(rateDen)).Mul(k)
+func scalePLRows(rateNum, rateDen int, groups []*model.MachineGroup, ios []*model.PLIO, k resource.Rational) (int, int, []db.ScaledGroup, []db.ScaledIO, error) {
+	rate := resource.NewRational(int64(rateNum), int64(rateDen)).Mul(k)
 	newRateNum, newRateDen, err := rateInts(rate)
 	if err != nil {
 		return 0, 0, nil, nil, fmt.Errorf("service: scale line rate: %w", err)
@@ -23,7 +24,7 @@ func scalePLRows(rateNum, rateDen int, groups []*model.MachineGroup, ios []*mode
 
 	scaledGroups := make([]db.ScaledGroup, 0, len(groups))
 	for _, g := range groups {
-		exact, count, _ := solver.ScaleCount(solver.NewRational(g.ExactCountNum, g.ExactCountDen), k)
+		exact, count, _ := solver.ScaleCount(resource.NewRational(g.ExactCountNum, g.ExactCountDen), k)
 		if int(count) < g.BuiltCount {
 			return 0, 0, nil, nil, fmt.Errorf("%w: %s would hold %d machines with %d built",
 				ErrBuiltCountExceeded, g.MachineID, count, g.BuiltCount)
@@ -35,7 +36,7 @@ func scalePLRows(rateNum, rateDen int, groups []*model.MachineGroup, ios []*mode
 
 	scaledIOs := make([]db.ScaledIO, 0, len(ios))
 	for _, io := range ios {
-		num, den, err := rateInts(solver.NewRational(int64(io.RateNum), int64(io.RateDen)).Mul(k))
+		num, den, err := rateInts(resource.NewRational(int64(io.RateNum), int64(io.RateDen)).Mul(k))
 		if err != nil {
 			return 0, 0, nil, nil, fmt.Errorf("service: scale %s rate: %w", io.ItemFluidID, err)
 		}
@@ -45,7 +46,7 @@ func scalePLRows(rateNum, rateDen int, groups []*model.MachineGroup, ios []*mode
 }
 
 // rateInts narrows a rate to the int columns the rate rows are stored in.
-func rateInts(r solver.Rational) (int, int, error) {
+func rateInts(r resource.Rational) (int, int, error) {
 	const maxInt32 = 1<<31 - 1
 	if r.Num > maxInt32 || r.Num < -maxInt32 || r.Den > maxInt32 {
 		return 0, 0, fmt.Errorf("rate %v does not fit the stored rate columns", r)

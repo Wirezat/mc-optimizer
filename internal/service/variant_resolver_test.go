@@ -117,23 +117,22 @@ func testMachine() *solver.MachineSpec {
 
 // steamRecipe burns one coal into 100 mB of steam in 20 ticks.
 func steamRecipe() *solver.RecipeRow {
-	coalMod, coalID := "testmod", "coal"
 	return &solver.RecipeRow{
 		ID:            "recipe:steam",
 		MachineMod:    "testmod",
 		MachineID:     "boiler",
 		DurationTicks: 20,
-		ItemInputs: []solver.RecipeRowItemIO{
-			{ItemModID: &coalMod, ItemID: &coalID, AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
+		Inputs: []resource.IO{
+			{Ref: resource.Ref{ModID: "testmod", ID: "coal"}, Amount: resource.NewRational(1, 1), Prob: resource.NewRational(1, 1), Consumed: true},
 		},
-		FluidOutputs: []solver.RecipeRowFluidIO{
-			{FluidModID: "testmod", FluidID: "steam", AmountMB: 100, ProbabilityNum: 1, ProbabilityDen: 1},
+		Outputs: []resource.IO{
+			{Ref: resource.Ref{ModID: "testmod", ID: "steam", Kind: resource.KindFluid}, Amount: resource.NewRational(100, 1), Prob: resource.NewRational(1, 1), Consumed: true},
 		},
 	}
 }
 
 func steamKey() string {
-	ref := solver.ResourceRef{ModID: "testmod", ID: "steam", Kind: resource.KindFluid}
+	ref := resource.Ref{ModID: "testmod", ID: "steam", Kind: resource.KindFluid}
 	return ref.Key()
 }
 
@@ -245,9 +244,9 @@ func TestVariantsReturnsPluginFailureRatherThanDegrading(t *testing.T) {
 // The refs handed to a plugin are ItemRef keys.
 func TestRecipeOutputsUseItemRefKeys(t *testing.T) {
 	recipe := steamRecipe()
-	recipe.ItemOutputs = []solver.RecipeRowItemIO{
-		{ItemModID: ptr("testmod"), ItemID: ptr("ash"), AmountNum: 1, AmountDen: 2, ProbabilityNum: 1, ProbabilityDen: 4},
-	}
+	recipe.Outputs = append([]resource.IO{
+		{Ref: resource.Ref{ModID: "testmod", ID: "ash"}, Amount: resource.NewRational(1, 2), Prob: resource.NewRational(1, 4), Consumed: true},
+	}, recipe.Outputs...)
 
 	outs := recipeOutputs(recipe)
 	if len(outs) != 2 {
@@ -274,8 +273,8 @@ func TestRecipeOutputsUseItemRefKeys(t *testing.T) {
 
 func TestRecipeInputsUseTagKeys(t *testing.T) {
 	recipe := steamRecipe()
-	recipe.ItemInputs = []solver.RecipeRowItemIO{
-		{TagID: ptr("t1"), TagName: ptr("c:coals"), AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
+	recipe.Inputs = []resource.IO{
+		{Ref: resource.Ref{TagRef: "c:coals"}, Amount: resource.NewRational(1, 1), Prob: resource.NewRational(1, 1), Consumed: true},
 	}
 	ins := recipeInputs(recipe)
 	if len(ins) != 1 || ins[0].Ref != "#c:coals" {
@@ -313,12 +312,8 @@ func TestVariantsNormalizesNilConfigLikeEmptyObject(t *testing.T) {
 // fluid, with coal as a raw leaf.
 type solveStore struct{ recipe *solver.RecipeRow }
 
-func (s *solveStore) GetRecipesForItem(_ context.Context, _, _ string) ([]*solver.RecipeRow, error) {
-	return nil, nil
-}
-
-func (s *solveStore) GetRecipesForFluid(_ context.Context, modID, fluidID string) ([]*solver.RecipeRow, error) {
-	if modID == "testmod" && fluidID == "steam" {
+func (s *solveStore) GetRecipesFor(_ context.Context, ref resource.Ref) ([]*solver.RecipeRow, error) {
+	if ref.Kind.Or() == resource.KindFluid && ref.ModID == "testmod" && ref.ID == "steam" {
 		return []*solver.RecipeRow{s.recipe}, nil
 	}
 	return nil, nil
@@ -342,7 +337,7 @@ func (s *solveStore) GetMachineType(_ context.Context, modID, machineID string) 
 	return nil, nil
 }
 
-func (s *solveStore) GetTagMembers(_ context.Context, _ solver.ResourceRef) ([]solver.ResourceRef, error) {
+func (s *solveStore) GetTagMembers(_ context.Context, _ resource.Ref) ([]resource.Ref, error) {
 	return nil, nil
 }
 
@@ -357,11 +352,10 @@ func TestFluidOutputOverrideChangesTheSolvedMachineCount(t *testing.T) {
 	sv := solver.NewSolver(store, 0)
 	sv.VariantSource = resolver
 	res, err := sv.Solve(context.Background(), solver.SolveRequest{
-		TargetItem: solver.ResourceRef{ModID: "testmod", ID: "steam", Kind: resource.KindFluid},
-		TargetRate: solver.NewRational(10, 1),
+		TargetItem: resource.Ref{ModID: "testmod", ID: "steam", Kind: resource.KindFluid},
+		TargetRate: resource.NewRational(10, 1),
 		TimeUnit:   "t",
 		Mode:       solver.SolveModeTarget,
-		// A fluid is a raw input unless a recipe is picked for it explicitly.
 		RecipeOverrides: map[string]string{
 			steamKey(): solver.RecipeOptionKey("recipe:steam", "testmod", "boiler"),
 		},
@@ -385,7 +379,7 @@ func TestFluidOutputOverrideChangesTheSolvedMachineCount(t *testing.T) {
 	if g.Count != 1 {
 		t.Errorf("machine count = %d, want 1 (2 means the doubled fluid output never reached the graph)", g.Count)
 	}
-	if !g.ExactCount.Eq(solver.NewRational(1, 1)) {
+	if !g.ExactCount.Eq(resource.NewRational(1, 1)) {
 		t.Errorf("exact count = %+v, want 1/1", g.ExactCount)
 	}
 
@@ -399,7 +393,7 @@ func TestFluidOutputOverrideChangesTheSolvedMachineCount(t *testing.T) {
 	if coal == nil {
 		t.Fatalf("coal missing from the IO profile: %+v", res.IOProfile.Inputs)
 	}
-	if !coal.Rate.Eq(solver.NewRational(1, 20)) {
+	if !coal.Rate.Eq(resource.NewRational(1, 20)) {
 		t.Errorf("coal rate = %+v, want 1/20 per tick", coal.Rate)
 	}
 
@@ -408,8 +402,6 @@ func TestFluidOutputOverrideChangesTheSolvedMachineCount(t *testing.T) {
 		t.Errorf("variant outputs %+v carry no entry under %q", g.Variant.Outputs, steamKey())
 	}
 }
-
-func ptr(s string) *string { return &s }
 
 // The cache is an optimization: the variants are already computed and correct when the
 // write is attempted.

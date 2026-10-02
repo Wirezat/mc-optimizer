@@ -3,30 +3,24 @@ package solver
 import (
 	"context"
 	"testing"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 // An override naming a machine that reaches the recipe through machine_interfaces must
 // select that machine.
 func TestBuildRecipeGraphOverrideSelectsInterfaceMachine(t *testing.T) {
-	mod := "m"
-	widget := "widget"
-
-	// Two candidates for one recipe, base first, exactly the shape GetRecipesForItem now
 	// returns.
 	base := &RecipeRow{
 		ID: "r1", MachineMod: "m", MachineID: "base_machine", DurationTicks: 1,
-		ItemOutputs: []RecipeRowItemIO{
-			{ItemModID: &mod, ItemID: &widget, AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
-		},
+		Outputs: []resource.IO{itemIO("m", "widget", 1, 1)},
 	}
 	tier := &RecipeRow{
 		ID: "r1", MachineMod: "m", MachineID: "tier_machine", DurationTicks: 1,
-		ItemOutputs: []RecipeRowItemIO{
-			{ItemModID: &mod, ItemID: &widget, AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
-		},
+		Outputs: []resource.IO{itemIO("m", "widget", 1, 1)},
 	}
 
-	target := ResourceRef{ModID: "m", ID: "widget"}
+	target := resource.Ref{ModID: "m", ID: "widget"}
 	store := &stubStore{
 		byItem: map[string][]*RecipeRow{"m:widget": {base, tier}},
 	}
@@ -52,15 +46,11 @@ func TestBuildRecipeGraphOverrideSelectsInterfaceMachine(t *testing.T) {
 
 // interfaceCandidates builds the two-candidate fixture BuildRecipeGraph now sees for one
 // recipe reachable through machine_interfaces: a base machine owned by baseMod and an
-// implementer owned by tierMod, base sorted first as GetRecipesForItem does.
+// implementer owned by tierMod, base sorted first as GetRecipesFor does.
 func interfaceCandidates(baseMod, tierMod string) (base, tier *RecipeRow) {
-	mod := "m"
-	widget := "widget"
-	out := []RecipeRowItemIO{
-		{ItemModID: &mod, ItemID: &widget, AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
-	}
-	base = &RecipeRow{ID: "r1", MachineMod: baseMod, MachineID: "base_machine", DurationTicks: 1, ItemOutputs: out}
-	tier = &RecipeRow{ID: "r1", MachineMod: tierMod, MachineID: "tier_machine", DurationTicks: 1, ItemOutputs: out}
+	out := []resource.IO{itemIO("m", "widget", 1, 1)}
+	base = &RecipeRow{ID: "r1", MachineMod: baseMod, MachineID: "base_machine", DurationTicks: 1, Outputs: out}
+	tier = &RecipeRow{ID: "r1", MachineMod: tierMod, MachineID: "tier_machine", DurationTicks: 1, Outputs: out}
 	return base, tier
 }
 
@@ -68,7 +58,7 @@ func interfaceCandidates(baseMod, tierMod string) (base, tier *RecipeRow) {
 // candidate and leave the base machine as the sole (and therefore default) pick.
 func TestBuildRecipeGraphActiveModsBaseSurvivesWhenImplementerInactive(t *testing.T) {
 	base, tier := interfaceCandidates("base_mod", "tier_mod")
-	target := ResourceRef{ModID: "m", ID: "widget"}
+	target := resource.Ref{ModID: "m", ID: "widget"}
 	store := &stubStore{byItem: map[string][]*RecipeRow{"m:widget": {base, tier}}}
 	s := NewSolver(store, 1000)
 	s.ActiveMods = map[string]bool{"base_mod": true}
@@ -90,7 +80,7 @@ func TestBuildRecipeGraphActiveModsBaseSurvivesWhenImplementerInactive(t *testin
 // recipe must still resolve through the implementer - not collapse to a raw material.
 func TestBuildRecipeGraphActiveModsImplementerSurvivesWhenBaseInactive(t *testing.T) {
 	base, tier := interfaceCandidates("base_mod", "tier_mod")
-	target := ResourceRef{ModID: "m", ID: "widget"}
+	target := resource.Ref{ModID: "m", ID: "widget"}
 	store := &stubStore{byItem: map[string][]*RecipeRow{"m:widget": {base, tier}}}
 	s := NewSolver(store, 1000)
 	s.ActiveMods = map[string]bool{"tier_mod": true}
@@ -113,7 +103,7 @@ func TestBuildRecipeGraphActiveModsImplementerSurvivesWhenBaseInactive(t *testin
 
 func TestBuildRecipeGraphActiveModsBothActiveKeepsBaseDefaultAndImplementerSelectable(t *testing.T) {
 	base, tier := interfaceCandidates("base_mod", "tier_mod")
-	target := ResourceRef{ModID: "m", ID: "widget"}
+	target := resource.Ref{ModID: "m", ID: "widget"}
 	store := &stubStore{byItem: map[string][]*RecipeRow{"m:widget": {base, tier}}}
 	s := NewSolver(store, 1000)
 	s.ActiveMods = map[string]bool{"base_mod": true, "tier_mod": true}

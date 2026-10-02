@@ -11,6 +11,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/Wirezat/production-optimizer/internal/plugins"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/service"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
@@ -18,7 +19,7 @@ import (
 
 // named* wrappers embed solver types with display names resolved at the API layer.
 type namedItemRef struct {
-	solver.ResourceRef
+	resource.Ref
 	Name string `json:"name"`
 }
 
@@ -48,10 +49,10 @@ func resolveTagResolutions(trs map[string]solver.TagResolution, names map[string
 	for k, tr := range trs {
 		opts := make([]namedItemRef, len(tr.Options))
 		for i, o := range tr.Options {
-			opts[i] = namedItemRef{ResourceRef: o, Name: names[o.Key()]}
+			opts[i] = namedItemRef{Ref: o, Name: names[o.Key()]}
 		}
 		out[k] = namedTagResolution{
-			Chosen:  namedItemRef{ResourceRef: tr.Chosen, Name: names[tr.Chosen.Key()]},
+			Chosen:  namedItemRef{Ref: tr.Chosen, Name: names[tr.Chosen.Key()]},
 			Options: opts,
 		}
 	}
@@ -61,10 +62,10 @@ func resolveTagResolutions(trs map[string]solver.TagResolution, names map[string
 // discoverRequest is the shared wire format for both the real (factory-scoped) and demo
 // discover endpoints.
 type discoverRequest struct {
-	TargetItem      solver.ResourceRef `json:"target"`
-	RecipeOverrides map[string]string  `json:"recipe_overrides"`
-	TagOverrides    map[string]string  `json:"tag_overrides"`
-	StopPoints      map[string]bool    `json:"stop_points"`
+	TargetItem      resource.Ref      `json:"target"`
+	RecipeOverrides map[string]string `json:"recipe_overrides"`
+	TagOverrides    map[string]string `json:"tag_overrides"`
+	StopPoints      map[string]bool   `json:"stop_points"`
 }
 
 func decodeDiscoverRequest(w http.ResponseWriter, r *http.Request) (discoverRequest, bool) {
@@ -90,7 +91,7 @@ func decodeDiscoverRequest(w http.ResponseWriter, r *http.Request) (discoverRequ
 
 // respondDiscover resolves display names for a DiscoverResult and writes the JSON response.
 func respondDiscover(w http.ResponseWriter, r *http.Request, database *db.DB, result solver.DiscoverResult) {
-	var allRefs []solver.ResourceRef
+	var allRefs []resource.Ref
 	for _, ci := range result.Items {
 		allRefs = append(allRefs, ci.Item)
 	}
@@ -261,7 +262,7 @@ func writeSolveError(w http.ResponseWriter, err error) bool {
 		})
 		return true
 	}
-	if errors.Is(err, solver.ErrRateOverflow) || errors.Is(err, solver.ErrRateDomain) {
+	if errors.Is(err, resource.ErrRateOverflow) || errors.Is(err, resource.ErrRateDomain) {
 		// A structured code, not a message: the client picks its own translated text
 		// (solve.error.rate_overflow), same as CYCLE_BREAK_NEEDED.
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
@@ -275,7 +276,7 @@ func writeSolveError(w http.ResponseWriter, err error) bool {
 
 // respondSolve resolves display names for a SolveResult and writes the JSON response.
 func respondSolve(w http.ResponseWriter, r *http.Request, database *db.DB, result solver.SolveResult, draftID *uuid.UUID, expiresAt *time.Time) {
-	var allRefs []solver.ResourceRef
+	var allRefs []resource.Ref
 	for _, mg := range result.MachineGroups {
 		allRefs = append(allRefs, mg.RecipeOutput)
 	}
@@ -673,7 +674,7 @@ func ScaleProductionLineHandler(database *db.DB, svc *service.PLService) http.Ha
 			return
 		}
 		var body struct {
-			Factor solver.Rational `json:"factor"`
+			Factor resource.Rational `json:"factor"`
 		}
 		if !decodeJSON(w, r, &body) {
 			return

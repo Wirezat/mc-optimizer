@@ -4,9 +4,11 @@ package solver
 
 import (
 	"testing"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
-func solveBoth(t *testing.T, g *RecipeGraph, target Rational) (dag RateVector, lin RateVector) {
+func solveBoth(t *testing.T, g *RecipeGraph, target resource.Rational) (dag RateVector, lin RateVector) {
 	t.Helper()
 	var err error
 	dag, err = SolveDAG(g, target)
@@ -21,16 +23,16 @@ func solveBoth(t *testing.T, g *RecipeGraph, target Rational) (dag RateVector, l
 }
 
 // rateFor looks up a rate by bare recipe ID, ignoring which machine it landed on.
-func rateFor(rv RateVector, recipeID string) Rational {
+func rateFor(rv RateVector, recipeID string) resource.Rational {
 	for k, v := range rv.RecipeRates {
 		if id, _, _, ok := ParseRecipeOptionKey(k); ok && id == recipeID {
 			return v
 		}
 	}
-	return Rational{}
+	return resource.Rational{}
 }
 
-func assertRate(t *testing.T, label string, got Rational, wantNum, wantDen int64) {
+func assertRate(t *testing.T, label string, got resource.Rational, wantNum, wantDen int64) {
 	t.Helper()
 	want := float64(wantNum) / float64(wantDen)
 	if !approxEq(ratF(got), want, 1e-9) {
@@ -81,11 +83,10 @@ func TestChain_linear(t *testing.T) {
 		"mc:steel": furnace,
 	}
 	g := buildGraph(item("mc", "gear"), byItem, nil)
-	target := NewRational(4, 1)
+	target := resource.NewRational(4, 1)
 
 	dag, lin := solveBoth(t, g, target)
 
-	// Recipe rates must agree for both solvers.
 	assertRate(t, "dag assembler", rateFor(dag, "r:assembler"), 4, 1)
 	assertRate(t, "dag furnace", rateFor(dag, "r:furnace"), 2, 1)
 	assertRate(t, "lin assembler", rateFor(lin, "r:assembler"), 4, 1)
@@ -136,7 +137,7 @@ func TestChain_sharedIntermediate(t *testing.T) {
 		"mi:c":    machC,
 	}
 	g := buildGraph(item("mi", "root"), byItem, nil)
-	target := NewRational(1, 1)
+	target := resource.NewRational(1, 1)
 
 	dag, lin := solveBoth(t, g, target)
 
@@ -174,17 +175,11 @@ func TestChain_probabilisticOutput(t *testing.T) {
 	centrifuge := makeRecipe("r:centrifuge", "mi", "centrifuge", 20)
 	withItemInput(centrifuge, "mi", "ore", 1, 1)
 	// primary output: gem, prob 1/2
-	centrifuge.ItemOutputs = append(centrifuge.ItemOutputs, RecipeRowItemIO{
-		ItemModID: mod("mi"), ItemID: mod("gem"),
-		AmountNum: 1, AmountDen: 1,
-		ProbabilityNum: 1, ProbabilityDen: 2,
-	})
+	gem := itemIO("mi", "gem", 1, 1)
+	gem.Prob = resource.NewRational(1, 2)
+	centrifuge.Outputs = append(centrifuge.Outputs, gem)
 	// secondary output: dust, prob 1 (always)
-	centrifuge.ItemOutputs = append(centrifuge.ItemOutputs, RecipeRowItemIO{
-		ItemModID: mod("mi"), ItemID: mod("dust"),
-		AmountNum: 1, AmountDen: 1,
-		ProbabilityNum: 1, ProbabilityDen: 1,
-	})
+	centrifuge.Outputs = append(centrifuge.Outputs, itemIO("mi", "dust", 1, 1))
 
 	byItem := map[string]*RecipeRow{
 		"mi:gem": centrifuge,
@@ -193,7 +188,7 @@ func TestChain_probabilisticOutput(t *testing.T) {
 
 	// OutputAmount for gem = 1/2, so 1 gem/t needs the centrifuge at 2/t.
 
-	target := NewRational(1, 1)
+	target := resource.NewRational(1, 1)
 	dag, err := SolveDAG(g, target)
 	if err != nil {
 		t.Fatalf("SolveDAG: %v", err)
@@ -237,7 +232,7 @@ func TestChain_stopPoint(t *testing.T) {
 	// Remove leaf node (not reachable through stop-point BFS)
 	delete(g.Nodes, "mi:raw")
 
-	target := NewRational(1, 1)
+	target := resource.NewRational(1, 1)
 	dag, err := SolveDAG(g, target)
 	if err != nil {
 		t.Fatalf("SolveDAG: %v", err)
@@ -284,7 +279,7 @@ func TestChain_factoryProvided(t *testing.T) {
 	}
 	delete(g.Nodes, "mi:raw")
 
-	target := NewRational(1, 1)
+	target := resource.NewRational(1, 1)
 	dag, err := SolveDAG(g, target)
 	if err != nil {
 		t.Fatalf("SolveDAG: %v", err)
@@ -330,7 +325,7 @@ func TestChain_multipleByproducts_bothConsumed(t *testing.T) {
 		"mi:plate": slagPress,
 	}
 	g := buildGraph(item("mi", "gear"), byItem, nil)
-	target := NewRational(1, 1)
+	target := resource.NewRational(1, 1)
 
 	dag, lin := solveBoth(t, g, target)
 
@@ -387,7 +382,7 @@ func TestChain_byproductExcess(t *testing.T) {
 		"mi:plate": slagPress,
 	}
 	g := buildGraph(item("mi", "gear"), byItem, nil)
-	target := NewRational(1, 1)
+	target := resource.NewRational(1, 1)
 
 	dag, lin := solveBoth(t, g, target)
 	for _, id := range []string{"r:assembler", "r:smelter", "r:slag_press"} {
@@ -437,12 +432,12 @@ func TestCycle_linearOnly(t *testing.T) {
 		t.Fatal("expected cycle to be detected in this graph")
 	}
 
-	_, dagErr := SolveDAG(g, NewRational(1, 1))
+	_, dagErr := SolveDAG(g, resource.NewRational(1, 1))
 	if dagErr == nil {
 		t.Error("SolveDAG should fail on cyclic graph")
 	}
 
-	rv, err := SolveLinearSystem(g, NewRational(1, 1))
+	rv, err := SolveLinearSystem(g, resource.NewRational(1, 1))
 	if err != nil {
 		t.Fatalf("SolveLinearSystem on cyclic graph: %v", err)
 	}
@@ -486,7 +481,7 @@ func TestSolvers_dagLinalgParity(t *testing.T) {
 		t.Fatal("test graph should be acyclic")
 	}
 
-	target := NewRational(1, 1)
+	target := resource.NewRational(1, 1)
 	dag, lin := solveBoth(t, g, target)
 
 	for _, id := range []string{"r:machine", "r:circuit", "r:chem"} {
@@ -523,9 +518,9 @@ func TestChain_stopPointZerosRecipe(t *testing.T) {
 	rootNode := &RecipeNode{
 		Item: item("mi", "root"), RecipeID: "r:root",
 		MachineMod: "mi", MachineID: "m",
-		OutputAmount: NewRational(1, 1),
+		OutputAmount: resource.NewRational(1, 1),
 	}
-	appendRecipeEdges(rootNode, recipeRoot, &[]ResourceRef{})
+	appendRecipeEdges(rootNode, recipeRoot, &[]resource.Ref{})
 	g.Nodes["mi:root"] = rootNode
 
 	// a as stop-point
@@ -534,7 +529,7 @@ func TestChain_stopPointZerosRecipe(t *testing.T) {
 		IsStopPoint: true,
 	}
 
-	dag, err := SolveDAG(g, NewRational(1, 1))
+	dag, err := SolveDAG(g, resource.NewRational(1, 1))
 	if err != nil {
 		t.Fatalf("SolveDAG: %v", err)
 	}

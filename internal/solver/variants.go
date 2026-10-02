@@ -76,9 +76,9 @@ type cell struct {
 	variant plugins.Variant
 
 	count       int64
-	exact       Rational
-	utilization Rational
-	byproduct   Rational
+	exact       resource.Rational
+	utilization resource.Rational
+	byproduct   resource.Rational
 }
 
 // ladderCtx carries the chain-wide figures stages 4 and 6 read; nil skips both.
@@ -88,7 +88,7 @@ type ladderCtx struct {
 }
 
 // yieldIndex is an item per tick per machine at the node producing it.
-type yieldIndex map[string]Rational
+type yieldIndex map[string]resource.Rational
 
 func indexYields(g *RecipeGraph, groups []MachineGroupDraft) yieldIndex {
 	out := yieldIndex{}
@@ -97,7 +97,7 @@ func indexYields(g *RecipeGraph, groups []MachineGroupDraft) yieldIndex {
 		if node == nil || node.RecipeID == "" {
 			continue
 		}
-		perMachine := node.OutputAmount.Mul(NewRational(gr.Variant.Rate.Num, gr.Variant.Rate.Den))
+		perMachine := node.OutputAmount.Mul(resource.NewRational(gr.Variant.Rate.Num, gr.Variant.Rate.Den))
 		if !perMachine.IsZero() {
 			out[node.Item.Key()] = perMachine
 		}
@@ -107,8 +107,8 @@ func indexYields(g *RecipeGraph, groups []MachineGroupDraft) yieldIndex {
 
 // byproductValue is the machines a cell saves elsewhere by raising an output the chain also
 // produces.
-func byproductValue(c cell, demand Rational, yi yieldIndex) Rational {
-	saved := NewRational(0, 1)
+func byproductValue(c cell, demand resource.Rational, yi yieldIndex) resource.Rational {
+	saved := resource.NewRational(0, 1)
 	if len(yi) == 0 || c.recipe == nil {
 		return saved
 	}
@@ -122,7 +122,7 @@ func byproductValue(c cell, demand Rational, yi yieldIndex) Rational {
 		if !ok || per.IsZero() {
 			continue
 		}
-		delta := NewRational(amount.Num, amount.Den).Sub(b)
+		delta := resource.NewRational(amount.Num, amount.Den).Sub(b)
 		if !delta.IsPositive() {
 			continue
 		}
@@ -131,24 +131,18 @@ func byproductValue(c cell, demand Rational, yi yieldIndex) Rational {
 	return saved
 }
 
-func catalogOutputs(r *RecipeRow) map[string]Rational {
-	out := make(map[string]Rational, len(r.ItemOutputs)+len(r.FluidOutputs))
-	for _, o := range r.ItemOutputs {
-		if o.ItemModID == nil || o.ItemID == nil {
-			continue
+func catalogOutputs(r *RecipeRow) map[string]resource.Rational {
+	out := make(map[string]resource.Rational, len(r.Outputs))
+	for _, o := range r.Outputs {
+		if o.Ref.TagRef == "" {
+			out[o.Ref.Key()] = o.Amount.Mul(o.Prob)
 		}
-		ref := ResourceRef{ModID: *o.ItemModID, ID: *o.ItemID}
-		out[ref.Key()] = NewRational(o.AmountNum, o.AmountDen).Mul(NewRational(o.ProbabilityNum, o.ProbabilityDen))
-	}
-	for _, f := range r.FluidOutputs {
-		ref := ResourceRef{ModID: f.FluidModID, ID: f.FluidID, Kind: resource.KindFluid}
-		out[ref.Key()] = NewRational(f.AmountMB, 1).Mul(NewRational(f.ProbabilityNum, f.ProbabilityDen))
 	}
 	return out
 }
 
 // pickCell picks one cell of a node; false when none can run the recipe.
-func pickCell(cells []cell, demand Rational, lc *ladderCtx) (cell, bool) {
+func pickCell(cells []cell, demand resource.Rational, lc *ladderCtx) (cell, bool) {
 	rem := make([]cell, 0, len(cells))
 	for _, c := range cells {
 		if !c.variant.Valid || c.variant.Rate.Num <= 0 || c.variant.Rate.Den <= 0 {
@@ -165,7 +159,6 @@ func pickCell(cells []cell, demand Rational, lc *ladderCtx) (cell, bool) {
 		for i := range rem {
 			rem[i].byproduct = byproductValue(rem[i], demand, lc.yields)
 		}
-		// Whole machines only: a tenth of one must not outweigh the energy the cell draws for it,
 		// which is stage 5's call.
 		rem = keepBest(rem, func(a, b cell) int {
 			return -cmpInt64(a.byproduct.FloorInt(), b.byproduct.FloorInt())
@@ -181,10 +174,10 @@ func pickCell(cells []cell, demand Rational, lc *ladderCtx) (cell, bool) {
 	return leastCell(rem), true
 }
 
-func measure(c cell, demand Rational) cell {
-	c.exact = demand.Div(NewRational(c.variant.Rate.Num, c.variant.Rate.Den))
+func measure(c cell, demand resource.Rational) cell {
+	c.exact = demand.Div(resource.NewRational(c.variant.Rate.Num, c.variant.Rate.Den))
 	c.count = max(c.exact.CeilInt(), 1)
-	c.utilization = c.exact.Div(NewRational(c.count, 1))
+	c.utilization = c.exact.Div(resource.NewRational(c.count, 1))
 	return c
 }
 
@@ -205,7 +198,7 @@ func keepBest(cells []cell, cmp func(a, b cell) int) []cell {
 // keepCheapestPerResource drops a cell when another with the same resource set is nowhere
 // dearer.
 func keepCheapestPerResource(cells []cell) []cell {
-	costs := make([]map[string]Rational, len(cells))
+	costs := make([]map[string]resource.Rational, len(cells))
 	for i, c := range cells {
 		costs[i] = costOf(c.variant)
 	}
@@ -228,18 +221,18 @@ func keepCheapestPerResource(cells []cell) []cell {
 	return out
 }
 
-func costOf(v plugins.Variant) map[string]Rational {
-	out := make(map[string]Rational, len(v.Costs))
+func costOf(v plugins.Variant) map[string]resource.Rational {
+	out := make(map[string]resource.Rational, len(v.Costs))
 	for _, c := range v.Costs {
 		if c.Amount.Den <= 0 {
 			continue
 		}
-		out[c.Resource] = out[c.Resource].Add(NewRational(c.Amount.Num, c.Amount.Den))
+		out[c.Resource] = out[c.Resource].Add(resource.NewRational(c.Amount.Num, c.Amount.Den))
 	}
 	return out
 }
 
-func cheaper(a, b map[string]Rational) bool {
+func cheaper(a, b map[string]resource.Rational) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -347,8 +340,8 @@ func baseVariant(vs []plugins.Variant, recipe *RecipeRow) plugins.Variant {
 }
 
 // chooseCell runs the ladder over a node's matrix at recipeRate (recipes per tick).
-func chooseCell(m nodeMatrix, recipeRate Rational, lc *ladderCtx, pinnedID string) (c cell, runnable bool, err error) {
-	defer guardRateArithmetic(&err)
+func chooseCell(m nodeMatrix, recipeRate resource.Rational, lc *ladderCtx, pinnedID string) (c cell, runnable bool, err error) {
+	defer resource.GuardRateArithmetic(&err)
 	cells := m.cells
 	if pinned := pinnedCells(cells, pinnedID); len(pinned) > 0 {
 		cells = pinned
@@ -401,11 +394,11 @@ func EffectiveOutputs(v plugins.Variant) map[string]plugins.Rational {
 		}
 		// A wholly missing probability field arrives as 0/0; treat it as 1/1, the same default
 		// plugins.Validate applies.
-		prob := Rational{Num: 1, Den: 1}
+		prob := resource.Rational{Num: 1, Den: 1}
 		if o.Probability.Den > 0 {
-			prob = NewRational(o.Probability.Num, o.Probability.Den)
+			prob = resource.NewRational(o.Probability.Num, o.Probability.Den)
 		}
-		net := NewRational(o.Amount.Num, o.Amount.Den).Mul(prob)
+		net := resource.NewRational(o.Amount.Num, o.Amount.Den).Mul(prob)
 		out[o.Ref] = plugins.Rational{Num: net.Num, Den: net.Den}
 	}
 	return out
@@ -414,8 +407,8 @@ func EffectiveOutputs(v plugins.Variant) map[string]plugins.Rational {
 // outputBaseline holds one recipe node's catalog output amounts so a later round can
 // restore them once the winning variant stops overriding them.
 type outputBaseline struct {
-	primary Rational
-	edges   []Rational
+	primary resource.Rational
+	edges   []resource.Rational
 }
 
 // captureOutputBaseline snapshots the catalog output amounts of every recipe node, keyed by
@@ -426,7 +419,7 @@ func captureOutputBaseline(g *RecipeGraph) map[string]outputBaseline {
 		if node.RecipeID == "" {
 			continue
 		}
-		edges := make([]Rational, len(node.Outputs))
+		edges := make([]resource.Rational, len(node.Outputs))
 		for i, e := range node.Outputs {
 			edges[i] = e.Amount
 		}
@@ -454,7 +447,7 @@ func syncVariantOutputs(g *RecipeGraph, base map[string]outputBaseline, groups [
 		overrides := EffectiveOutputs(chosen[node.RateKey()])
 		want := b.primary
 		if o, ok := overrides[key]; ok {
-			want = Rational{Num: o.Num, Den: o.Den}
+			want = resource.Rational{Num: o.Num, Den: o.Den}
 		}
 		if !want.Eq(node.OutputAmount) {
 			changed = true
@@ -465,7 +458,7 @@ func syncVariantOutputs(g *RecipeGraph, base map[string]outputBaseline, groups [
 		for i := range node.Outputs {
 			edgeWant := b.edges[i]
 			if o, ok := overrides[node.Outputs[i].Item.Key()]; ok {
-				edgeWant = Rational{Num: o.Num, Den: o.Den}
+				edgeWant = resource.Rational{Num: o.Num, Den: o.Den}
 			}
 			if !edgeWant.Eq(node.Outputs[i].Amount) {
 				changed = true
@@ -498,7 +491,7 @@ func repickVariants(groups []MachineGroupDraft, req SolveRequest, lc *ladderCtx)
 		if len(candidates) == 0 {
 			continue
 		}
-		recipeRate := g.ExactCount.Mul(NewRational(g.Variant.Rate.Num, g.Variant.Rate.Den))
+		recipeRate := g.ExactCount.Mul(resource.NewRational(g.Variant.Rate.Num, g.Variant.Rate.Den))
 		best, ok := pickCell(candidates, recipeRate, lc)
 		if !ok || (best.variant.ID == g.VariantID && best.machine.ModID == g.MachineMod && best.machine.MachineID == g.MachineID) {
 			continue
@@ -511,15 +504,15 @@ func repickVariants(groups []MachineGroupDraft, req SolveRequest, lc *ladderCtx)
 // RecountForVariant recomputes a machine group's counts when it switches variant.
 // Input: the group's fractional count under from. Output: the new machine count and
 // fractional count.
-func RecountForVariant(exact Rational, from, to plugins.Variant) (count int64, newExact Rational, err error) {
-	defer guardRateArithmetic(&err)
+func RecountForVariant(exact resource.Rational, from, to plugins.Variant) (count int64, newExact resource.Rational, err error) {
+	defer resource.GuardRateArithmetic(&err)
 	if from.Rate.Num <= 0 || from.Rate.Den <= 0 {
-		return 0, Rational{}, fmt.Errorf("solver: variant %q has no usable rate", from.ID)
+		return 0, resource.Rational{}, fmt.Errorf("solver: variant %q has no usable rate", from.ID)
 	}
 	if to.Rate.Num <= 0 || to.Rate.Den <= 0 {
-		return 0, Rational{}, fmt.Errorf("solver: variant %q has no usable rate", to.ID)
+		return 0, resource.Rational{}, fmt.Errorf("solver: variant %q has no usable rate", to.ID)
 	}
-	recipeRate := exact.Mul(NewRational(from.Rate.Num, from.Rate.Den))
-	newExact = recipeRate.Div(NewRational(to.Rate.Num, to.Rate.Den))
+	recipeRate := exact.Mul(resource.NewRational(from.Rate.Num, from.Rate.Den))
+	newExact = recipeRate.Div(resource.NewRational(to.Rate.Num, to.Rate.Den))
 	return max(newExact.CeilInt(), 1), newExact, nil
 }

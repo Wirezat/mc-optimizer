@@ -7,14 +7,15 @@ import (
 
 	"github.com/Wirezat/GoLog"
 	"github.com/Wirezat/production-optimizer/internal/plugins"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 // nodeMatrix is one node's flattened candidate matrix.
 type nodeMatrix struct {
 	rateKey    string
 	recipeID   string
-	recipeRate Rational
-	item       ResourceRef
+	recipeRate resource.Rational
+	item       resource.Ref
 	recipe     *RecipeRow
 	machine    *MachineSpec // the node's own, for the fallback
 	variants   []plugins.Variant
@@ -232,29 +233,29 @@ func modAffinity(groups []MachineGroupDraft) map[string]int {
 }
 
 // Partial machines (allowPartial, keyed by RateKey) use ceil(ExactCount).
-func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootItem ResourceRef, maxScale int64, allowPartial map[string]bool) ([]MachineGroupDraft, Rational, int64, []Warning) {
+func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootItem resource.Ref, maxScale int64, allowPartial map[string]bool) ([]MachineGroupDraft, resource.Rational, int64, []Warning) {
 	var warnings []Warning
 
 	if len(groups) == 0 {
-		return groups, NewRational(0, 1), 1, warnings
+		return groups, resource.NewRational(0, 1), 1, warnings
 	}
 
 	hasPartial := len(allowPartial) > 0
 
-	// LCM of non-partial machine denominators so their ExactCounts become integers (100% util).
-	fractions := make([]Rational, 0, len(groups))
+	// resource.LCM of non-partial machine denominators so their ExactCounts become integers (100% util).
+	fractions := make([]resource.Rational, 0, len(groups))
 	for _, g := range groups {
 		if !hasPartial || !allowPartial[g.RateKey] {
 			fractions = append(fractions, g.ExactCount)
 		}
 	}
 	if len(fractions) == 0 {
-		// All machines are partial — skip LCM scaling, just ceil each independently.
+		// All machines are partial — skip resource.LCM scaling, just ceil each independently.
 		result := make([]MachineGroupDraft, len(groups))
 		copy(result, groups)
 		for i := range result {
 			result[i].Count = max(result[i].ExactCount.CeilInt(), 1)
-			result[i].Utilization = result[i].ExactCount.Div(NewRational(result[i].Count, 1))
+			result[i].Utilization = result[i].ExactCount.Div(resource.NewRational(result[i].Count, 1))
 		}
 		return result, rv.ItemRates[rootItem.Key()], 1, warnings
 	}
@@ -273,11 +274,11 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 		copy(result, groups)
 		actualRate := rv.ItemRates[rootItem.Key()]
 		if maxExact.Num > 0 {
-			scale := NewRational(maxExact.Den, maxExact.Num) // 1 / maxExact → busiest becomes 1.0
+			scale := resource.NewRational(maxExact.Den, maxExact.Num) // 1 / maxExact → busiest becomes 1.0
 			for i := range result {
 				result[i].ExactCount = result[i].ExactCount.Mul(scale)
 				result[i].Count = max(result[i].ExactCount.CeilInt(), 1)
-				result[i].Utilization = result[i].ExactCount.Div(NewRational(result[i].Count, 1))
+				result[i].Utilization = result[i].ExactCount.Div(resource.NewRational(result[i].Count, 1))
 			}
 			actualRate = actualRate.Mul(scale)
 			// (Returning k=1 below stops Solve from scaling rv again.)
@@ -294,13 +295,13 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 
 	result := make([]MachineGroupDraft, len(groups))
 	copy(result, groups)
-	kRat := NewRational(k, 1)
+	kRat := resource.NewRational(k, 1)
 	for i := range result {
 		result[i].ExactCount = result[i].ExactCount.Mul(kRat)
 	}
 	actualRate := rv.ItemRates[rootItem.Key()].Mul(kRat)
 
-	// GCD-reduce using non-partial counts (integers after LCM scaling) to find minimal solution.
+	// GCD-reduce using non-partial counts (integers after resource.LCM scaling) to find minimal solution.
 	var g int64
 	for _, gr := range result {
 		if !hasPartial || !allowPartial[gr.RateKey] {
@@ -308,7 +309,7 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 			if g == 0 {
 				g = c
 			} else {
-				g = gcd(g, c)
+				g = resource.GCD(g, c)
 			}
 			if g == 1 {
 				break
@@ -322,7 +323,7 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 			if g == 0 {
 				g = c
 			} else {
-				g = gcd(g, c)
+				g = resource.GCD(g, c)
 			}
 		}
 	}
@@ -330,7 +331,7 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 		g = 1
 	}
 	if g > 1 {
-		gRat := NewRational(g, 1)
+		gRat := resource.NewRational(g, 1)
 		for i := range result {
 			result[i].ExactCount = result[i].ExactCount.Div(gRat)
 		}
@@ -340,23 +341,23 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 	// Set counts: non-partial get ExactCount, partial get ceil(ExactCount).
 	for i := range result {
 		result[i].Count = max(result[i].ExactCount.CeilInt(), 1)
-		result[i].Utilization = result[i].ExactCount.Div(NewRational(result[i].Count, 1))
+		result[i].Utilization = result[i].ExactCount.Div(resource.NewRational(result[i].Count, 1))
 	}
 
 	// Final GCD pass: ceil of partial ExactCounts may introduce a new common factor.
 	g2 := result[0].Count
 	for _, gr := range result[1:] {
-		g2 = gcd(g2, gr.Count)
+		g2 = resource.GCD(g2, gr.Count)
 		if g2 == 1 {
 			break
 		}
 	}
 	if g2 > 1 {
-		g2Rat := NewRational(g2, 1)
+		g2Rat := resource.NewRational(g2, 1)
 		for i := range result {
 			result[i].Count /= g2
 			result[i].ExactCount = result[i].ExactCount.Div(g2Rat)
-			result[i].Utilization = result[i].ExactCount.Div(NewRational(result[i].Count, 1))
+			result[i].Utilization = result[i].ExactCount.Div(resource.NewRational(result[i].Count, 1))
 		}
 		actualRate = actualRate.Div(g2Rat)
 	}
@@ -364,8 +365,8 @@ func (s *Solver) ScaleToInteger(groups []MachineGroupDraft, rv RateVector, rootI
 	return result, actualRate, k, warnings
 }
 
-// safeLCMOfFractions computes the LCM of fraction denominators, returning 0 on int64 overflow.
-func safeLCMOfFractions(fractions []Rational, _ int64) (k int64) {
+// safeLCMOfFractions computes the resource.LCM of fraction denominators, returning 0 on int64 overflow.
+func safeLCMOfFractions(fractions []resource.Rational, _ int64) (k int64) {
 	defer func() {
 		if recover() != nil {
 			k = 0
@@ -377,7 +378,7 @@ func safeLCMOfFractions(fractions []Rational, _ int64) (k int64) {
 // ComputeIOProfile aggregates inputs and outputs from the rate vector and recipe graph.
 func ComputeIOProfile(rv RateVector, g *RecipeGraph, factory FactoryState, timeUnit string) IOProfile {
 	// Step 1: gross byproduct production rates (secondary outputs only).
-	byproductGross := make(map[string]Rational)
+	byproductGross := make(map[string]resource.Rational)
 	for key, node := range g.Nodes {
 		if node.RecipeID == "" || node.OutputAmount.IsZero() || len(node.Outputs) == 0 {
 			continue
@@ -416,7 +417,7 @@ func ComputeIOProfile(rv RateVector, g *RecipeGraph, factory FactoryState, timeU
 			if bpSupply, ok := byproductGross[key]; ok {
 				demand = demand.Sub(bpSupply)
 				if demand.Num < 0 {
-					demand = Rational{}
+					demand = resource.Rational{}
 				}
 			}
 			if demand.IsZero() {
@@ -439,11 +440,11 @@ func ComputeIOProfile(rv RateVector, g *RecipeGraph, factory FactoryState, timeU
 		if net.IsZero() || net.Num <= 0 {
 			continue
 		}
-		var ref ResourceRef
+		var ref resource.Ref
 		if node, ok := g.Nodes[bKey]; ok {
 			ref = node.Item
 		} else {
-			ref = RefFromKey(bKey)
+			ref = resource.RefFromKey(bKey)
 		}
 		outputs = append(outputs, IOEntry{
 			Item:     ref,
@@ -456,10 +457,10 @@ func ComputeIOProfile(rv RateVector, g *RecipeGraph, factory FactoryState, timeU
 }
 
 // lcmOfFractions returns the least common multiple of the denominators of the given fractions.
-func lcmOfFractions(fs []Rational) int64 {
+func lcmOfFractions(fs []resource.Rational) int64 {
 	dens := make([]int64, len(fs))
 	for i, f := range fs {
 		dens[i] = f.Den
 	}
-	return LCM(dens)
+	return resource.LCM(dens)
 }

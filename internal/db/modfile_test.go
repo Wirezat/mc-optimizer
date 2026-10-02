@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/google/uuid"
 )
 
@@ -98,12 +99,8 @@ func TestImportRecipe_StoresModDataAndFluidOutput(t *testing.T) {
 		MachineID:   "iron_furnace",
 		Duration:    100,
 		ModData:     map[string]any{"heat": float64(500)},
-		ItemInputs: []model.NormalizedIO{
-			{ModID: strp("minecraft"), ID: strp("iron_ore"), AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1},
-		},
-		FluidOutputs: []model.NormalizedIO{
-			{ModID: strp("testmod"), ID: strp("molten_iron"), AmountMB: 1000, ProbNum: 1, ProbDen: 1},
-		},
+		Inputs:      []resource.IO{itemIO("minecraft", "iron_ore", 1)},
+		Outputs:     []resource.IO{fluidIO("testmod", "molten_iron", 1000)},
 		ContentHash: uuid.NewString(),
 	}
 	imported, err := d.ImportRecipe(ctx, rec)
@@ -145,7 +142,6 @@ func TestImportRecipe_StoresModDataAndFluidOutput(t *testing.T) {
 		t.Errorf("fluid output = %s:%s, want testmod:molten_iron", fluidModID, fluidID)
 	}
 
-	// The fluid must not have been written to the item output table under a naive "mod:id" ref
 	// — that would silently miss both the solver and any plugin looking for it as a fluid.
 	var itemLeakCount int
 	if err := d.Pool.QueryRow(ctx,
@@ -171,12 +167,8 @@ func TestImportRecipe_RejectsUndeclaredMachine(t *testing.T) {
 		SourceModID: "testmod",
 		MachineID:   "ghost_machine",
 		Duration:    100,
-		ItemInputs: []model.NormalizedIO{
-			{ModID: strp("minecraft"), ID: strp("iron_ore"), AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1},
-		},
-		ItemOutputs: []model.NormalizedIO{
-			{ModID: strp("minecraft"), ID: strp("iron_ingot"), AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1},
-		},
+		Inputs:      []resource.IO{itemIO("minecraft", "iron_ore", 1)},
+		Outputs:     []resource.IO{itemIO("minecraft", "iron_ingot", 1)},
 		ContentHash: uuid.NewString(),
 	}
 	imported, err := d.ImportRecipe(ctx, rec)
@@ -223,9 +215,7 @@ func TestImportRecipe_RefreshesModDataOnContentHashHit(t *testing.T) {
 		MachineID:   "smelter",
 		Duration:    100,
 		ModData:     map[string]any{"energy_per_tick": float64(128)},
-		ItemInputs: []model.NormalizedIO{
-			{ModID: strp("minecraft"), ID: strp("iron_ore"), AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1},
-		},
+		Inputs:      []resource.IO{itemIO("minecraft", "iron_ore", 1)},
 		ContentHash: uuid.NewString(),
 	}
 	imported, err := d.ImportRecipe(ctx, rec)
@@ -300,12 +290,8 @@ func TestImportRecipe_RejectsTagOnlyItemOutput(t *testing.T) {
 		SourceModID: "tagoutmod",
 		MachineID:   "press",
 		Duration:    100,
-		ItemInputs: []model.NormalizedIO{
-			{ModID: strp("minecraft"), ID: strp("iron_ore"), AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1},
-		},
-		ItemOutputs: []model.NormalizedIO{
-			{TagName: strp("c:ingots/iron"), AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1},
-		},
+		Inputs:      []resource.IO{itemIO("minecraft", "iron_ore", 1)},
+		Outputs:     []resource.IO{tagIO(resource.KindItem, "c:ingots/iron", 1)},
 		ContentHash: uuid.NewString(),
 	}
 

@@ -2,6 +2,8 @@ package solver
 
 import (
 	"testing"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 func TestPartialMachineReduction(t *testing.T) {
@@ -17,19 +19,19 @@ func TestPartialMachineReduction(t *testing.T) {
 	baseGroups := func() []MachineGroupDraft {
 		return []MachineGroupDraft{
 			{RecipeID: assemblerID, MachineID: "assembler", RateKey: key(assemblerID, "assembler"),
-				Count: 1, ExactCount: NewRational(10, 1)},
+				Count: 1, ExactCount: resource.NewRational(10, 1)},
 			{RecipeID: bendingID, MachineID: "bending_machine", RateKey: key(bendingID, "bending_machine"),
-				Count: 1, ExactCount: NewRational(10, 1)},
+				Count: 1, ExactCount: resource.NewRational(10, 1)},
 			{RecipeID: compressorID, MachineID: "compressor", RateKey: key(compressorID, "compressor"),
-				Count: 1, ExactCount: NewRational(25, 2)},
+				Count: 1, ExactCount: resource.NewRational(25, 2)},
 		}
 	}
 
 	rv := RateVector{
-		ItemRates:   map[string]Rational{"mi:redstone_battery": NewRational(1, 20)},
-		RecipeRates: map[string]Rational{},
+		ItemRates:   map[string]resource.Rational{"mi:redstone_battery": resource.NewRational(1, 20)},
+		RecipeRates: map[string]resource.Rational{},
 	}
-	root := ResourceRef{ModID: "mi", ID: "redstone_battery"}
+	root := resource.Ref{ModID: "mi", ID: "redstone_battery"}
 
 	s := &Solver{AutoScaleMax: 500}
 
@@ -38,7 +40,7 @@ func TestPartialMachineReduction(t *testing.T) {
 		if k != 2 {
 			t.Errorf("k=%d want 2", k)
 		}
-		rateS := rate.Mul(NewRational(20, 1))
+		rateS := rate.Mul(resource.NewRational(20, 1))
 		if rateS.Num != 2 || rateS.Den != 5 {
 			t.Errorf("rate=%v/%v want 0.4/s", rateS.Num, rateS.Den)
 		}
@@ -53,7 +55,7 @@ func TestPartialMachineReduction(t *testing.T) {
 	t.Run("partial_on_compressor", func(t *testing.T) {
 		ap := map[string]bool{key(compressorID, "compressor"): true}
 		groups, rate, _, _ := s.ScaleToInteger(baseGroups(), rv, root, 500, ap)
-		rateS := rate.Mul(NewRational(20, 1))
+		rateS := rate.Mul(resource.NewRational(20, 1))
 		t.Logf("=== PARTIAL on compressor === Rate: %v/%v/s  %dx assembler util=%v, %dx bending util=%v, %dx compressor util=%v",
 			rateS.Num, rateS.Den, groups[0].Count, groups[0].Utilization, groups[1].Count, groups[1].Utilization, groups[2].Count, groups[2].Utilization)
 		// Non-partial groups: assembler, bending.
@@ -87,7 +89,7 @@ func TestPartialMachineReduction(t *testing.T) {
 	t.Run("partial_on_bending", func(t *testing.T) {
 		ap := map[string]bool{bendingID: true}
 		groups, rate, _, _ := s.ScaleToInteger(baseGroups(), rv, root, 500, ap)
-		rateS := rate.Mul(NewRational(20, 1))
+		rateS := rate.Mul(resource.NewRational(20, 1))
 		t.Logf("=== PARTIAL on bending === Rate: %v/%v/s  %dx assembler util=%v, %dx bending util=%v, %dx compressor util=%v",
 			rateS.Num, rateS.Den, groups[0].Count, groups[0].Utilization, groups[1].Count, groups[1].Utilization, groups[2].Count, groups[2].Utilization)
 		// Non-partial groups: assembler, compressor.

@@ -72,26 +72,22 @@ function craftCell({ label, name, ref = '', entry = null,
     ${infocardHTML(entry, { title: name, subtitle: ref, sections: amtRow + ncRow + extra })}`;
 }
 
-// One recipe-card I/O entry → its cell's craftCell HTML.
+// One recipe-card entry ({ ref, amount, probability, consumed, x, y }) → its cell's craftCell HTML.
 function ioCellHTML(io, style) {
-  const isFluid = io.fluid_id != null;
-  const count = isFluid ? (io.amount_mb ? String(io.amount_mb) : '')
-    : (io.amount > 1 ? String(io.amount) : '');
-  const amount = isFluid ? (io.amount_mb ? io.amount_mb + 'mB' : '')
-    : (io.amount > 1 ? io.amount + '×' : '');
-  if (io.tag_name) {
-    return craftCell({ ...tagCell(io.tag_name, isFluid), count, amount, nonConsuming: io.non_consuming, style });
+  const ref = io.ref || {};
+  const isFluid = ref.kind === 'fluid';
+  const value = io.amount?.den ? io.amount.num / io.amount.den : 0;
+  const shown = Number.isInteger(value) ? String(value) : String(+value.toFixed(3));
+  const count = isFluid ? (value ? shown : '') : (value > 1 ? shown : '');
+  const amount = isFluid ? (value ? shown + 'mB' : '') : (value > 1 ? shown + '×' : '');
+  const nonConsuming = io.consumed === false;
+  if (ref.tag_ref) {
+    return craftCell({ ...tagCell(ref.tag_ref, isFluid), count, amount, nonConsuming, style });
   }
-  const ref = isFluid
-    ? (io.fluid_mod_id + ':' + io.fluid_id)
-    : ((io.item_mod_id || '') + ':' + (io.item_id || ''));
-  const parts = isFluid
-    ? cellParts(io.fluid_mod_id, io.fluid_id, true)
-    : cellParts(io.item_mod_id, io.item_id, false);
-  return craftCell({ ...parts, ref, count, amount, nonConsuming: io.non_consuming, style });
+  const key = (ref.mod_id || '') + ':' + (ref.id || '');
+  return craftCell({ ...cellParts(ref.mod_id, ref.id, isFluid), ref: key, count, amount, nonConsuming, style });
 }
 
-// items: one or more recipe-card I/O arrays for one grid.
 function ioGrid(items) {
   if (!items.length) return `<div class="crafting-cell empty" style="width:36px;height:36px;"></div>`;
 
@@ -124,8 +120,8 @@ function fmt0(v, suffix) {
 /** Builds one recipe card. Input: recipe (Card), machineName (optional). Output: HTML string. */
 function recipeCardHTML(recipe, machineName) {
   const machineUrl = `/catalog/machines?mod=${encodeURIComponent(recipe.machine_mod_id)}&machine=${encodeURIComponent(recipe.machine_id)}`;
-  const inputs = [...recipe.inputs, ...recipe.fluid_inputs];
-  const outputs = [...recipe.outputs, ...recipe.fluid_outputs];
+  const inputs = recipe.inputs || [];
+  const outputs = recipe.outputs || [];
   return `<div class="recipe-card">
     <div class="recipe-card-meta">
       <a href="${esc(machineUrl)}" class="catalog-link">${esc(machineName || recipe.machine_id)}</a>

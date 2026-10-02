@@ -7,30 +7,25 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
-func honeyStore(members []ResourceRef) *stubStore {
-	honey := "c:honey"
+func honeyStore(members []resource.Ref) *stubStore {
 	r := &RecipeRow{
 		ID: "canning", MachineMod: "mi", MachineID: "canning_machine", DurationTicks: 100,
-		ItemInputs: []RecipeRowItemIO{
-			{ItemModID: sp("minecraft"), ItemID: sp("glass_bottle"), AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
+		Inputs: []resource.IO{
+			itemIO("minecraft", "glass_bottle", 1, 1),
+			tagIO(resource.KindFluid, "c:honey", 250),
 		},
-		FluidInputs: []RecipeRowFluidIO{
-			{TagName: &honey, AmountMB: 250, ProbabilityNum: 1, ProbabilityDen: 1},
-		},
-		ItemOutputs: []RecipeRowItemIO{
-			{ItemModID: sp("minecraft"), ItemID: sp("honey_bottle"), AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
-		},
+		Outputs: []resource.IO{itemIO("minecraft", "honey_bottle", 1, 1)},
 	}
 	return &stubStore{
 		recipes: map[string]*RecipeRow{r.ID: r},
 		byItem:  map[string][]*RecipeRow{"minecraft:honey_bottle": {r}},
-		tags:    map[string][]ResourceRef{"fluid:#c:honey": members},
+		tags:    map[string][]resource.Ref{"fluid:#c:honey": members},
 	}
 }
 
 func TestItemRefKey_FluidTag(t *testing.T) {
-	fluidTag := ResourceRef{TagRef: "c:honey", Kind: resource.KindFluid}
-	itemTag := ResourceRef{TagRef: "c:ingots"}
+	fluidTag := resource.Ref{TagRef: "c:honey", Kind: resource.KindFluid}
+	itemTag := resource.Ref{TagRef: "c:ingots"}
 	if got := fluidTag.Key(); got != "fluid:#c:honey" {
 		t.Errorf("fluid tag key = %q, want fluid:#c:honey", got)
 	}
@@ -40,9 +35,9 @@ func TestItemRefKey_FluidTag(t *testing.T) {
 }
 
 func TestBuildRecipeGraph_ResolvesFluidTagToAFluid(t *testing.T) {
-	store := honeyStore([]ResourceRef{{ModID: "extended_industrialization", ID: "honey", Kind: resource.KindFluid}})
+	store := honeyStore([]resource.Ref{{ModID: "extended_industrialization", ID: "honey", Kind: resource.KindFluid}})
 	g, err := NewSolver(store, 0).BuildRecipeGraph(context.Background(),
-		ResourceRef{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{}, nil, nil)
+		resource.Ref{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{}, nil, nil)
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
 	}
@@ -69,7 +64,7 @@ func TestBuildRecipeGraph_ResolvesFluidTagToAFluid(t *testing.T) {
 
 func TestBuildRecipeGraph_FluidTagWithoutMembersIsRawMaterial(t *testing.T) {
 	g, err := NewSolver(honeyStore(nil), 0).BuildRecipeGraph(context.Background(),
-		ResourceRef{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{}, nil, nil)
+		resource.Ref{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{}, nil, nil)
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
 	}
@@ -82,12 +77,12 @@ func TestBuildRecipeGraph_FluidTagWithoutMembersIsRawMaterial(t *testing.T) {
 }
 
 func TestBuildRecipeGraph_FluidTagOverridePicksMember(t *testing.T) {
-	store := honeyStore([]ResourceRef{
+	store := honeyStore([]resource.Ref{
 		{ModID: "create", ID: "honey", Kind: resource.KindFluid},
 		{ModID: "extended_industrialization", ID: "honey", Kind: resource.KindFluid},
 	})
 	g, err := NewSolver(store, 0).BuildRecipeGraph(context.Background(),
-		ResourceRef{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{}, nil,
+		resource.Ref{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{}, nil,
 		map[string]string{"fluid:#c:honey": "extended_industrialization:honey"})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
@@ -99,9 +94,9 @@ func TestBuildRecipeGraph_FluidTagOverridePicksMember(t *testing.T) {
 }
 
 func TestDiscover_FluidTagInputUsesItsKey(t *testing.T) {
-	store := honeyStore([]ResourceRef{{ModID: "extended_industrialization", ID: "honey", Kind: resource.KindFluid}})
+	store := honeyStore([]resource.Ref{{ModID: "extended_industrialization", ID: "honey", Kind: resource.KindFluid}})
 	res, err := NewSolver(store, 0).Discover(context.Background(),
-		ResourceRef{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{},
+		resource.Ref{ModID: "minecraft", ID: "honey_bottle"}, nil, FactoryState{},
 		map[string]string{"minecraft:honey_bottle": "canning"}, nil)
 	if err != nil {
 		t.Fatalf("Discover: %v", err)

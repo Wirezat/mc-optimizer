@@ -1,5 +1,7 @@
 package model
 
+import "github.com/Wirezat/production-optimizer/internal/resource"
+
 // BlockDrop describes what a block yields when broken.
 type BlockDrop struct {
 	BlockModID  string
@@ -13,14 +15,13 @@ type BlockDrop struct {
 
 // VillagerTrade is one trade offer from a villager profession.
 type VillagerTrade struct {
-	SourceModID string
-	TradeKey    string
-	Profession  string
-	Tier        int
-	CostModID   string
-	CostItemID  string
-	CostCount   int
-	// Second cost slot; empty IDs mean the offer only charges one item.
+	SourceModID    string
+	TradeKey       string
+	Profession     string
+	Tier           int
+	CostModID      string
+	CostItemID     string
+	CostCount      int
 	Cost2ModID     string
 	Cost2ItemID    string
 	Cost2Count     int
@@ -28,11 +29,9 @@ type VillagerTrade struct {
 	ResultItemID   string
 	ResultCount    int
 	ResultModified bool
-	// CostVariable marks an offer whose price the data does not fix; CostCount is then the
-	// lowest it can be, not what it costs.
-	CostVariable bool
-	MaxUses      *int
-	XP           *int
+	CostVariable   bool
+	MaxUses        *int
+	XP             *int
 }
 
 // ModMetadata holds optional enrichment data fetched from Modrinth.
@@ -53,7 +52,6 @@ type NormalizedRecipe struct {
 	SourceFile string
 	RecipeType string
 	ModID      string
-	// SourceModID is the mod whose modfile defines this recipe — may differ from ModID (the
 	// machine's mod) for addon-added recipes.
 	SourceModID string
 	MachineID   string
@@ -66,20 +64,6 @@ type NormalizedRecipe struct {
 	// ModData holds every mod-specific field from the recipe entry, keyed as written.
 	ModData map[string]any
 
-	ItemInputs   []NormalizedIO
-	ItemOutputs  []NormalizedIO
-	FluidInputs  []NormalizedIO
-	FluidOutputs []NormalizedIO
-}
-
-type NormalizedIO struct {
-	ModID        *string
-	ID           *string // item or fluid ID
-	TagName      *string
-	AmountNum    int   // items: rational numerator; fluids: 0
-	AmountDen    int   // items: rational denominator; fluids: 0
-	AmountMB     int64 // fluids: millibuckets; items: 0
-	ProbNum      int
-	ProbDen      int
-	NonConsuming bool // true = item is a reusable tool (probability=0 in MI JSON)
+	Inputs  []resource.IO
+	Outputs []resource.IO
 }

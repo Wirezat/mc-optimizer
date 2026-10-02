@@ -21,8 +21,7 @@ type variantStore interface {
 	PutVariants(ctx context.Context, modID, machineID, recipeID, configHash string, vs []plugins.Variant) error
 }
 
-// VariantResolver serves solver.VariantSource from the Postgres cache and fills it from the
-// mod's plugin on a miss.
+// VariantResolver serves solver.VariantSource from the cache, filling it from the plugin on a miss.
 type VariantResolver struct {
 	store    variantStore
 	registry *plugins.Registry
@@ -113,55 +112,27 @@ func normalizeConfig(cfg json.RawMessage) json.RawMessage {
 
 // recipeOutputs maps a recipe's catalog outputs onto the plugin wire type.
 func recipeOutputs(recipe *solver.RecipeRow) []plugins.Output {
-	out := make([]plugins.Output, 0, len(recipe.ItemOutputs)+len(recipe.FluidOutputs))
-	for _, o := range recipe.ItemOutputs {
-		if o.ItemModID == nil || o.ItemID == nil {
-			continue
+	out := make([]plugins.Output, 0, len(recipe.Outputs))
+	for _, o := range recipe.Outputs {
+		if o.Ref.TagRef == "" {
+			out = append(out, pluginIO(o))
 		}
-		ref := solver.ResourceRef{ModID: *o.ItemModID, ID: *o.ItemID}
-		out = append(out, plugins.Output{
-			Ref:         ref.Key(),
-			Amount:      plugins.Rational{Num: o.AmountNum, Den: o.AmountDen},
-			Probability: plugins.Rational{Num: o.ProbabilityNum, Den: o.ProbabilityDen},
-		})
-	}
-	for _, f := range recipe.FluidOutputs {
-		ref := solver.ResourceRef{ModID: f.FluidModID, ID: f.FluidID, Kind: resource.KindFluid}
-		out = append(out, plugins.Output{
-			Ref:         ref.Key(),
-			Amount:      plugins.Rational{Num: f.AmountMB, Den: 1},
-			Probability: plugins.Rational{Num: f.ProbabilityNum, Den: f.ProbabilityDen},
-		})
 	}
 	return out
 }
 
-// recipeInputs maps a recipe's catalog inputs onto the plugin wire type.
 func recipeInputs(recipe *solver.RecipeRow) []plugins.Output {
-	in := make([]plugins.Output, 0, len(recipe.ItemInputs)+len(recipe.FluidInputs))
-	for _, i := range recipe.ItemInputs {
-		var ref solver.ResourceRef
-		switch {
-		case i.TagName != nil:
-			ref = solver.ResourceRef{TagRef: *i.TagName}
-		case i.ItemModID != nil && i.ItemID != nil:
-			ref = solver.ResourceRef{ModID: *i.ItemModID, ID: *i.ItemID}
-		default:
-			continue
-		}
-		in = append(in, plugins.Output{
-			Ref:         ref.Key(),
-			Amount:      plugins.Rational{Num: i.AmountNum, Den: i.AmountDen},
-			Probability: plugins.Rational{Num: i.ProbabilityNum, Den: i.ProbabilityDen},
-		})
-	}
-	for _, f := range recipe.FluidInputs {
-		ref := f.Ref()
-		in = append(in, plugins.Output{
-			Ref:         ref.Key(),
-			Amount:      plugins.Rational{Num: f.AmountMB, Den: 1},
-			Probability: plugins.Rational{Num: f.ProbabilityNum, Den: f.ProbabilityDen},
-		})
+	in := make([]plugins.Output, 0, len(recipe.Inputs))
+	for _, i := range recipe.Inputs {
+		in = append(in, pluginIO(i))
 	}
 	return in
+}
+
+func pluginIO(io resource.IO) plugins.Output {
+	return plugins.Output{
+		Ref:         io.Ref.Key(),
+		Amount:      plugins.Rational{Num: io.Amount.Num, Den: io.Amount.Den},
+		Probability: plugins.Rational{Num: io.Prob.Num, Den: io.Prob.Den},
+	}
 }

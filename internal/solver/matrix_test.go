@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Wirezat/production-optimizer/internal/plugins"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 // byMachineSource answers per machine.
@@ -30,25 +31,24 @@ func interfaceStub(durationTicks int) *stubStore {
 }
 
 // matrixGroup solves the iron-ingot node on nodeMachine and returns its group.
-func matrixGroup(t *testing.T, st *stubStore, src VariantSource, nodeMachine MachineRef, recipeRate Rational) MachineGroupDraft {
+func matrixGroup(t *testing.T, st *stubStore, src VariantSource, nodeMachine MachineRef, recipeRate resource.Rational) MachineGroupDraft {
 	t.Helper()
 	return matrixGroupFor(t, st, src, "recipe:iron_ingot", nodeMachine, recipeRate)
 }
 
-func matrixGroupFor(t *testing.T, st *stubStore, src VariantSource, recipeID string, nodeMachine MachineRef, recipeRate Rational) MachineGroupDraft {
+func matrixGroupFor(t *testing.T, st *stubStore, src VariantSource, recipeID string, nodeMachine MachineRef, recipeRate resource.Rational) MachineGroupDraft {
 	t.Helper()
 	s := NewSolver(st, 1000)
 	s.VariantSource = src
 	ctx := context.Background()
 	nodeKey := RecipeOptionKey(recipeID, nodeMachine.ModID, nodeMachine.MachineID)
-	// Naming a machine is what pins it.
 	override := recipeID
 	if own := st.recipes[recipeID]; own == nil ||
 		own.MachineMod != nodeMachine.ModID || own.MachineID != nodeMachine.MachineID {
 		override = nodeKey
 	}
 	overrides := map[string]string{"minecraft:iron_ingot": override}
-	g, err := s.BuildRecipeGraph(ctx, ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
+	g, err := s.BuildRecipeGraph(ctx, resource.Ref{ModID: "minecraft", ID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{},
 		overrides, map[string]string{})
 	if err != nil {
@@ -76,7 +76,7 @@ func TestMatrixPicksTheBetterMachineOfAnotherMod(t *testing.T) {
 		"ironfurnaces:gold_furnace": {{ID: "plain", Rate: rate(1, 100), Valid: true}},
 	}}
 	// At 1/100 per tick the vanilla furnace needs two, the gold one.
-	g := matrixGroup(t, interfaceStub(200), src, MachineRef{"minecraft", "furnace"}, NewRational(1, 100))
+	g := matrixGroup(t, interfaceStub(200), src, MachineRef{"minecraft", "furnace"}, resource.NewRational(1, 100))
 	if g.MachineMod != "ironfurnaces" || g.MachineID != "gold_furnace" {
 		t.Errorf("machine = %s:%s, want ironfurnaces:gold_furnace", g.MachineMod, g.MachineID)
 	}
@@ -97,7 +97,7 @@ func TestMatrixKeepsAPinnedMachine(t *testing.T) {
 		"minecraft:furnace":         {{ID: "plain", Rate: rate(1, 10), Valid: true}},
 		"ironfurnaces:gold_furnace": {{ID: "plain", Rate: rate(1, 200), Valid: true}},
 	}}
-	g := matrixGroup(t, interfaceStub(200), src, MachineRef{"ironfurnaces", "gold_furnace"}, NewRational(1, 100))
+	g := matrixGroup(t, interfaceStub(200), src, MachineRef{"ironfurnaces", "gold_furnace"}, resource.NewRational(1, 100))
 	if g.MachineMod != "ironfurnaces" || g.MachineID != "gold_furnace" {
 		t.Errorf("machine = %s:%s, want the pinned ironfurnaces:gold_furnace", g.MachineMod, g.MachineID)
 	}
@@ -112,14 +112,14 @@ func TestMatrixSkipsInactiveMods(t *testing.T) {
 	s.VariantSource = src
 	s.ActiveMods = map[string]bool{"minecraft": true}
 	ctx := context.Background()
-	g, err := s.BuildRecipeGraph(ctx, ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
+	g, err := s.BuildRecipeGraph(ctx, resource.Ref{ModID: "minecraft", ID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{},
 		map[string]string{}, map[string]string{})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
 	}
 	rv := newRateVector()
-	rv.RecipeRates[RecipeOptionKey("recipe:iron_ingot", "minecraft", "furnace")] = NewRational(1, 100)
+	rv.RecipeRates[RecipeOptionKey("recipe:iron_ingot", "minecraft", "furnace")] = resource.NewRational(1, 100)
 	groups, _, err := s.CalculateMachineGroups(ctx, g, rv, SolveRequest{})
 	if err != nil {
 		t.Fatalf("CalculateMachineGroups: %v", err)
@@ -139,7 +139,7 @@ func TestMatrixPickIsStableAcrossRuns(t *testing.T) {
 	st := interfaceStub(200)
 	var want string
 	for i := range 50 {
-		g := matrixGroup(t, st, src, MachineRef{"minecraft", "furnace"}, NewRational(1, 100))
+		g := matrixGroup(t, st, src, MachineRef{"minecraft", "furnace"}, resource.NewRational(1, 100))
 		got := g.MachineMod + ":" + g.MachineID + "/" + g.VariantID
 		if i == 0 {
 			want = got
@@ -165,7 +165,7 @@ func smeltingSiblings() *stubStore {
 
 // Built on the furnace recipe, the blast furnace still wins.
 func TestSiblingRecipesShareOneMatrix(t *testing.T) {
-	g := matrixGroup(t, smeltingSiblings(), nil, MachineRef{"minecraft", "furnace"}, NewRational(1, 100))
+	g := matrixGroup(t, smeltingSiblings(), nil, MachineRef{"minecraft", "furnace"}, resource.NewRational(1, 100))
 	if g.RecipeID != "recipe:iron_ingot_blasting" {
 		t.Errorf("recipe = %q, want the blasting sibling", g.RecipeID)
 	}
@@ -183,16 +183,12 @@ func TestRecipesWithDifferentIOAreNotSiblings(t *testing.T) {
 	withSlag := ironIngotRecipe(100)
 	withSlag.ID = "recipe:iron_ingot_slag"
 	withSlag.MachineID = "blast_furnace"
-	mc := "minecraft"
-	withSlag.ItemOutputs = append(withSlag.ItemOutputs, RecipeRowItemIO{
-		ItemModID: &mc, ItemID: sp("slag"), AmountNum: 1, AmountDen: 10,
-		ProbabilityNum: 1, ProbabilityDen: 1,
-	})
+	withSlag.Outputs = append(withSlag.Outputs, itemIO("minecraft", "slag", 1, 10))
 	st := stubStoreFor([]*RecipeRow{furnace, withSlag},
 		&MachineSpec{ModID: "minecraft", MachineID: "furnace", Name: "Furnace"},
 		&MachineSpec{ModID: "minecraft", MachineID: "blast_furnace", Name: "Blast Furnace"})
 
-	g := matrixGroup(t, st, nil, MachineRef{"minecraft", "furnace"}, NewRational(1, 100))
+	g := matrixGroup(t, st, nil, MachineRef{"minecraft", "furnace"}, resource.NewRational(1, 100))
 	if g.RecipeID != "recipe:iron_ingot" {
 		t.Errorf("recipe = %q, want the node's own: a byproduct makes it a different recipe", g.RecipeID)
 	}
@@ -207,7 +203,7 @@ func TestPinnedMachineOnlyGetsSiblingsItCanRun(t *testing.T) {
 		"recipe:iron_ingot": {{ModID: "ironfurnaces", MachineID: "copper_furnace"}},
 	}
 
-	g := matrixGroup(t, st, nil, MachineRef{"ironfurnaces", "copper_furnace"}, NewRational(1, 100))
+	g := matrixGroup(t, st, nil, MachineRef{"ironfurnaces", "copper_furnace"}, resource.NewRational(1, 100))
 	if g.MachineMod != "ironfurnaces" || g.MachineID != "copper_furnace" {
 		t.Errorf("machine = %s:%s, want the pinned ironfurnaces:copper_furnace", g.MachineMod, g.MachineID)
 	}
@@ -224,19 +220,19 @@ func TestIOSignatureIsStrict(t *testing.T) {
 	}
 
 	probability := ironIngotRecipe(100)
-	probability.ItemOutputs[0].ProbabilityNum, probability.ItemOutputs[0].ProbabilityDen = 9, 10
+	probability.Outputs[0].Prob = resource.NewRational(9, 10)
 	if ioSignature(base) == ioSignature(probability) {
 		t.Error("a 90% output must not match a certain one")
 	}
 
 	amount := ironIngotRecipe(100)
-	amount.ItemInputs[0].AmountNum = 2
+	amount.Inputs[0].Amount = resource.NewRational(2, 1)
 	if ioSignature(base) == ioSignature(amount) {
 		t.Error("a doubled input must not match")
 	}
 
 	tool := ironIngotRecipe(100)
-	tool.ItemInputs[0].NonConsuming = true
+	tool.Inputs[0].Consumed = false
 	if ioSignature(base) == ioSignature(tool) {
 		t.Error("an input that survives the craft must not match one that is consumed")
 	}
@@ -245,12 +241,11 @@ func TestIOSignatureIsStrict(t *testing.T) {
 // pulverizerCells is Thermal's case: an output augment raises the nickel byproduct from
 // 1/10 to 19/100 for 3.8x the energy, at the same rate.
 func pulverizerCells() []cell {
-	mc := "minecraft"
 	recipe := &RecipeRow{
 		ID: "r:pulverize", MachineMod: "thermal", MachineID: "pulverizer", DurationTicks: 100,
-		ItemOutputs: []RecipeRowItemIO{
-			{ItemModID: &mc, ItemID: sp("iron_dust"), AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
-			{ItemModID: &mc, ItemID: sp("nickel"), AmountNum: 1, AmountDen: 10, ProbabilityNum: 1, ProbabilityDen: 1},
+		Outputs: []resource.IO{
+			itemIO("minecraft", "iron_dust", 1, 1),
+			itemIO("minecraft", "nickel", 1, 10),
 		},
 	}
 	outs := func(nickelNum, nickelDen int64) []plugins.Output {
@@ -272,20 +267,20 @@ func pulverizerCells() []cell {
 
 // One machine at the nickel node makes 1/100 nickel per tick.
 func nickelYields() yieldIndex {
-	return yieldIndex{"minecraft:nickel": NewRational(1, 100)}
+	return yieldIndex{"minecraft:nickel": resource.NewRational(1, 100)}
 }
 
 func TestByproductValueOnlyWinsByAWholeMachine(t *testing.T) {
 	tests := []struct {
 		name   string
-		demand Rational
+		demand resource.Rational
 		yields yieldIndex
 		want   string
 	}{
 		// 0.09 machines saved, so stage 5 decides instead.
-		{"one machine", NewRational(1, 100), nickelYields(), "plain"},
-		{"a hundred machines", NewRational(1, 1), nickelYields(), "boosted"},
-		{"nickel unused", NewRational(1, 1), yieldIndex{}, "plain"},
+		{"one machine", resource.NewRational(1, 100), nickelYields(), "plain"},
+		{"a hundred machines", resource.NewRational(1, 1), nickelYields(), "boosted"},
+		{"nickel unused", resource.NewRational(1, 1), yieldIndex{}, "plain"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -301,14 +296,14 @@ func TestByproductValueOnlyWinsByAWholeMachine(t *testing.T) {
 }
 
 func TestIndexYields(t *testing.T) {
-	nickel := ResourceRef{ModID: "minecraft", ID: "nickel"}
+	nickel := resource.Ref{ModID: "minecraft", ID: "nickel"}
 	g := &RecipeGraph{Nodes: map[string]*RecipeNode{
-		"minecraft:nickel": {Item: nickel, RecipeID: "r:nickel", OutputAmount: NewRational(2, 1)},
-		"minecraft:stone":  {Item: ResourceRef{ModID: "minecraft", ID: "stone"}},
+		"minecraft:nickel": {Item: nickel, RecipeID: "r:nickel", OutputAmount: resource.NewRational(2, 1)},
+		"minecraft:stone":  {Item: resource.Ref{ModID: "minecraft", ID: "stone"}},
 	}}
 	groups := []MachineGroupDraft{
 		{RecipeOutput: nickel, Variant: plugins.Variant{Rate: rate(1, 50)}},
-		{RecipeOutput: ResourceRef{ModID: "minecraft", ID: "stone"}, Variant: plugins.Variant{Rate: rate(1, 10)}},
+		{RecipeOutput: resource.Ref{ModID: "minecraft", ID: "stone"}, Variant: plugins.Variant{Rate: rate(1, 10)}},
 	}
 	yi := indexYields(g, groups)
 	wantRational(t, "nickel per machine", yi["minecraft:nickel"], 1, 25)
@@ -366,7 +361,7 @@ func TestVanillaSkipsTheVariantSource(t *testing.T) {
 	src := &stubSource{vs: []plugins.Variant{{ID: "fromPlugin", Rate: rate(1, 1), Valid: true}}}
 	st := newStub(200)
 	st.machines["minecraft:furnace"].Ecosystem = VanillaEcosystem
-	g := matrixGroup(t, st, src, MachineRef{"minecraft", "furnace"}, NewRational(1, 200))
+	g := matrixGroup(t, st, src, MachineRef{"minecraft", "furnace"}, resource.NewRational(1, 200))
 	if g.VariantID != "vanilla" {
 		t.Errorf("variant = %q, want the host's own", g.VariantID)
 	}

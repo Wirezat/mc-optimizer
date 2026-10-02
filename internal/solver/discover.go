@@ -8,23 +8,20 @@ import (
 
 // RecipeOption is a lightweight recipe summary for the discover UI.
 type RecipeOption struct {
-	RecipeID   string `json:"recipe_id"`
-	MachineMod string `json:"machine_mod"`
-	MachineID  string `json:"machine_id"`
-	// Key uniquely identifies this (recipe, machine) choice — use this, not RecipeID, as the
-	// override value sent back to the server.
-	Key     string   `json:"key"`
-	IOKey   string   `json:"io_key"`  // options with identical I/O; the solver picks between them
-	Inputs  []string `json:"inputs"`  // "item_id", "#tag_name", or "~fluid_id" — complete list;
-	Outputs []string `json:"outputs"` // the graph view derives its edges from these, so no cap.
-	// DurationTicks orders an IOKey group's siblings for display: the longest duration is the
+	RecipeID   string   `json:"recipe_id"`
+	MachineMod string   `json:"machine_mod"`
+	MachineID  string   `json:"machine_id"`
+	Key        string   `json:"key"`
+	IOKey      string   `json:"io_key"`  // options with identical I/O; the solver picks between them
+	Inputs     []string `json:"inputs"`  // "item_id", "#tag_name", or "~fluid_id" — complete list;
+	Outputs    []string `json:"outputs"` // the graph view derives its edges from these, so no cap.
 	// recipe the others speed up (e.g.
 	DurationTicks int `json:"duration_ticks"`
 }
 
 // ChainItem is one node in the discovered production chain.
 type ChainItem struct {
-	Item             ResourceRef    `json:"ref"`
+	Item             resource.Ref   `json:"ref"`
 	Level            int            `json:"level"`              // depth from root (root = 0)
 	Options          []RecipeOption `json:"options"`            // empty = raw material
 	ChosenRecipeID   string         `json:"chosen_recipe_id"`   // selected recipe (first or user override)
@@ -47,7 +44,7 @@ type DiscoverResult struct {
 // with their available recipes, without computing any rates.
 func (s *Solver) Discover(
 	ctx context.Context,
-	targetItem ResourceRef,
+	targetItem resource.Ref,
 	stopPoints map[string]bool,
 	factoryState FactoryState,
 	recipeOverrides map[string]string,
@@ -58,7 +55,7 @@ func (s *Solver) Discover(
 	}
 
 	type entry struct {
-		item        ResourceRef
+		item        resource.Ref
 		level       int
 		resolvedTag string // set when item was queued by resolving this tag key
 	}
@@ -123,7 +120,7 @@ func (s *Solver) Discover(
 			res.Items = append(res.Items, ci)
 			continue
 		}
-		recipes, err := s.recipesFor(ctx, item)
+		recipes, err := s.DB.GetRecipesFor(ctx, item)
 		if err != nil {
 			return res, err
 		}
@@ -151,28 +148,11 @@ func (s *Solver) Discover(
 				IOKey:         ioSignature(r),
 				DurationTicks: r.DurationTicks,
 			}
-			for _, in := range r.ItemInputs {
-				if in.TagName != nil {
-					opt.Inputs = append(opt.Inputs, "#"+*in.TagName)
-				} else if in.ItemID != nil {
-					opt.Inputs = append(opt.Inputs, *in.ItemID)
-				}
+			for _, in := range r.Inputs {
+				opt.Inputs = append(opt.Inputs, in.Ref.Key())
 			}
-			for _, fi := range r.FluidInputs {
-				if fi.TagName != nil {
-					ref := fi.Ref()
-					opt.Inputs = append(opt.Inputs, ref.Key())
-					continue
-				}
-				opt.Inputs = append(opt.Inputs, "~"+fi.FluidID)
-			}
-			for _, out := range r.ItemOutputs {
-				if out.ItemID != nil {
-					opt.Outputs = append(opt.Outputs, *out.ItemID)
-				}
-			}
-			for _, fo := range r.FluidOutputs {
-				opt.Outputs = append(opt.Outputs, "~"+fo.FluidID)
+			for _, out := range r.Outputs {
+				opt.Outputs = append(opt.Outputs, out.Ref.Key())
 			}
 			ci.Options = append(ci.Options, opt)
 		}
@@ -191,23 +171,9 @@ func (s *Solver) Discover(
 				ci.ChosenRecipeID = r.ID
 				ci.ChosenMachineMod = r.MachineMod
 				ci.ChosenMachineID = r.MachineID
-				for _, in := range r.ItemInputs {
-					var ref ResourceRef
-					if in.TagName != nil {
-						ref = ResourceRef{TagRef: *in.TagName}
-					} else if in.ItemModID != nil && in.ItemID != nil {
-						ref = ResourceRef{ModID: *in.ItemModID, ID: *in.ItemID}
-					} else {
-						continue
-					}
-					if !visited[ref.Key()] {
-						queue = append(queue, entry{item: ref, level: e.level + 1})
-					}
-				}
-				for _, fi := range r.FluidInputs {
-					ref := fi.Ref()
-					if !visited[ref.Key()] {
-						queue = append(queue, entry{item: ref, level: e.level + 1})
+				for _, in := range r.Inputs {
+					if !visited[in.Ref.Key()] {
+						queue = append(queue, entry{item: in.Ref, level: e.level + 1})
 					}
 				}
 				break

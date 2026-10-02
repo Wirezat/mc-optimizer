@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/Wirezat/production-optimizer/internal/model"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 // ContentHash computes a stable SHA-256 fingerprint of a normalized recipe.
@@ -38,18 +39,18 @@ func ContentHash(n model.NormalizedRecipe) string {
 		Machine:  n.MachineID,
 		Duration: n.Duration,
 	}
-	for _, io := range n.ItemInputs {
-		c.II = append(c.II, itemEntry{ioRef(io), io.AmountNum, io.ProbNum, io.ProbDen})
+	addIO := func(ios []resource.IO, items *[]itemEntry, fluids *[]fluidEntry) {
+		for _, io := range ios {
+			switch io.Ref.Kind.Or() {
+			case resource.KindFluid:
+				*fluids = append(*fluids, fluidEntry{hashRef(io.Ref), io.Amount.Num, int(io.Prob.Num), int(io.Prob.Den)})
+			default:
+				*items = append(*items, itemEntry{hashRef(io.Ref), int(io.Amount.Num), int(io.Prob.Num), int(io.Prob.Den)})
+			}
+		}
 	}
-	for _, io := range n.ItemOutputs {
-		c.IO = append(c.IO, itemEntry{ioRef(io), io.AmountNum, io.ProbNum, io.ProbDen})
-	}
-	for _, io := range n.FluidInputs {
-		c.FI = append(c.FI, fluidEntry{ioRef(io), io.AmountMB, io.ProbNum, io.ProbDen})
-	}
-	for _, io := range n.FluidOutputs {
-		c.FO = append(c.FO, fluidEntry{ioRef(io), io.AmountMB, io.ProbNum, io.ProbDen})
-	}
+	addIO(n.Inputs, &c.II, &c.FI)
+	addIO(n.Outputs, &c.IO, &c.FO)
 
 	sort.Slice(c.II, func(i, j int) bool { return c.II[i].Ref < c.II[j].Ref })
 	sort.Slice(c.IO, func(i, j int) bool { return c.IO[i].Ref < c.IO[j].Ref })
@@ -61,9 +62,9 @@ func ContentHash(n model.NormalizedRecipe) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-func ioRef(io model.NormalizedIO) string {
-	if io.TagName != nil {
-		return "#" + *io.TagName
+func hashRef(r resource.Ref) string {
+	if r.TagRef != "" {
+		return "#" + r.TagRef
 	}
-	return *io.ModID + ":" + *io.ID
+	return r.ModID + ":" + r.ID
 }

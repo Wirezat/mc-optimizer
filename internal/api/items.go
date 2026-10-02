@@ -7,6 +7,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/Wirezat/production-optimizer/internal/recipecard"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/solver"
 )
 
@@ -20,7 +21,7 @@ func GetItemRecipesHandler(database *db.DB) http.HandlerFunc {
 			errBadRequest(w, "mod_id and item_id are required")
 			return
 		}
-		rows, err := database.GetRecipesForItem(r.Context(), modID, itemID)
+		rows, err := database.GetRecipesFor(r.Context(), resource.Ref{ModID: modID, ID: itemID})
 		if err != nil {
 			errInternal(w, err)
 			return

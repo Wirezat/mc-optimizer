@@ -13,7 +13,6 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/Wirezat/production-optimizer/internal/plugins"
 	"github.com/Wirezat/production-optimizer/internal/resource"
-	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
 )
 
@@ -150,19 +149,19 @@ func absInt64(n int64) int64 {
 // enrichBalanceNames looks up display names for all entries in a factoryBalance and sets
 // Name.
 func enrichBalanceNames(ctx context.Context, database *db.DB, balance *factoryBalance) error {
-	collect := func(entries []balanceEntry) []solver.ResourceRef {
-		refs := make([]solver.ResourceRef, len(entries))
+	collect := func(entries []balanceEntry) []resource.Ref {
+		refs := make([]resource.Ref, len(entries))
 		for i, e := range entries {
-			refs[i] = solver.ResourceRef{ModID: e.ModID, ID: e.ItemFluidID, Kind: resource.Kind(e.IOType)}
+			refs[i] = resource.Ref{ModID: e.ModID, ID: e.ItemFluidID, Kind: resource.Kind(e.IOType)}
 		}
 		return refs
 	}
-	var refs []solver.ResourceRef
+	var refs []resource.Ref
 	refs = append(refs, collect(balance.ExternalInputs)...)
 	refs = append(refs, collect(balance.Outputs)...)
-	surplusRefs := make([]solver.ResourceRef, len(balance.Surplus))
+	surplusRefs := make([]resource.Ref, len(balance.Surplus))
 	for i, e := range balance.Surplus {
-		surplusRefs[i] = solver.ResourceRef{ModID: e.ModID, ID: e.ItemFluidID, Kind: resource.Kind(e.IOType)}
+		surplusRefs[i] = resource.Ref{ModID: e.ModID, ID: e.ItemFluidID, Kind: resource.Kind(e.IOType)}
 	}
 	refs = append(refs, surplusRefs...)
 
@@ -385,14 +384,14 @@ func requireFactoryOwner(r *http.Request, w http.ResponseWriter, database *db.DB
 
 // aggregateCosts sums costs per resource across groups, sorted alphabetically by resource.
 func aggregateCosts(groups [][]plugins.Cost) []plugins.Cost {
-	sums := map[string]solver.Rational{}
+	sums := map[string]resource.Rational{}
 	dropped := map[string]bool{}
 	for _, costs := range groups {
 		for _, c := range costs {
 			if c.Amount.Den == 0 || dropped[c.Resource] {
 				continue
 			}
-			addCostSafely(sums, dropped, c.Resource, solver.NewRational(c.Amount.Num, c.Amount.Den))
+			addCostSafely(sums, dropped, c.Resource, resource.NewRational(c.Amount.Num, c.Amount.Den))
 		}
 	}
 	keys := make([]string, 0, len(sums))
@@ -410,21 +409,21 @@ func aggregateCosts(groups [][]plugins.Cost) []plugins.Cost {
 	return out
 }
 
-// addCostSafely adds amount into sums[resource].
-func addCostSafely(sums map[string]solver.Rational, dropped map[string]bool, resource string, amount solver.Rational) {
+// addCostSafely adds amount into sums[res].
+func addCostSafely(sums map[string]resource.Rational, dropped map[string]bool, res string, amount resource.Rational) {
 	var err error
 	func() {
-		defer solver.GuardRateArithmetic(&err)
-		if have, ok := sums[resource]; ok {
-			sums[resource] = have.Add(amount)
+		defer resource.GuardRateArithmetic(&err)
+		if have, ok := sums[res]; ok {
+			sums[res] = have.Add(amount)
 		} else {
-			sums[resource] = amount
+			sums[res] = amount
 		}
 	}()
 	if err != nil {
-		delete(sums, resource)
-		dropped[resource] = true
-		GoLog.Warnf("aggregateCosts: dropping resource %q: %v", resource, err)
+		delete(sums, res)
+		dropped[res] = true
+		GoLog.Warnf("aggregateCosts: dropping resource %q: %v", res, err)
 	}
 }
 
@@ -450,7 +449,7 @@ func scaleCosts(costs []plugins.Cost, count int) []plugins.Cost {
 // scaleCostSafely multiplies a cost amount by count, turning a rate-arithmetic panic into
 // an error.
 func scaleCostSafely(amount plugins.Rational, count int) (result plugins.Rational, err error) {
-	defer solver.GuardRateArithmetic(&err)
-	scaled := solver.NewRational(amount.Num, amount.Den).Mul(solver.RationalFromInt(int64(count)))
+	defer resource.GuardRateArithmetic(&err)
+	scaled := resource.NewRational(amount.Num, amount.Den).Mul(resource.RationalFromInt(int64(count)))
 	return plugins.Rational{Num: scaled.Num, Den: scaled.Den}, nil
 }

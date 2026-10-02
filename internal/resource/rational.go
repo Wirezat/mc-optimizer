@@ -1,4 +1,4 @@
-package solver
+package resource
 
 import (
 	"errors"
@@ -8,7 +8,6 @@ import (
 )
 
 var (
-	// ErrRateOverflow reports a rate whose magnitude no longer fits into int64.
 	ErrRateOverflow = errors.New("solver: rate overflow")
 	// ErrRateDomain reports a zero denominator, a division by zero, or MinInt64.
 	ErrRateDomain = errors.New("solver: invalid rate")
@@ -66,6 +65,9 @@ func ugcd(a, b uint64) uint64 {
 
 // gcd returns the GCD of two int64s.
 func gcd(a, b int64) int64 { return int64(ugcd(abs64u(a), abs64u(b))) }
+
+// GCD returns the greatest common divisor of a and b.
+func GCD(a, b int64) int64 { return gcd(a, b) }
 
 // mulHiLo computes the full 128-bit product of two uint64s.
 func mulHiLo(a, b uint64) (hi, lo uint64) {

@@ -53,7 +53,6 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 		return ModFileResult{}, fmt.Errorf("modfile: open zip: %w", err)
 	}
 
-	// Find mod.yml
 	var yamlData []byte
 	for _, f := range zr.File {
 		if f.Name == "mod.yml" || f.Name == "mod.yaml" {
@@ -100,7 +99,6 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 		res.Warnings = append(res.Warnings, fmt.Sprintf(format, args...))
 	}
 
-	// 1.
 	slug := def.ModrinthSlug
 	if slug == "" {
 		slug = def.ModID
@@ -137,7 +135,6 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 		}
 	}
 
-	// 2. Write mod record.
 	if err := imp.db.UpsertMod(ctx, *def); err != nil {
 		return res, fmt.Errorf("modfile: upsert mod: %w", err)
 	}
@@ -295,48 +292,8 @@ func ModRecipeToNormalized(r model.ModRecipeDef, sourceModID string) model.Norma
 		Shape:       r.Shape,
 		ModData:     r.ModData,
 	}
-	for _, io := range r.ItemInputs {
-		norm.ItemInputs = append(norm.ItemInputs, model.NormalizedIO{
-			ModID:     io.ItemModID,
-			ID:        io.ItemID,
-			TagName:   io.TagName,
-			AmountNum: io.AmountNum,
-			AmountDen: io.AmountDen,
-			ProbNum:   io.ProbNum,
-			ProbDen:   io.ProbDen,
-		})
-	}
-	for _, io := range r.ItemOutputs {
-		norm.ItemOutputs = append(norm.ItemOutputs, model.NormalizedIO{
-			ModID:     io.ItemModID,
-			ID:        io.ItemID,
-			TagName:   io.TagName,
-			AmountNum: io.AmountNum,
-			AmountDen: io.AmountDen,
-			ProbNum:   io.ProbNum,
-			ProbDen:   io.ProbDen,
-		})
-	}
-	for _, io := range r.FluidInputs {
-		norm.FluidInputs = append(norm.FluidInputs, model.NormalizedIO{
-			ModID:    io.FluidModID,
-			ID:       io.FluidID,
-			TagName:  io.TagName,
-			AmountMB: io.AmountMB,
-			ProbNum:  io.ProbNum,
-			ProbDen:  io.ProbDen,
-		})
-	}
-	for _, io := range r.FluidOutputs {
-		norm.FluidOutputs = append(norm.FluidOutputs, model.NormalizedIO{
-			ModID:    io.FluidModID,
-			ID:       io.FluidID,
-			TagName:  io.TagName,
-			AmountMB: io.AmountMB,
-			ProbNum:  io.ProbNum,
-			ProbDen:  io.ProbDen,
-		})
-	}
+	norm.Inputs = r.Inputs
+	norm.Outputs = r.Outputs
 	norm.ContentHash = ContentHash(norm)
 	return norm
 }

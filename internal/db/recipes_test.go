@@ -3,11 +3,13 @@ package db
 import (
 	"context"
 	"testing"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 // A machine that implements another via machine_interfaces can run that machine's recipes,
 // and both must be offered as separate candidates.
-func TestGetRecipesForItemOffersInterfaceMachines(t *testing.T) {
+func TestGetRecipesForOffersInterfaceMachines(t *testing.T) {
 	d := testDB(t)
 	ctx := context.Background()
 
@@ -40,9 +42,9 @@ func TestGetRecipesForItemOffersInterfaceMachines(t *testing.T) {
 		}
 	})
 
-	got, err := d.GetRecipesForItem(ctx, "grfi_mod", "widget")
+	got, err := d.GetRecipesFor(ctx, resource.Ref{ModID: "grfi_mod", ID: "widget"})
 	if err != nil {
-		t.Fatalf("GetRecipesForItem: %v", err)
+		t.Fatalf("GetRecipesFor: %v", err)
 	}
 	if len(got) != 2 {
 		var seen []string

@@ -7,7 +7,6 @@ import (
 
 	"github.com/Wirezat/production-optimizer/internal/model"
 	"github.com/Wirezat/production-optimizer/internal/resource"
-	"github.com/Wirezat/production-optimizer/internal/solver"
 	"github.com/google/uuid"
 )
 
@@ -113,15 +112,8 @@ func TestImportRecipe_FluidTagInputGetsAFluidTag(t *testing.T) {
 	}
 	rec := model.NormalizedRecipe{
 		ModID: "r1importmod", SourceModID: "r1importmod", MachineID: "canner", Duration: 100,
-		ItemInputs: []model.NormalizedIO{
-			{TagName: strp("r1test:honey"), AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1},
-		},
-		FluidInputs: []model.NormalizedIO{
-			{TagName: strp("r1test:honey"), AmountMB: 250, ProbNum: 1, ProbDen: 1},
-		},
-		ItemOutputs: []model.NormalizedIO{
-			{ModID: strp("r1importmod"), ID: strp("honey_bottle"), AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1},
-		},
+		Inputs:      []resource.IO{tagIO(resource.KindItem, "r1test:honey", 1), tagIO(resource.KindFluid, "r1test:honey", 250)},
+		Outputs:     []resource.IO{itemIO("r1importmod", "honey_bottle", 1)},
 		ContentHash: uuid.NewString(),
 	}
 	if _, err := d.ImportRecipe(ctx, rec); err != nil {
@@ -160,12 +152,8 @@ func TestFluidTag_LoadsAndResolves(t *testing.T) {
 	}
 	rec := model.NormalizedRecipe{
 		ModID: "r1loadmod", SourceModID: "r1loadmod", MachineID: "canner", Duration: 100,
-		FluidInputs: []model.NormalizedIO{
-			{TagName: strp("r1test:honey"), AmountMB: 250, ProbNum: 1, ProbDen: 1},
-		},
-		ItemOutputs: []model.NormalizedIO{
-			{ModID: strp("r1loadmod"), ID: strp("honey_bottle"), AmountNum: 1, AmountDen: 1, ProbNum: 1, ProbDen: 1},
-		},
+		Inputs:      []resource.IO{tagIO(resource.KindFluid, "r1test:honey", 250)},
+		Outputs:     []resource.IO{itemIO("r1loadmod", "honey_bottle", 1)},
 		ContentHash: uuid.NewString(),
 	}
 	if _, err := d.ImportRecipe(ctx, rec); err != nil {
@@ -179,17 +167,23 @@ func TestFluidTag_LoadsAndResolves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRecipe: %v", err)
 	}
-	if len(r.FluidInputs) != 1 || r.FluidInputs[0].TagName == nil || *r.FluidInputs[0].TagName != "r1test:honey" {
-		t.Fatalf("fluid inputs = %+v, want the tag r1test:honey", r.FluidInputs)
+	var fluidIns []resource.IO
+	for _, in := range r.Inputs {
+		if in.Ref.Kind.Or() == resource.KindFluid {
+			fluidIns = append(fluidIns, in)
+		}
 	}
-	members, err := d.GetTagMembers(ctx, solver.ResourceRef{TagRef: "r1test:honey", Kind: resource.KindFluid})
+	if len(fluidIns) != 1 || fluidIns[0].Ref.TagRef != "r1test:honey" {
+		t.Fatalf("fluid inputs = %+v, want the tag r1test:honey", fluidIns)
+	}
+	members, err := d.GetTagMembers(ctx, resource.Ref{TagRef: "r1test:honey", Kind: resource.KindFluid})
 	if err != nil {
 		t.Fatalf("GetTagMembers: %v", err)
 	}
 	if len(members) != 1 || members[0].Key() != "fluid:r1loadmod:honey" {
 		t.Errorf("members = %+v, want fluid r1loadmod:honey", members)
 	}
-	itemMembers, err := d.GetTagMembers(ctx, solver.ResourceRef{TagRef: "r1test:honey"})
+	itemMembers, err := d.GetTagMembers(ctx, resource.Ref{TagRef: "r1test:honey"})
 	if err != nil {
 		t.Fatalf("GetTagMembers item: %v", err)
 	}

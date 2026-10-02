@@ -3,6 +3,8 @@ package solver
 import (
 	"context"
 	"testing"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 func sp(s string) *string { return &s }
@@ -13,15 +15,18 @@ type stubStore struct {
 	byItem     map[string][]*RecipeRow
 	machines   map[string]*MachineSpec
 	interfaces map[string][]MachineRef // recipe id → machine_interfaces implementers
-	tags       map[string][]ResourceRef
+	tags       map[string][]resource.Ref
 	byFluid    map[string][]*RecipeRow
 }
 
-// GetRecipesForItem mirrors the real query: one row per (recipe, machine), the recipe's own
+// GetRecipesFor mirrors the real query: one row per (recipe, machine), the recipe's own
 // machine first, then the machine_interfaces implementers.
-func (s *stubStore) GetRecipesForItem(_ context.Context, modID, itemID string) ([]*RecipeRow, error) {
+func (s *stubStore) GetRecipesFor(_ context.Context, ref resource.Ref) ([]*RecipeRow, error) {
+	if ref.Kind.Or() == resource.KindFluid {
+		return s.byFluid[ref.ModID+":"+ref.ID], nil
+	}
 	var out []*RecipeRow
-	for _, r := range s.byItem[modID+":"+itemID] {
+	for _, r := range s.byItem[ref.ModID+":"+ref.ID] {
 		out = append(out, r)
 		for _, ref := range s.interfaces[r.ID] {
 			clone := *r
@@ -30,10 +35,6 @@ func (s *stubStore) GetRecipesForItem(_ context.Context, modID, itemID string) (
 		}
 	}
 	return out, nil
-}
-
-func (s *stubStore) GetRecipesForFluid(_ context.Context, modID, fluidID string) ([]*RecipeRow, error) {
-	return s.byFluid[modID+":"+fluidID], nil
 }
 
 func (s *stubStore) GetRecipe(_ context.Context, id string) (*RecipeRow, error) {
@@ -57,25 +58,19 @@ func (s *stubStore) GetMachinesForRecipe(_ context.Context, recipeID string) ([]
 	return append([]MachineRef{{ModID: r.MachineMod, MachineID: r.MachineID}}, s.interfaces[recipeID]...), nil
 }
 
-func (s *stubStore) GetTagMembers(_ context.Context, tag ResourceRef) ([]ResourceRef, error) {
+func (s *stubStore) GetTagMembers(_ context.Context, tag resource.Ref) ([]resource.Ref, error) {
 	return s.tags[tag.Key()], nil
 }
 
 // ironIngotRecipe is 1 iron ore → 1 iron ingot in a furnace, taking durationTicks.
 func ironIngotRecipe(durationTicks int) *RecipeRow {
-	iron := "iron_ore"
-	mc := "minecraft"
 	return &RecipeRow{
 		ID:            "recipe:iron_ingot",
 		MachineMod:    "minecraft",
 		MachineID:     "furnace",
 		DurationTicks: durationTicks,
-		ItemInputs: []RecipeRowItemIO{
-			{ItemModID: &mc, ItemID: &iron, AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
-		},
-		ItemOutputs: []RecipeRowItemIO{
-			{ItemModID: &mc, ItemID: sp("iron_ingot"), AmountNum: 1, AmountDen: 1, ProbabilityNum: 1, ProbabilityDen: 1},
-		},
+		Inputs:        []resource.IO{itemIO("minecraft", "iron_ore", 1, 1)},
+		Outputs:       []resource.IO{itemIO("minecraft", "iron_ingot", 1, 1)},
 	}
 }
 
@@ -92,11 +87,11 @@ func newStub(durationTicks int) *stubStore {
 
 // calcGroup runs CalculateMachineGroups for the iron-ingot fixture at the given recipe rate
 // (recipes per tick) and returns the single group it produces.
-func calcGroup(t *testing.T, durationTicks int, recipeRate Rational) MachineGroupDraft {
+func calcGroup(t *testing.T, durationTicks int, recipeRate resource.Rational) MachineGroupDraft {
 	t.Helper()
 	s := NewSolver(newStub(durationTicks), 1000)
 	ctx := context.Background()
-	g, err := s.BuildRecipeGraph(ctx, ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
+	g, err := s.BuildRecipeGraph(ctx, resource.Ref{ModID: "minecraft", ID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{},
 		map[string]string{}, map[string]string{})
 	if err != nil {
@@ -121,19 +116,19 @@ func newVariantTestSolver(t *testing.T, src VariantSource) (*Solver, *RecipeGrap
 	t.Helper()
 	s := NewSolver(newStub(20), 1000)
 	s.VariantSource = src
-	g, err := s.BuildRecipeGraph(context.Background(), ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
+	g, err := s.BuildRecipeGraph(context.Background(), resource.Ref{ModID: "minecraft", ID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{},
 		map[string]string{}, map[string]string{})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)
 	}
 	rv := newRateVector()
-	rv.RecipeRates[RecipeOptionKey("recipe:iron_ingot", "minecraft", "furnace")] = NewRational(1, 10)
+	rv.RecipeRates[RecipeOptionKey("recipe:iron_ingot", "minecraft", "furnace")] = resource.NewRational(1, 10)
 	return s, g, rv
 }
 
 // wantRational fails unless r equals num/den exactly.
-func wantRational(t *testing.T, label string, r Rational, num, den int64) {
+func wantRational(t *testing.T, label string, r resource.Rational, num, den int64) {
 	t.Helper()
 	if r.Num*den != num*r.Den {
 		t.Errorf("%s = %d/%d, want %d/%d", label, r.Num, r.Den, num, den)
@@ -144,7 +139,7 @@ func wantRational(t *testing.T, label string, r Rational, num, den int64) {
 // rewrite computes: 1/60 recipes per tick on a 90-tick recipe needs 3/2 machines, so two
 // machines stand and each runs at 3/4 load.
 func TestCalculateMachineGroups_fractionalCount(t *testing.T) {
-	g := calcGroup(t, 90, NewRational(1, 60))
+	g := calcGroup(t, 90, resource.NewRational(1, 60))
 
 	wantRational(t, "ExactCount", g.ExactCount, 3, 2)
 	if g.Count != 2 {
@@ -155,7 +150,7 @@ func TestCalculateMachineGroups_fractionalCount(t *testing.T) {
 
 // TestCalculateMachineGroups_zeroDurationClampsToOneTick covers max(DurationTicks, 1).
 func TestCalculateMachineGroups_zeroDurationClampsToOneTick(t *testing.T) {
-	g := calcGroup(t, 0, NewRational(1, 4))
+	g := calcGroup(t, 0, resource.NewRational(1, 4))
 
 	wantRational(t, "ExactCount", g.ExactCount, 1, 4)
 	if g.Count != 1 {
@@ -167,7 +162,7 @@ func TestCalculateMachineGroups_zeroDurationClampsToOneTick(t *testing.T) {
 // TestCalculateMachineGroups_wholeCount is the exact-fit case: 1/20 recipes per tick on a
 // 20-tick recipe is precisely one fully loaded machine, no rounding involved.
 func TestCalculateMachineGroups_wholeCount(t *testing.T) {
-	g := calcGroup(t, 20, NewRational(1, 20))
+	g := calcGroup(t, 20, resource.NewRational(1, 20))
 
 	wantRational(t, "ExactCount", g.ExactCount, 1, 1)
 	if g.Count != 1 {
@@ -178,8 +173,8 @@ func TestCalculateMachineGroups_wholeCount(t *testing.T) {
 
 func TestRateVector_itemRates(t *testing.T) {
 	rv := newRateVector()
-	rv.RecipeRates["recipe:iron_ingot"] = NewRational(1, 20)
-	rv.ItemRates["minecraft:iron_ingot"] = NewRational(1, 20)
+	rv.RecipeRates["recipe:iron_ingot"] = resource.NewRational(1, 20)
+	rv.ItemRates["minecraft:iron_ingot"] = resource.NewRational(1, 20)
 
 	if rv.RecipeRates["recipe:iron_ingot"].Den != 20 {
 		t.Errorf("unexpected rate: %v", rv.RecipeRates["recipe:iron_ingot"])
@@ -189,7 +184,6 @@ func TestRateVector_itemRates(t *testing.T) {
 // A recipe's own machine must be pinnable.
 func TestCalculateMachineGroups_PinsTheRecipesOwnMachine(t *testing.T) {
 	stub := newStub(200)
-	// A second machine runs the same recipe and is the one the ladder favours.
 	stub.interfaces = map[string][]MachineRef{
 		"recipe:iron_ingot": {{ModID: "addon", MachineID: "super_furnace"}},
 	}
@@ -203,7 +197,7 @@ func TestCalculateMachineGroups_PinsTheRecipesOwnMachine(t *testing.T) {
 		if override != "" {
 			overrides["minecraft:iron_ingot"] = override
 		}
-		g, err := s.BuildRecipeGraph(ctx, ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
+		g, err := s.BuildRecipeGraph(ctx, resource.Ref{ModID: "minecraft", ID: "iron_ingot"},
 			map[string]bool{"minecraft:iron_ore": true}, FactoryState{}, overrides, map[string]string{})
 		if err != nil {
 			t.Fatalf("BuildRecipeGraph: %v", err)
@@ -214,7 +208,7 @@ func TestCalculateMachineGroups_PinsTheRecipesOwnMachine(t *testing.T) {
 			if node.RecipeID == "" {
 				continue
 			}
-			rv.RecipeRates[RecipeOptionKey(node.RecipeID, node.MachineMod, node.MachineID)] = NewRational(1, 100)
+			rv.RecipeRates[RecipeOptionKey(node.RecipeID, node.MachineMod, node.MachineID)] = resource.NewRational(1, 100)
 		}
 		groups, _, err := s.CalculateMachineGroups(ctx, g, rv, SolveRequest{RecipeOverrides: overrides})
 		if err != nil {
@@ -250,7 +244,7 @@ func TestCalculateMachineGroups_BareRecipeOverrideLeavesTheMachineOpen(t *testin
 	ctx := context.Background()
 	overrides := map[string]string{"minecraft:iron_ingot": "recipe:iron_ingot"}
 
-	g, err := s.BuildRecipeGraph(ctx, ResourceRef{ModID: "minecraft", ID: "iron_ingot"},
+	g, err := s.BuildRecipeGraph(ctx, resource.Ref{ModID: "minecraft", ID: "iron_ingot"},
 		map[string]bool{"minecraft:iron_ore": true}, FactoryState{}, overrides, map[string]string{})
 	if err != nil {
 		t.Fatalf("BuildRecipeGraph: %v", err)

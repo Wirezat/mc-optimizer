@@ -1,18 +1,22 @@
 package solver
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
+)
 
 // RateVector holds the computed rates for recipes and items.
 type RateVector struct {
-	RecipeRates map[string]Rational // RecipeOptionKey(recipe, machine) → Executions/Tick
-	ItemRates   map[string]Rational // ItemRef.Key() → Net-Flow/Tick
+	RecipeRates map[string]resource.Rational // RecipeOptionKey(recipe, machine) → Executions/Tick
+	ItemRates   map[string]resource.Rational // ItemRef.Key() → Net-Flow/Tick
 }
 
 // newRateVector creates an empty RateVector with initialized maps.
 func newRateVector() RateVector {
 	return RateVector{
-		RecipeRates: make(map[string]Rational),
-		ItemRates:   make(map[string]Rational),
+		RecipeRates: make(map[string]resource.Rational),
+		ItemRates:   make(map[string]resource.Rational),
 	}
 }
 
@@ -130,7 +134,7 @@ func TopologicalSort(g *RecipeGraph) ([]*RecipeNode, error) {
 
 // SolveDAG computes recipe and item rates for a target output rate by walking the
 // topological order in reverse.
-func SolveDAG(g *RecipeGraph, targetRatePerTick Rational) (RateVector, error) {
+func SolveDAG(g *RecipeGraph, targetRatePerTick resource.Rational) (RateVector, error) {
 	topoOrder, err := TopologicalSort(g)
 	if err != nil {
 		return RateVector{}, err

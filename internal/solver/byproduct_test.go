@@ -2,9 +2,9 @@ package solver
 
 import (
 	"testing"
-)
 
-func mod(s string) *string { return sp(s) }
+	"github.com/Wirezat/production-optimizer/internal/resource"
+)
 
 // makeRecipe builds a simple RecipeRow with given ID, machine, duration, item inputs and item outputs.
 func makeRecipe(id, machineMod, machineID string, durationTicks int) *RecipeRow {
@@ -17,35 +17,27 @@ func makeRecipe(id, machineMod, machineID string, durationTicks int) *RecipeRow 
 }
 
 func withItemInput(r *RecipeRow, modID, itemID string, amountNum, amountDen int64) *RecipeRow {
-	r.ItemInputs = append(r.ItemInputs, RecipeRowItemIO{
-		ItemModID: mod(modID), ItemID: mod(itemID),
-		AmountNum: amountNum, AmountDen: amountDen,
-		ProbabilityNum: 1, ProbabilityDen: 1,
-	})
+	r.Inputs = append(r.Inputs, itemIO(modID, itemID, amountNum, amountDen))
 	return r
 }
 
 func withItemOutput(r *RecipeRow, modID, itemID string, amountNum, amountDen int64) *RecipeRow {
-	r.ItemOutputs = append(r.ItemOutputs, RecipeRowItemIO{
-		ItemModID: mod(modID), ItemID: mod(itemID),
-		AmountNum: amountNum, AmountDen: amountDen,
-		ProbabilityNum: 1, ProbabilityDen: 1,
-	})
+	r.Outputs = append(r.Outputs, itemIO(modID, itemID, amountNum, amountDen))
 	return r
 }
 
-func item(modID, itemID string) ResourceRef {
-	return ResourceRef{ModID: modID, ID: itemID}
+func item(modID, itemID string) resource.Ref {
+	return resource.Ref{ModID: modID, ID: itemID}
 }
 
 // buildGraph constructs a RecipeGraph directly without a DB, for unit testing.
-func buildGraph(root ResourceRef, byItemMap map[string]*RecipeRow, overrides map[string]string) *RecipeGraph {
+func buildGraph(root resource.Ref, byItemMap map[string]*RecipeRow, overrides map[string]string) *RecipeGraph {
 	g := &RecipeGraph{
 		Nodes:          make(map[string]*RecipeNode),
 		Root:           root,
 		TagResolutions: make(map[string]TagResolution),
 	}
-	queue := []ResourceRef{root}
+	queue := []resource.Ref{root}
 	visited := make(map[string]bool)
 
 	for qi := 0; qi < len(queue); qi++ {
@@ -69,7 +61,7 @@ func buildGraph(root ResourceRef, byItemMap map[string]*RecipeRow, overrides map
 			_ = ov
 		}
 
-		outputAmt, found := outputAmountForItem(r, it)
+		outputAmt, found := outputAmountFor(r, it)
 		if !found {
 			node.IsRawMaterial = true
 			g.Nodes[key] = node
@@ -86,8 +78,8 @@ func buildGraph(root ResourceRef, byItemMap map[string]*RecipeRow, overrides map
 	return g
 }
 
-// ratF converts Rational to float64 for approximate comparisons in tests.
-func ratF(r Rational) float64 {
+// ratF converts resource.Rational to float64 for approximate comparisons in tests.
+func ratF(r resource.Rational) float64 {
 	if r.Den == 0 {
 		return 0
 	}
@@ -117,20 +109,19 @@ func TestByproduct_notNeeded(t *testing.T) {
 	root := item("mi", "sulfur_dust")
 	g := buildGraph(root, byItem, nil)
 
-	targetRate := NewRational(2, 20) // 2/s = 2/20t
+	targetRate := resource.NewRational(2, 20) // 2/s = 2/20t
 	rv, err := SolveDAG(g, targetRate)
 	if err != nil {
 		t.Fatalf("SolveDAG: %v", err)
 	}
 
-	// centrifuge runs at 1/20t (1 run per 20 ticks = 1/s), producing 2 sulfur_dust/s
 	recipeRate := rateFor(rv, "r:centrifuge")
 	if !approxEq(ratF(recipeRate), 1.0/20, 1e-9) {
 		t.Errorf("centrifuge recipeRate: got %v, want 1/20", recipeRate)
 	}
 
 	// ore demand: 1 per centrifuge run → 1/20t
-	oreRate := rv.ItemRates[(&ResourceRef{ModID: "mi", ID: "ore"}).Key()]
+	oreRate := rv.ItemRates[(&resource.Ref{ModID: "mi", ID: "ore"}).Key()]
 	if !approxEq(ratF(oreRate), 1.0/20, 1e-9) {
 		t.Errorf("ore itemRate: got %v, want 1/20", oreRate)
 	}
@@ -175,7 +166,7 @@ func TestByproduct_fullyCoversDemand(t *testing.T) {
 	root := item("mi", "sulfuric_acid")
 	g := buildGraph(root, byItem, nil)
 
-	targetRate := NewRational(1, 20)
+	targetRate := resource.NewRational(1, 20)
 	rv, err := SolveDAG(g, targetRate)
 	if err != nil {
 		t.Fatalf("SolveDAG: %v", err)
@@ -226,7 +217,7 @@ func TestByproduct_partiallyCoversDemand(t *testing.T) {
 	root := item("mi", "sulfuric_acid")
 	g := buildGraph(root, byItem, nil)
 
-	targetRate := NewRational(1, 20)
+	targetRate := resource.NewRational(1, 20)
 	rv, err := SolveDAG(g, targetRate)
 	if err != nil {
 		t.Fatalf("SolveDAG: %v", err)
@@ -267,7 +258,7 @@ func TestByproduct_stopPoint(t *testing.T) {
 	root := item("mi", "sulfur_dust")
 	g := buildGraph(root, byItem, nil)
 
-	rv, err := SolveDAG(g, NewRational(1, 20))
+	rv, err := SolveDAG(g, resource.NewRational(1, 20))
 	if err != nil {
 		t.Fatalf("SolveDAG: %v", err)
 	}
@@ -312,10 +303,10 @@ func TestByproduct_linearSystem(t *testing.T) {
 	root := item("mi", "sulfuric_acid")
 	g := buildGraph(root, byItem, nil)
 
-	targetRate := NewRational(1, 20)
+	targetRate := resource.NewRational(1, 20)
 	S, items, recipeIDs := BuildStoichiometryMatrix(g)
 
-	b := make([]Rational, len(items))
+	b := make([]resource.Rational, len(items))
 	for i, it := range items {
 		if it.Key() == root.Key() {
 			b[i] = targetRate
@@ -332,7 +323,7 @@ func TestByproduct_linearSystem(t *testing.T) {
 		rv.RecipeRates[rid] = x[i]
 	}
 	for i, it := range items {
-		net := NewRational(0, 1)
+		net := resource.NewRational(0, 1)
 		for j := range recipeIDs {
 			net = net.Add(S[i][j].Mul(x[j]))
 		}

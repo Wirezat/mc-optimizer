@@ -5,16 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+
+	"github.com/Wirezat/production-optimizer/internal/resource"
 )
 
 // RecipeStore is the data-access interface required by the solver.
 type RecipeStore interface {
-	GetRecipesForItem(ctx context.Context, modID, itemID string) ([]*RecipeRow, error)
-	GetRecipesForFluid(ctx context.Context, modID, fluidID string) ([]*RecipeRow, error)
+	GetRecipesFor(ctx context.Context, ref resource.Ref) ([]*RecipeRow, error)
 	GetRecipe(ctx context.Context, id string) (*RecipeRow, error)
 	GetMachinesForRecipe(ctx context.Context, recipeID string) ([]MachineRef, error)
 	GetMachineType(ctx context.Context, modID, machineID string) (*MachineSpec, error)
-	GetTagMembers(ctx context.Context, tag ResourceRef) ([]ResourceRef, error)
+	GetTagMembers(ctx context.Context, tag resource.Ref) ([]resource.Ref, error)
 }
 
 // Solver executes production line optimization.
@@ -37,7 +38,7 @@ func NewSolver(store RecipeStore, autoScaleMax int64) *Solver {
 
 // Solve computes the optimal machine groups for a production line request.
 func (s *Solver) Solve(ctx context.Context, req SolveRequest) (res SolveResult, err error) {
-	defer guardRateArithmetic(&err)
+	defer resource.GuardRateArithmetic(&err)
 	return s.solve(ctx, req)
 }
 
@@ -108,8 +109,8 @@ func (s *Solver) solve(ctx context.Context, req SolveRequest) (SolveResult, erro
 			yields:   indexYields(g, groups),
 		})
 		if k > 1 {
-			kRat := NewRational(k, 1)
-			scaled := make(map[string]Rational, len(rv.ItemRates))
+			kRat := resource.NewRational(k, 1)
+			scaled := make(map[string]resource.Rational, len(rv.ItemRates))
 			for key, rate := range rv.ItemRates {
 				scaled[key] = rate.Mul(kRat)
 			}
@@ -137,7 +138,7 @@ func (s *Solver) solve(ctx context.Context, req SolveRequest) (SolveResult, erro
 		Warnings:       warnings,
 		TagResolutions: g.TagResolutions,
 	}
-	if k := req.Factor; k.Den != 0 && k.IsPositive() && !k.Eq(RationalFromInt(1)) {
+	if k := req.Factor; k.Den != 0 && k.IsPositive() && !k.Eq(resource.RationalFromInt(1)) {
 		res = ScaleResult(res, k)
 	}
 	return res, nil
@@ -146,7 +147,7 @@ func (s *Solver) solve(ctx context.Context, req SolveRequest) (SolveResult, erro
 // solveRates computes the rate vector for the graph as it currently stands, walking the DAG
 // or solving the linear system depending on hadCycles. Returns *ErrCycleBreakNeeded when a
 // cycle needs a user-chosen stop point.
-func (s *Solver) solveRates(g *RecipeGraph, targetRate Rational, hadCycles bool, root ResourceRef) (RateVector, error) {
+func (s *Solver) solveRates(g *RecipeGraph, targetRate resource.Rational, hadCycles bool, root resource.Ref) (RateVector, error) {
 	if !hadCycles {
 		rv, err := SolveDAG(g, targetRate)
 		if err != nil {

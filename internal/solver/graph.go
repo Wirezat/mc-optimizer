@@ -11,25 +11,24 @@ import (
 
 // Edge represents a directed connection between a recipe node and an item or fluid.
 type Edge struct {
-	Item        ResourceRef
-	Amount      Rational
-	Probability Rational
+	Item        resource.Ref
+	Amount      resource.Rational
+	Probability resource.Rational
 }
 
 // RecipeNode represents a single item in the recipe graph, optionally bound to a specific recipe.
 type RecipeNode struct {
-	Item              ResourceRef
+	Item              resource.Ref
 	RecipeID          string
 	MachineMod        string
 	MachineID         string
 	Inputs            []Edge
 	Outputs           []Edge
-	OutputAmount      Rational
+	OutputAmount      resource.Rational
 	IsStopPoint       bool
 	IsRawMaterial     bool
 	IsFactoryProvided bool
-	// Siblings are the recipe ids with I/O identical to RecipeID's, itself included.
-	Siblings []string
+	Siblings          []string
 }
 
 // RateKey identifies this node's (recipe, machine) pair for rate-tracking purposes.
@@ -75,14 +74,14 @@ func ParseRecipeOptionKey(key string) (recipeID, machineMod, machineID string, o
 // RecipeGraph maps item keys to RecipeNode and stores the root item.
 type RecipeGraph struct {
 	Nodes          map[string]*RecipeNode
-	Root           ResourceRef
+	Root           resource.Ref
 	TagResolutions map[string]TagResolution // tagKey → resolved item + options
 }
 
 // BuildRecipeGraph constructs a directed recipe graph starting from the root item.
 func (s *Solver) BuildRecipeGraph(
 	ctx context.Context,
-	root ResourceRef,
+	root resource.Ref,
 	stopPoints map[string]bool,
 	factory FactoryState,
 	overrides map[string]string,
@@ -93,7 +92,7 @@ func (s *Solver) BuildRecipeGraph(
 		Root:           root,
 		TagResolutions: make(map[string]TagResolution),
 	}
-	queue := []ResourceRef{root}
+	queue := []resource.Ref{root}
 	visited := make(map[string]bool)
 
 	for qi := 0; qi < len(queue); qi++ {
@@ -118,14 +117,12 @@ func (s *Solver) BuildRecipeGraph(
 			continue
 		}
 
-		// Tag node: resolve to a member, then continue with that member.
 		if item.TagRef != "" {
 			members, err := s.DB.GetTagMembers(ctx, item)
 			if err != nil {
 				return nil, fmt.Errorf("solver: get tag members for %s: %w", key, err)
 			}
 			if len(members) == 0 {
-				// No members known — treat as raw material input.
 				node.IsRawMaterial = true
 				g.Nodes[key] = node
 				continue
@@ -151,7 +148,7 @@ func (s *Solver) BuildRecipeGraph(
 			g.Nodes[key] = node
 			continue
 		}
-		recipes, err := s.recipesFor(ctx, item)
+		recipes, err := s.DB.GetRecipesFor(ctx, item)
 		if err != nil {
 			return nil, fmt.Errorf("solver: get recipes for %s: %w", key, err)
 		}
@@ -232,16 +229,16 @@ func siblingIDs(selected *RecipeRow, rows []*RecipeRow) []string {
 func ioSignature(r *RecipeRow) string {
 	var b strings.Builder
 	b.WriteString("in:")
-	writeIOSignature(&b, itemSignatures(r.ItemInputs), fluidSignatures(r.FluidInputs))
+	writeIOSignature(&b, r.Inputs)
 	b.WriteString("|out:")
-	writeIOSignature(&b, itemSignatures(r.ItemOutputs), fluidSignatures(r.FluidOutputs))
+	writeIOSignature(&b, r.Outputs)
 	return b.String()
 }
 
-func writeIOSignature(b *strings.Builder, parts ...[]string) {
-	all := make([]string, 0, 8)
-	for _, p := range parts {
-		all = append(all, p...)
+func writeIOSignature(b *strings.Builder, ios []resource.IO) {
+	all := make([]string, 0, len(ios))
+	for _, io := range ios {
+		all = append(all, fmt.Sprintf("%s=%s*%s/%t", io.Ref.Key(), io.Amount, io.Prob, !io.Consumed))
 	}
 	sort.Strings(all)
 	for _, p := range all {
@@ -250,121 +247,26 @@ func writeIOSignature(b *strings.Builder, parts ...[]string) {
 	}
 }
 
-func itemSignatures(ios []RecipeRowItemIO) []string {
-	out := make([]string, 0, len(ios))
-	for _, io := range ios {
-		var ref ResourceRef
-		switch {
-		case io.TagName != nil:
-			ref = ResourceRef{TagRef: *io.TagName}
-		case io.ItemModID != nil && io.ItemID != nil:
-			ref = ResourceRef{ModID: *io.ItemModID, ID: *io.ItemID}
-		default:
-			continue
-		}
-		out = append(out, fmt.Sprintf("%s=%s*%s/%t", ref.Key(),
-			NewRational(io.AmountNum, io.AmountDen), NewRational(io.ProbabilityNum, io.ProbabilityDen),
-			io.NonConsuming))
-	}
-	return out
-}
-
-func fluidSignatures(ios []RecipeRowFluidIO) []string {
-	out := make([]string, 0, len(ios))
-	for _, io := range ios {
-		ref := io.Ref()
-		out = append(out, fmt.Sprintf("%s=%s*%s", ref.Key(),
-			NewRational(io.AmountMB, 1), NewRational(io.ProbabilityNum, io.ProbabilityDen)))
-	}
-	return out
-}
-
 // appendRecipeEdges populates node.Inputs and node.Outputs from a recipe and extends the BFS queue.
-func appendRecipeEdges(node *RecipeNode, r *RecipeRow, queue *[]ResourceRef) {
-	for _, in := range r.ItemInputs {
-		var ref ResourceRef
-		if in.TagName != nil {
-			ref = ResourceRef{TagRef: *in.TagName}
-		} else if in.ItemModID != nil && in.ItemID != nil {
-			ref = ResourceRef{ModID: *in.ItemModID, ID: *in.ItemID}
-		} else {
+func appendRecipeEdges(node *RecipeNode, r *RecipeRow, queue *[]resource.Ref) {
+	for _, in := range r.Inputs {
+		node.Inputs = append(node.Inputs, Edge{Item: in.Ref, Amount: in.Amount, Probability: in.Prob})
+		*queue = append(*queue, in.Ref)
+	}
+	for _, out := range r.Outputs {
+		if out.Ref.TagRef != "" {
 			continue
 		}
-		node.Inputs = append(node.Inputs, Edge{
-			Item:        ref,
-			Amount:      NewRational(in.AmountNum, in.AmountDen),
-			Probability: NewRational(in.ProbabilityNum, in.ProbabilityDen),
-		})
-		*queue = append(*queue, ref)
-	}
-	for _, fi := range r.FluidInputs {
-		ref := fi.Ref()
-		node.Inputs = append(node.Inputs, Edge{
-			Item:        ref,
-			Amount:      NewRational(fi.AmountMB, 1),
-			Probability: NewRational(fi.ProbabilityNum, fi.ProbabilityDen),
-		})
-		*queue = append(*queue, ref)
-	}
-	for _, out := range r.ItemOutputs {
-		if out.ItemModID == nil || out.ItemID == nil {
-			continue
-		}
-		ref := ResourceRef{ModID: *out.ItemModID, ID: *out.ItemID}
-		node.Outputs = append(node.Outputs, Edge{
-			Item:        ref,
-			Amount:      NewRational(out.AmountNum, out.AmountDen).Mul(NewRational(out.ProbabilityNum, out.ProbabilityDen)),
-			Probability: NewRational(out.ProbabilityNum, out.ProbabilityDen),
-		})
-	}
-	for _, fo := range r.FluidOutputs {
-		ref := ResourceRef{ModID: fo.FluidModID, ID: fo.FluidID, Kind: resource.KindFluid}
-		node.Outputs = append(node.Outputs, Edge{
-			Item:        ref,
-			Amount:      NewRational(fo.AmountMB, 1).Mul(NewRational(fo.ProbabilityNum, fo.ProbabilityDen)),
-			Probability: NewRational(fo.ProbabilityNum, fo.ProbabilityDen),
-		})
+		node.Outputs = append(node.Outputs, Edge{Item: out.Ref, Amount: out.Amount.Mul(out.Prob), Probability: out.Prob})
 	}
 }
 
-// outputAmountForItem returns the expected net output amount (amount * probability) for the given item.
-func (s *Solver) recipesFor(ctx context.Context, ref ResourceRef) ([]*RecipeRow, error) {
-	switch ref.Kind.Or() {
-	case resource.KindItem:
-		return s.DB.GetRecipesForItem(ctx, ref.ModID, ref.ID)
-	case resource.KindFluid:
-		return s.DB.GetRecipesForFluid(ctx, ref.ModID, ref.ID)
-	}
-	return nil, fmt.Errorf("solver: no recipe lookup for kind %q", ref.Kind)
-}
-
-// outputAmountFor returns how much of ref one craft of r yields, and whether r yields it.
-func outputAmountFor(r *RecipeRow, ref ResourceRef) (Rational, bool) {
-	if ref.Kind.Or() == resource.KindFluid {
-		return outputAmountForFluid(r, ref)
-	}
-	return outputAmountForItem(r, ref)
-}
-
-func outputAmountForItem(r *RecipeRow, item ResourceRef) (Rational, bool) {
-	for _, out := range r.ItemOutputs {
-		if out.ItemModID != nil && out.ItemID != nil && *out.ItemModID == item.ModID && *out.ItemID == item.ID {
-			base := NewRational(out.AmountNum, out.AmountDen)
-			prob := NewRational(out.ProbabilityNum, out.ProbabilityDen)
-			return base.Mul(prob), true
+// outputAmountFor returns how much of ref one craft of r yields (amount × probability), and whether r yields it.
+func outputAmountFor(r *RecipeRow, ref resource.Ref) (resource.Rational, bool) {
+	for _, out := range r.Outputs {
+		if out.Ref.Key() == ref.Key() {
+			return out.Amount.Mul(out.Prob), true
 		}
 	}
-	return Rational{}, false
-}
-
-// outputAmountForFluid returns the expected net output amount in mB (amount * probability) for the given fluid.
-func outputAmountForFluid(r *RecipeRow, item ResourceRef) (Rational, bool) {
-	for _, out := range r.FluidOutputs {
-		if out.FluidModID == item.ModID && out.FluidID == item.ID {
-			base := NewRational(out.AmountMB, 1)
-			prob := NewRational(out.ProbabilityNum, out.ProbabilityDen)
-			return base.Mul(prob), true
-		}
-	}
-	return Rational{}, false
+	return resource.Rational{}, false
 }

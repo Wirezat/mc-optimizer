@@ -22,6 +22,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/db"
 	"github.com/Wirezat/production-optimizer/internal/plugins"
 	"github.com/Wirezat/production-optimizer/internal/render"
+	"github.com/Wirezat/production-optimizer/internal/resource"
 	"github.com/Wirezat/production-optimizer/internal/service"
 )
 
@@ -68,6 +69,13 @@ func run() error {
 	}
 	defer database.Close()
 	GoLog.Infof("Database: %s", maskPassword(dbURL))
+	kinds, err := database.ListResourceKinds(ctx)
+	if err != nil {
+		return err
+	}
+	if err := resource.Load(kinds); err != nil {
+		return err
+	}
 
 	// Background cleanup ticker   Purges expired
 	// tokens and solver_drafts.

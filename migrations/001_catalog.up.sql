@@ -15,6 +15,18 @@ CREATE TABLE mods (
     modrinth_slug TEXT
 );
 
+CREATE TABLE resource_kinds (
+    kind       TEXT PRIMARY KEY,
+    key_prefix TEXT NOT NULL UNIQUE,
+    base_unit  TEXT NOT NULL,
+    uom_system TEXT,
+    expand     TEXT NOT NULL CHECK (expand IN ('always', 'on_choice', 'never'))
+);
+
+INSERT INTO resource_kinds (kind, key_prefix, base_unit, uom_system, expand) VALUES
+    ('item',  '',       'one', NULL,     'always'),
+    ('fluid', 'fluid:', 'mb',  'volume', 'on_choice');
+
 CREATE TABLE items (
     mod_id    TEXT     NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
     item_id   TEXT     NOT NULL,

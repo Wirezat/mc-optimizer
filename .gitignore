@@ -41,3 +41,4 @@ CLAUDE.md
 # Live deployment: a symlink to ../mc_optimizer-live (assets mount + env),
 # outside the repo on purpose. Host-local, not part of the source tree.
 /live
+/projekt.md

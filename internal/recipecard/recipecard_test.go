@@ -172,3 +172,13 @@ func TestBuild_FractionalAmount(t *testing.T) {
 		t.Errorf("expected fractional amount 0.5, got %v", card.Outputs[0].Amount)
 	}
 }
+
+func TestBuild_FluidTagInput(t *testing.T) {
+	card := Build(&solver.RecipeRow{
+		ID: "r", MachineMod: "m", MachineID: "canner",
+		FluidInputs: []solver.RecipeRowFluidIO{{TagName: strp("c:honey"), AmountMB: 250}},
+	})
+	if len(card.FluidInputs) != 1 || card.FluidInputs[0].TagName != "c:honey" || card.FluidInputs[0].AmountMB != 250 {
+		t.Errorf("fluid inputs = %+v, want tag c:honey with 250 mB", card.FluidInputs)
+	}
+}

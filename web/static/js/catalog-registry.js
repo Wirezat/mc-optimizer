@@ -1,7 +1,4 @@
-/**
- * Resolves catalog references (mod_id + item_id / fluid_id) to a display name and a texture,
- * and is the single place icon markup is built.
- */
+/** Resolves catalog references (mod_id + item_id / fluid_id) to a display name and a texture, and is the single place icon markup is built. */
 import { apiFetch } from '/static/ui/js/auth.js';
 import { esc, t }   from '/static/js/i18n.js';
 
@@ -11,14 +8,14 @@ const _tags     = new Map();  // tag name → { total, icons: [entry] }
 let   _loaded   = null;       // in-flight or settled load promise
 
 const keyFor = (modID, id, isFluid) => `${isFluid ? 'fluid:' : ''}${modID}:${id}`;
+const tagKeyFor = (name, isFluid) => `${isFluid ? 'fluid:' : ''}#${name}`;
 
 const GLINT_ITEMS = new Set([
     keyFor('minecraft', 'enchanted_golden_apple', false),
     keyFor('minecraft', 'enchanted_book', false),
 ]);
 
-// Animated textures are vertical strips of frames in one file. These wirezat-ui classes
-// present a strip: one holds its first cell, the other plays through them.
+// wirezat-ui classes for a vertical frame strip: first cell, or playing.
 const SHEET_STILL_CLASS = 'wui-sheet-first-cell';
 const SHEET_PLAY_CLASS  = 'wui-sheet-play';
 
@@ -27,7 +24,6 @@ function sheetAttrs(entry) {
     const anim = entry?.animation;
     const frames = Number(anim?.frames);
     const frameMS = Number(anim?.frame_ms);
-    // Cells is what the file holds; frames can be fewer. Older payloads carry no cells field.
     const cells = Number(anim?.cells) || frames;
     if (!Number.isFinite(frames) || frames < 2 ||
         !Number.isFinite(frameMS) || frameMS <= 0 ||
@@ -42,10 +38,7 @@ function sheetAttrs(entry) {
     return { cls: SHEET_PLAY_CLASS, style };
 }
 
-/**
- * Fetches the full item and fluid catalog once per page.
- * Input: { saveIDParam }. Output: a promise; repeated calls return the same one.
- */
+/** Fetches the full item and fluid catalog once per page. Input: { saveIDParam }. Output: a promise; repeated calls return the same one. */
 export function loadCatalog({ saveIDParam = '' } = {}) {
     if (_loaded) return _loaded;
 
@@ -90,31 +83,35 @@ export function loadCatalog({ saveIDParam = '' } = {}) {
                 animation:  null,
             });
         }
-        for (const [name, members] of Object.entries(tagMembers ?? {})) {
-            const icons = [];
-            for (const m of members) {
-                const entry = _entries.get(keyFor(m.mod_id, m.item_id, false));
-                if (entry?.textureUrl) icons.push(entry);
+        for (const [kind, byName] of Object.entries(tagMembers ?? {})) {
+            const isFluid = kind === 'fluid';
+            for (const [name, members] of Object.entries(byName ?? {})) {
+                const icons = [];
+                for (const m of members) {
+                    const entry = _entries.get(keyFor(m.mod_id, m.id, isFluid));
+                    if (entry?.textureUrl) icons.push(entry);
+                }
+                _tags.set(tagKeyFor(name, isFluid), { total: members.length, icons });
             }
-            _tags.set(name, { total: members.length, icons });
         }
     });
 
     return _loaded;
 }
 
-/**
- * Looks up a tag.
- * Input: tag name. Output: { total, icons: [entry] } for every member with a texture, or null.
- */
-export function lookupTag(name) {
-    return _tags.get(name) ?? null;
+/** Looks up an item tag, or a fluid tag when isFluid is set. Input: tag name, isFluid. Output: { total, icons: [entry] } for every member with a texture, or null. */
+export function lookupTag(name, isFluid = false) {
+    return _tags.get(tagKeyFor(name, isFluid)) ?? null;
 }
 
-/**
- * Every loaded entry, in no guaranteed order.
- * Output: Array<{ modID, id, isFluid, name, textureUrl }>.
- */
+/** Splits a solver tag key ("#c:ingots", "fluid:#c:honey"). Input: key. Output: { name, isFluid }, or null when key names no tag. */
+export function parseTagKey(key) {
+    const isFluid = key.startsWith('fluid:#');
+    if (!isFluid && !key.startsWith('#')) return null;
+    return { name: key.slice(isFluid ? 'fluid:#'.length : 1), isFluid };
+}
+
+/** Every loaded entry, in no guaranteed order. Output: Array<{ modID, id, isFluid, name, textureUrl }>. */
 export function catalogEntries() {
     return [..._entries.values()];
 }
@@ -129,10 +126,7 @@ export function lookupMachine(modID, machineID) {
     return _machines.get(`${modID}:${machineID}`) ?? null;
 }
 
-/**
- * Adapts a raw /api/items or /api/fluids row to the shape the icon builders take.
- * Input: the API object and isFluid. Output: an entry.
- */
+/** Adapts a raw /api/items or /api/fluids row to the shape the icon builders take. Input: the API object and isFluid. Output: an entry. */
 export function entryOf(row, isFluid = false) {
     if (!row) return null;
     return {
@@ -145,10 +139,7 @@ export function entryOf(row, isFluid = false) {
     };
 }
 
-/**
- * The single source of icon markup; a slot supplies only its own class.
- * Input: entry, { cls, placeholder }. Output: HTML string.
- */
+/** The single source of icon markup; a slot supplies only its own class. Input: entry, { cls, placeholder }. Output: HTML string. */
 export function iconImageHTML(entry, { cls = '', placeholder = true, dataset = null, hidpiPx = null } = {}) {
     const { cls: sheetCls, style } = sheetAttrs(entry);
     const classes = [cls, sheetCls].filter(Boolean).join(' ');
@@ -157,8 +148,7 @@ export function iconImageHTML(entry, { cls = '', placeholder = true, dataset = n
     if (!entry?.textureUrl) {
         return placeholder ? `<span${classAttr}></span>` : '';
     }
-    // Extra data-* attributes for behaviour a slot opts into. hidpiPx is read by
-    // initHiDPIRender (hidpi-render.js).
+    // Extra data-* attributes a slot opts into; hidpiPx is read by initHiDPIRender.
     const data = Object.entries({ ...(hidpiPx ? { 'hidpi-px': hidpiPx } : {}), ...(dataset ?? {}) })
         .map(([k, v]) => {
             if (!/^[a-z][a-z0-9-]*$/.test(k)) {
@@ -177,10 +167,7 @@ export function iconImageHTML(entry, { cls = '', placeholder = true, dataset = n
     return `<span class="${wrapCls}">${img}</span>`;
 }
 
-/**
- * The app's one hover card for wirezat-ui's infocard.js: texture left, name and origin right.
- * Input: entry, { title, subtitle, sections, id, cycle }. Output: HTML string.
- */
+/** The app's one hover card for wirezat-ui's infocard.js: texture left, name and origin right. Input: entry, { title, subtitle, sections, id, cycle }. Output: HTML string. */
 export function infocardHTML(entry, { title, subtitle = '', sections = '', id = '', cycle = null } = {}) {
     const icon = iconImageHTML(entry, {
         cls: 'infocard-icon', placeholder: false, hidpiPx: 28,
@@ -198,10 +185,7 @@ export function infocardHTML(entry, { title, subtitle = '', sections = '', id = 
     </div>`;
 }
 
-/**
- * Icon plus label, the wirezat-ui icontext component.
- * Input: modID, id, opts. Output: HTML string; falls back to opts.name for an unknown ref.
- */
+/** Icon plus label, the wirezat-ui icontext component. Input: modID, id, opts. Output: HTML string; falls back to opts.name for an unknown ref. */
 export function iconTextHTML(modID, id, {
     isFluid = false, name = null, subtitle = null,
     size = null, marquee = false, extraClass = '', hoverCard = false,
@@ -210,10 +194,7 @@ export function iconTextHTML(modID, id, {
         { name, subtitle, size, marquee, extraClass, hoverCard });
 }
 
-/**
- * The same icontext as iconTextHTML, for a machine.
- * Input: modID, machineID, opts. Output: HTML string.
- */
+/** The same icontext as iconTextHTML, for a machine. Input: modID, machineID, opts. Output: HTML string. */
 export function machineIconTextHTML(modID, machineID, opts = {}) {
     return entryTextHTML(lookupMachine(modID, machineID), modID, machineID, opts);
 }
@@ -250,12 +231,9 @@ function entryTextHTML(entry, modID, id, {
     });
 }
 
-/**
- * Icontext for a tag: the icon cycles through every member with a texture and the subtitle
- * gives the count. Call initIconCycle() and initInfocards() on the container after inserting.
- */
-export function tagIconTextHTML(tagRef, { size = null, extraClass = '', chosenRef = null } = {}) {
-    const resolved = lookupTag(tagRef);
+/** Icontext for a tag: the icon cycles through every member with a texture and the subtitle gives the count. Call initIconCycle() and initInfocards() on the container after inserting. */
+export function tagIconTextHTML(tagRef, { size = null, extraClass = '', chosenRef = null, isFluid = false } = {}) {
+    const resolved = lookupTag(tagRef, isFluid);
     const total = resolved?.total ?? 0;
 
     // chosenRef names the item a chain step resolved this tag to, and leads the cycle.
@@ -277,8 +255,8 @@ export function tagIconTextHTML(tagRef, { size = null, extraClass = '', chosenRe
 
     const label = chosenEntry?.name ?? first?.name ?? '#' + tagRef;
     const sub = total === 0 ? ''
-        : total === 1 ? t('catalog.recipes.card.tag_members_one')
-        : t('catalog.recipes.card.tag_members').replace('{n}', total);
+        : total === 1 ? t(isFluid ? 'catalog.recipes.card.tag_fluid_members_one' : 'catalog.recipes.card.tag_members_one')
+        : t(isFluid ? 'catalog.recipes.card.tag_fluid_members' : 'catalog.recipes.card.tag_members').replace('{n}', total);
 
     const body = `<span class="${rootCls}"${first ? ' data-infocard-inline' : ''}>${icon}` +
            `<span class="icontext-body"><span class="icontext-text">${esc(label)}</span>` +
@@ -288,18 +266,10 @@ export function tagIconTextHTML(tagRef, { size = null, extraClass = '', chosenRe
     return body + infocardHTML(first, { title: label, subtitle: '#' + tagRef, cycle: frames });
 }
 
-/**
- * The single entry point for an ItemRef-shaped value as the solver returns it.
- * Input: ref ({ ModID, ItemID, TagRef, IsFluid }), opts. Output: HTML string.
- */
+/** The single entry point for an ItemRef-shaped value as the solver returns it. Input: ref ({ ModID, ItemID, TagRef, IsFluid }), opts. Output: HTML string. */
 export function refIconTextHTML(ref, opts = {}) {
-    if (ref?.TagRef) return tagIconTextHTML(ref.TagRef, opts);
-    if (opts.resolvedTag) {
-        const tagName = opts.resolvedTag.replace(/^#/, '');
-        return tagIconTextHTML(tagName, { ...opts, chosenRef: ref });
-    }
-    // hoverCard: a plain item gets the same card its tag-shaped neighbours do, so every icon in
-    // a chain answers the same hover instead of some rows falling back to the browser's own
-    // title tooltip.
+    if (ref?.TagRef) return tagIconTextHTML(ref.TagRef, { ...opts, isFluid: !!ref.IsFluid });
+    const tag = opts.resolvedTag ? parseTagKey(opts.resolvedTag) : null;
+    if (tag) return tagIconTextHTML(tag.name, { ...opts, isFluid: tag.isFluid, chosenRef: ref });
     return iconTextHTML(ref?.ModID, ref?.ItemID, { ...opts, isFluid: ref?.IsFluid, hoverCard: true });
 }

@@ -38,6 +38,7 @@ type RecipeFluidIO struct {
 	FluidModID     string  `json:"fluid_mod_id"`
 	FluidID        string  `json:"fluid_id"`
 	FluidName      *string `json:"fluid_name,omitempty"`
+	TagName        *string `json:"tag_name,omitempty"`
 	AmountMB       int64   `json:"amount_mb"`
 	ProbabilityNum int     `json:"probability_num"`
 	ProbabilityDen int     `json:"probability_den"`

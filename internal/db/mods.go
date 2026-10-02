@@ -579,15 +579,16 @@ func (d *DB) SearchFluids(ctx context.Context, q string, offset int) ([]*model.F
 	return fluids, nil
 }
 
-// ListTagMembers returns every item each tag stands for, ordered so a tag's members always
-// come back in the same sequence — the UI cycles through them, and a cycle that reshuffled
-// per request would be unreadable.
+// ListTagMembers returns every member of every item and fluid tag, ordered by kind, tag,
+// mod and id.
 func (d *DB) ListTagMembers(ctx context.Context) ([]model.TagMember, error) {
 	rows, err := d.Pool.Query(ctx, `
-		SELECT t.name, m.item_mod_id, m.item_id
-		FROM tags t
-		JOIN tag_members m ON m.tag_id = t.id
-		ORDER BY t.name, m.item_mod_id, m.item_id
+		SELECT t.kind, t.name, m.item_mod_id, m.item_id
+		FROM tags t JOIN tag_members m ON m.tag_id = t.id
+		UNION
+		SELECT t.kind, t.name, m.fluid_mod_id, m.fluid_id
+		FROM tags t JOIN tag_fluid_members m ON m.tag_id = t.id
+		ORDER BY 1, 2, 3, 4
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("db: list tag members: %w", err)
@@ -596,7 +597,7 @@ func (d *DB) ListTagMembers(ctx context.Context) ([]model.TagMember, error) {
 	var members []model.TagMember
 	for rows.Next() {
 		var m model.TagMember
-		if err := rows.Scan(&m.TagName, &m.ModID, &m.ItemID); err != nil {
+		if err := rows.Scan(&m.Kind, &m.TagName, &m.ModID, &m.ID); err != nil {
 			return nil, fmt.Errorf("db: scan tag member: %w", err)
 		}
 		members = append(members, m)
@@ -886,8 +887,9 @@ func (d *DB) hydrateRecipeIO(ctx context.Context, rec *model.Recipe) error {
 		           (SELECT name FROM translations WHERE lang='en_us' AND lang_key='item.'||rfi.fluid_mod_id||'.'||rfi.fluid_id),
 		           ''
 		       ),
-		       rfi.amount_mb, rfi.probability_num, rfi.probability_den
+		       t.name, rfi.amount_mb, rfi.probability_num, rfi.probability_den
 		FROM recipe_fluid_inputs rfi
+		LEFT JOIN tags t ON t.id = rfi.tag_id
 		WHERE rfi.recipe_id = $1
 	`, rec.ID)
 	if err != nil {
@@ -898,7 +900,7 @@ func (d *DB) hydrateRecipeIO(ctx context.Context, rec *model.Recipe) error {
 		in := model.RecipeFluidIO{}
 		var fluidModID, fluidID, fluidName string
 		if err := rows3.Scan(&in.ID, &in.RecipeID, &fluidModID, &fluidID, &fluidName,
-			&in.AmountMB, &in.ProbabilityNum, &in.ProbabilityDen); err != nil {
+			&in.TagName, &in.AmountMB, &in.ProbabilityNum, &in.ProbabilityDen); err != nil {
 			return fmt.Errorf("db: hydrate recipe io: %w", err)
 		}
 		in.FluidModID = fluidModID

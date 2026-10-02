@@ -430,7 +430,7 @@
   import { createContainer } from '/static/ui/js/components/container.js';
   import { openPopover, closePopover } from '/static/ui/js/components/popover.js';
   import { renderGraph } from '/static/ui/js/components/graph.js';
-  import { loadCatalog, lookupCatalog, lookupMachine, refIconTextHTML, catalogEntries, iconTextHTML, iconImageHTML, machineIconTextHTML } from '/static/js/catalog-registry.js';
+  import { loadCatalog, lookupCatalog, lookupMachine, refIconTextHTML, catalogEntries, iconTextHTML, iconImageHTML, machineIconTextHTML, parseTagKey } from '/static/js/catalog-registry.js';
   import { initCellClampScroll } from '/static/ui/js/table-features.js';
   import { initHiDPIRender } from '/static/ui/js/hidpi-render.js';
   import { initIconCycle } from '/static/ui/js/icon-cycle.js';
@@ -1020,6 +1020,7 @@
       return cands.find(c => c.Level === consumerLevel + 1) || cands[0];
     }
 
+    const chainKeys = new Set(_chainItems.map(ci => itemKey(ci.Item)));
     const nodes = [];
     for (const ci of _chainItems) {
       const key = itemKey(ci.Item);
@@ -1061,7 +1062,7 @@
       if (chosen) {
         for (const inStr of (chosen.Inputs || [])) {
           let toKey = null, title = '';
-          if (inStr.startsWith('#')) {
+          if (parseTagKey(inStr)) {
             // Tag input — resolved to a concrete item by the backend. Drawn as a
             // normal solid edge (tag origin only via tooltip) so every input has
             // an unbroken line into its consumer.
@@ -1069,6 +1070,8 @@
             if (res?.Chosen) {
               toKey = itemKey(res.Chosen);
               title = inStr;
+            } else if (chainKeys.has(inStr)) {
+              toKey = inStr;
             }
           } else if (inStr.startsWith('~')) {
             const cand = pickCandidate(byFluidId.get(inStr.slice(1)), ci.Level);
@@ -1516,9 +1519,9 @@
   document.getElementById('chain-card').appendChild(chainContainer.el);
 
   function itemKey(item) {
-    if (item.TagRef) return '#' + item.TagRef;
-    if (item.IsFluid) return 'fluid:' + item.ModID + ':' + item.ItemID;
-    return item.ModID + ':' + item.ItemID;
+    const prefix = item.IsFluid ? 'fluid:' : '';
+    if (item.TagRef) return prefix + '#' + item.TagRef;
+    return prefix + item.ModID + ':' + item.ItemID;
   }
 
   function nameOf(item) {
@@ -1540,7 +1543,7 @@
     const list = document.getElementById('cycle-error-list');
     list.innerHTML = nodes.map(key => {
       let name = _names[key];
-      if (!name && !key.startsWith('#')) {
+      if (!name && !parseTagKey(key)) {
         const isFluid = key.startsWith('fluid:');
         const rest = isFluid ? key.slice('fluid:'.length) : key;
         const sep = rest.indexOf(':');

@@ -41,6 +41,7 @@ type Output struct {
 type Fluid struct {
 	FluidModID string `json:"fluid_mod_id"`
 	FluidID    string `json:"fluid_id"`
+	TagName    string `json:"tag_name,omitempty"`
 	AmountMB   int64  `json:"amount_mb"`
 	X          *int16 `json:"x,omitempty"`
 	Y          *int16 `json:"y,omitempty"`
@@ -84,7 +85,11 @@ func Build(r *solver.RecipeRow) Card {
 		card.Outputs = append(card.Outputs, v)
 	}
 	for _, fi := range r.FluidInputs {
-		card.FluidInputs = append(card.FluidInputs, Fluid{FluidModID: fi.FluidModID, FluidID: fi.FluidID, AmountMB: fi.AmountMB})
+		f := Fluid{FluidModID: fi.FluidModID, FluidID: fi.FluidID, AmountMB: fi.AmountMB}
+		if fi.TagName != nil {
+			f.TagName = *fi.TagName
+		}
+		card.FluidInputs = append(card.FluidInputs, f)
 	}
 	for _, fo := range r.FluidOutputs {
 		card.FluidOutputs = append(card.FluidOutputs, Fluid{FluidModID: fo.FluidModID, FluidID: fo.FluidID, AmountMB: fo.AmountMB})

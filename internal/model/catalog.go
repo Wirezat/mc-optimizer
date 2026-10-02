@@ -16,22 +16,18 @@ type Mod struct {
 	ModrinthSlug *string `json:"modrinth_slug,omitempty"`
 	RecipeCount  int     `json:"recipe_count"`
 	ItemCount    int     `json:"item_count"`
-	// Ecosystems is every distinct ecosystem this mod's machines declare — the mod's own id
-	// where a machine names none, empty when it has no machines.
-	Ecosystems []string `json:"ecosystems"`
-	// Plugin is nil for a mod that ships no plugin.
-	Plugin *ModPluginInfo `json:"plugin,omitempty"`
+	// Ecosystems is every distinct ecosystem this mod's machines declare.
+	Ecosystems []string       `json:"ecosystems"`
+	Plugin     *ModPluginInfo `json:"plugin,omitempty"`
 }
 
-// ModPluginInfo is what the frontend needs to know about an installed plugin: how to label
-// its wizard button and whether it has one at all.
+// ModPluginInfo labels an installed plugin's wizard button, if it has one.
 type ModPluginInfo struct {
 	DisplayName string `json:"display_name"`
 	Version     string `json:"version"`
 	HasWizard   bool   `json:"has_wizard"`
 }
 
-// ModUpdate carries the fields an admin may overwrite on a mod.
 type ModUpdate struct {
 	Name         *string
 	Description  *string
@@ -46,13 +42,12 @@ type ModUpdate struct {
 }
 
 type Item struct {
-	ModID      string  `json:"mod_id"`
-	ItemID     string  `json:"item_id"`
-	Name       string  `json:"name"` // populated from translations (en_us); empty until JAR import
-	MaxStack   int16   `json:"max_stack"`
-	TextureURL *string `json:"texture_url,omitempty"`
-	// Set only when the texture is a sprite sheet.
-	Animation *TextureAnimation `json:"animation,omitempty"`
+	ModID      string            `json:"mod_id"`
+	ItemID     string            `json:"item_id"`
+	Name       string            `json:"name"` // populated from translations (en_us); empty until JAR import
+	MaxStack   int16             `json:"max_stack"`
+	TextureURL *string           `json:"texture_url,omitempty"`
+	Animation  *TextureAnimation `json:"animation,omitempty"`
 }
 
 // TextureAnimation describes a sprite sheet whose frames are stacked downward in the file.
@@ -60,19 +55,18 @@ type TextureAnimation struct {
 	// Cells is how many frames are stacked in the file.
 	Cells int `json:"cells"`
 	// Frames is how many cells the client should play.
-	Frames int `json:"frames"`
-	// FrameMS is how long one frame is shown.
+	Frames  int `json:"frames"`
 	FrameMS int `json:"frame_ms"`
-	// PingPong is set when the frame order runs up and back down again, which the client can
-	// play by alternating direction instead of following a list.
+	// PingPong plays the frames up and back down again.
 	PingPong bool `json:"ping_pong,omitempty"`
 }
 
-// TagMember is one item a tag stands for.
+// TagMember is one item or fluid a tag stands for.
 type TagMember struct {
+	Kind    string `json:"kind"`
 	TagName string `json:"tag_name"`
 	ModID   string `json:"mod_id"`
-	ItemID  string `json:"item_id"`
+	ID      string `json:"id"`
 }
 
 type Fluid struct {
@@ -89,12 +83,9 @@ type MachineType struct {
 	Name        string  `json:"name"`
 	RecipeCount int     `json:"recipe_count"`
 	TextureURL  *string `json:"texture_url,omitempty"`
-	// Variants holds every machine folded into this row (base + implementers), alphabetical by
-	// name; nil means a plain single icon, no cycle/hover.
+	// Variants holds every machine folded into this row, alphabetical; nil for a single machine.
 	Variants []MachineVariant `json:"variants,omitempty"`
-	// Costs is the operating cost of the machine's base (no-items) plugin variant, read from
-	// the variant cache. Nil means no variant has been computed for this machine yet — never
-	// presented as a zero cost.
+	// Costs is the base variant's operating cost; nil when none is cached yet.
 	Costs []plugins.Cost `json:"costs,omitempty"`
 }
 
@@ -115,16 +106,15 @@ type MachineSlot struct {
 }
 
 type VillagerTradeView struct {
-	ID          string `json:"id"`
-	SourceModID string `json:"source_mod_id"`
-	SourceName  string `json:"source_name"`
-	Profession  string `json:"profession"`
-	Tier        int    `json:"tier"`
-	CostModID   string `json:"cost_mod_id"`
-	CostItemID  string `json:"cost_item_id"`
-	CostName    string `json:"cost_name"`
-	CostCount   int    `json:"cost_count"`
-	// Second cost slot; all four are null together when the offer charges only one item.
+	ID             string  `json:"id"`
+	SourceModID    string  `json:"source_mod_id"`
+	SourceName     string  `json:"source_name"`
+	Profession     string  `json:"profession"`
+	Tier           int     `json:"tier"`
+	CostModID      string  `json:"cost_mod_id"`
+	CostItemID     string  `json:"cost_item_id"`
+	CostName       string  `json:"cost_name"`
+	CostCount      int     `json:"cost_count"`
 	Cost2ModID     *string `json:"cost2_mod_id,omitempty"`
 	Cost2ItemID    *string `json:"cost2_item_id,omitempty"`
 	Cost2Name      *string `json:"cost2_name,omitempty"`
@@ -140,9 +130,7 @@ type VillagerTradeView struct {
 	XP           *int `json:"xp,omitempty"`
 }
 
-// ModBlocker is one reason a mod cannot be deleted.
-// Kind is one of production_line, factory_source, save, dependent_mod; Sample holds up to
-// three human-readable names out of Count.
+// ModBlocker is one reason a mod cannot be deleted; Sample holds up to three names out of Count.
 type ModBlocker struct {
 	Kind   string   `json:"kind"`
 	Count  int      `json:"count"`

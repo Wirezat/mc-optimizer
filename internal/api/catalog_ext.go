@@ -8,7 +8,7 @@ import (
 	"github.com/Wirezat/production-optimizer/internal/model"
 )
 
-// ListTagMembersHandler returns every tag's members, grouped by tag name.
+// ListTagMembersHandler returns every tag's members, grouped by kind, then by tag name.
 func ListTagMembersHandler(database *db.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		members, err := database.ListTagMembers(r.Context())
@@ -17,12 +17,15 @@ func ListTagMembersHandler(database *db.DB) http.HandlerFunc {
 			return
 		}
 		type ref struct {
-			ModID  string `json:"mod_id"`
-			ItemID string `json:"item_id"`
+			ModID string `json:"mod_id"`
+			ID    string `json:"id"`
 		}
-		grouped := map[string][]ref{}
+		grouped := map[string]map[string][]ref{
+			model.TagKindItem:  {},
+			model.TagKindFluid: {},
+		}
 		for _, m := range members {
-			grouped[m.TagName] = append(grouped[m.TagName], ref{m.ModID, m.ItemID})
+			grouped[m.Kind][m.TagName] = append(grouped[m.Kind][m.TagName], ref{m.ModID, m.ID})
 		}
 		writeJSON(w, http.StatusOK, grouped)
 	}

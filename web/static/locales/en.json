@@ -110,6 +110,8 @@
   "catalog.recipes.card.amount": "Amount",
   "catalog.recipes.card.tag_members": "{n} items",
   "catalog.recipes.card.tag_members_one": "1 item",
+  "catalog.recipes.card.tag_fluid_members": "{n} fluids",
+  "catalog.recipes.card.tag_fluid_members_one": "1 fluid",
   "catalog.recipes.section.recipes": "Recipes",
   "catalog.search_placeholder": "Search by name or ID…",
   "catalog.trades.col.cost": "Cost",

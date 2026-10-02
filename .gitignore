@@ -19,8 +19,7 @@ pg_data/
 *.swp
 
 # Other
-markdown/
-docs/*
+/docs/
 logs/
 /scripts/
 /.dockerignore

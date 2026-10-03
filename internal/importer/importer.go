@@ -17,6 +17,7 @@ type ImporterDB interface {
 
 	UpsertMod(ctx context.Context, m model.ModDef) error
 	UpsertFluids(ctx context.Context, modID string, fluidIDs []string) error
+	ReplaceEnergies(ctx context.Context, modID string, defs []model.EnergyDef) error
 	UpsertMachineType(ctx context.Context, m model.MachineTypeDef) error
 	UpsertMachineSlots(ctx context.Context, slots []model.MachineSlotDef) error
 	AddMachineInterface(ctx context.Context, modID, machineID, baseModID, baseMachineID string) error

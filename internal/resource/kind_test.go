@@ -9,6 +9,7 @@ func validKinds() []KindInfo {
 	return []KindInfo{
 		{Kind: KindItem, KeyPrefix: "", BaseUnit: "one", Expand: ExpandAlways},
 		{Kind: KindFluid, KeyPrefix: "fluid:", BaseUnit: "mb", UOMSystem: "volume", Expand: ExpandOnChoice},
+		{Kind: KindEnergy, KeyPrefix: "energy:", BaseUnit: "fe", UOMSystem: "energy", Expand: ExpandNever},
 	}
 }
 
@@ -26,7 +27,8 @@ func TestLoad_SetsPrefixAndExpand(t *testing.T) {
 
 func TestLoad_RejectsBadTables(t *testing.T) {
 	cases := map[string]func([]KindInfo) []KindInfo{
-		"fluid missing":        func(k []KindInfo) []KindInfo { return k[:1] },
+		"fluid missing":        func(k []KindInfo) []KindInfo { return append(k[:1], k[2]) },
+		"energy missing":       func(k []KindInfo) []KindInfo { return k[:2] },
 		"bad expand":           func(k []KindInfo) []KindInfo { k[1].Expand = "sometimes"; return k },
 		"duplicate prefix":     func(k []KindInfo) []KindInfo { k[1].KeyPrefix = ""; return k },
 		"duplicate kind":       func(k []KindInfo) []KindInfo { return append(k, k[0]) },
@@ -61,6 +63,10 @@ func TestKindByPrefix(t *testing.T) {
 	k, rest := SplitKey("fluid:mi:steam")
 	if k != KindFluid || rest != "mi:steam" {
 		t.Errorf("SplitKey fluid = %q, %q", k, rest)
+	}
+	k, rest = SplitKey("energy:neoforge:fe")
+	if k != KindEnergy || rest != "neoforge:fe" {
+		t.Errorf("SplitKey energy = %q, %q", k, rest)
 	}
 	k, rest = SplitKey("minecraft:stone")
 	if k != KindItem || rest != "minecraft:stone" {

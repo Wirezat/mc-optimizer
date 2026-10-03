@@ -24,8 +24,9 @@ CREATE TABLE resource_kinds (
 );
 
 INSERT INTO resource_kinds (kind, key_prefix, base_unit, uom_system, expand) VALUES
-    ('item',  '',       'one', NULL,     'always'),
-    ('fluid', 'fluid:', 'mb',  'volume', 'on_choice');
+    ('item',   '',        'one', NULL,     'always'),
+    ('fluid',  'fluid:',  'mb',  'volume', 'on_choice'),
+    ('energy', 'energy:', 'fe',  'energy', 'never');
 
 CREATE TABLE items (
     mod_id    TEXT     NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
@@ -38,6 +39,16 @@ CREATE TABLE fluids (
     mod_id   TEXT NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
     fluid_id TEXT NOT NULL,
     PRIMARY KEY (mod_id, fluid_id)
+);
+
+CREATE TABLE energies (
+    mod_id          TEXT   NOT NULL REFERENCES mods(mod_id) ON DELETE CASCADE,
+    energy_id       TEXT   NOT NULL,
+    symbol          TEXT   NOT NULL CHECK (symbol <> ''),
+    lang_key        TEXT,
+    fe_per_unit_num BIGINT NOT NULL CHECK (fe_per_unit_num > 0),
+    fe_per_unit_den BIGINT NOT NULL CHECK (fe_per_unit_den > 0),
+    PRIMARY KEY (mod_id, energy_id)
 );
 
 CREATE TABLE translations (

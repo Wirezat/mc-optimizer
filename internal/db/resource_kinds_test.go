@@ -22,4 +22,7 @@ func TestListResourceKinds_LoadsTheSeed(t *testing.T) {
 	if info, _ := resource.Info(resource.KindFluid); info.BaseUnit != "mb" || info.UOMSystem != "volume" {
 		t.Errorf("fluid info = %+v", info)
 	}
+	if info, _ := resource.Info(resource.KindEnergy); info.KeyPrefix != "energy:" || info.BaseUnit != "fe" || info.UOMSystem != "energy" || info.Expand != resource.ExpandNever {
+		t.Errorf("energy info = %+v", info)
+	}
 }

@@ -33,6 +33,7 @@ type ModFileResult struct {
 	RecipesSkip     int      `json:"recipes_skipped"`
 	Items           int      `json:"items"`
 	Fluids          int      `json:"fluids"`
+	Energies        int      `json:"energies"`
 	Translations    int      `json:"translations"`
 	Tags            int      `json:"tags"`
 	Textures        int      `json:"textures"`
@@ -162,6 +163,11 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 		return res, fmt.Errorf("modfile: upsert fluids: %w", err)
 	}
 	res.Fluids = len(fluidIDs)
+
+	if err := imp.db.ReplaceEnergies(ctx, def.ModID, def.Energies); err != nil {
+		return res, fmt.Errorf("modfile: replace energies: %w", err)
+	}
+	res.Energies = len(def.Energies)
 
 	// 6. Tags.
 	for _, tag := range def.Tags {

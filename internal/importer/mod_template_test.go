@@ -2,6 +2,8 @@ package importer
 
 import (
 	"archive/zip"
+	"bytes"
+	"io"
 	"testing"
 )
 
@@ -34,4 +36,31 @@ func TestShippedModTemplateIsAValidPlugin(t *testing.T) {
 	if !hasWizard {
 		t.Error("hasWizard = false, want true — the template's wizard example is gone or malformed")
 	}
+}
+
+func TestShippedModTemplateParses(t *testing.T) {
+	zr, err := zip.OpenReader("../../web/static/data/mod-template.zip")
+	if err != nil {
+		t.Fatalf("open template: %v", err)
+	}
+	defer zr.Close()
+	for _, f := range zr.File {
+		if f.Name != "mod.yml" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("open mod.yml: %v", err)
+		}
+		data, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatalf("read mod.yml: %v", err)
+		}
+		if _, err := ParseModFile(bytes.Replace(data, []byte("mod_id: _example_"), []byte("mod_id: tmpl"), 1)); err != nil {
+			t.Fatalf("ParseModFile: %v", err)
+		}
+		return
+	}
+	t.Fatal("template ships no mod.yml")
 }

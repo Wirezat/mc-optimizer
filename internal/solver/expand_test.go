@@ -12,6 +12,7 @@ func withKinds(t *testing.T, item, fluid resource.ExpandRule) {
 	if err := resource.Load([]resource.KindInfo{
 		{Kind: resource.KindItem, KeyPrefix: "", BaseUnit: "one", Expand: item},
 		{Kind: resource.KindFluid, KeyPrefix: "fluid:", BaseUnit: "mb", UOMSystem: "volume", Expand: fluid},
+		{Kind: resource.KindEnergy, KeyPrefix: "energy:", BaseUnit: "fe", UOMSystem: "energy", Expand: resource.ExpandNever},
 	}); err != nil {
 		t.Fatalf("Load: %v", err)
 	}

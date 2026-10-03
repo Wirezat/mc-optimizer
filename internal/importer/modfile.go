@@ -38,6 +38,8 @@ type rawModFile struct {
 		LangKey string `yaml:"lang_key"`
 	} `yaml:"fluids"`
 
+	Energies []rawEnergy `yaml:"energies"`
+
 	Tags []rawTag `yaml:"tags"`
 
 	Machines []struct {
@@ -105,6 +107,23 @@ type rawTag struct {
 
 func (r *rawTag) UnmarshalYAML(n *yaml.Node) error {
 	type plain rawTag
+	if err := n.Decode((*plain)(r)); err != nil {
+		return err
+	}
+	r.line = n.Line
+	return nil
+}
+
+type rawEnergy struct {
+	ID        string    `yaml:"id"`
+	Symbol    string    `yaml:"symbol"`
+	LangKey   string    `yaml:"lang_key"`
+	FePerUnit yaml.Node `yaml:"fe_per_unit"`
+	line      int
+}
+
+func (r *rawEnergy) UnmarshalYAML(n *yaml.Node) error {
+	type plain rawEnergy
 	if err := n.Decode((*plain)(r)); err != nil {
 		return err
 	}
@@ -234,6 +253,12 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 			LangKey: strOrSentinel(r.LangKey),
 		})
 	}
+
+	energies, err := parseEnergies(raw.Energies, raw.ModID)
+	if err != nil {
+		return nil, err
+	}
+	def.Energies = energies
 
 	// Tags
 	for _, r := range raw.Tags {
@@ -447,6 +472,58 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 }
 
 // splitRef parses "mod_id:item_id" or plain "item_id" (uses defaultMod).
+// parseEnergies turns the energies section into EnergyDefs, rejecting a form without id or
+// symbol, of another mod, listed twice, or with a factor that is not a positive fraction.
+func parseEnergies(raw []rawEnergy, defaultMod string) ([]model.EnergyDef, error) {
+	var out []model.EnergyDef
+	seen := map[string]bool{}
+	for _, r := range raw {
+		if r.ID == exampleSentinel {
+			continue
+		}
+		name := r.ID
+		fail := func(format string, args ...any) error {
+			return fmt.Errorf("modfile: mod.yml line %d: energy %q: %s", r.line, name, fmt.Sprintf(format, args...))
+		}
+		if r.ID == "" {
+			return nil, fail("id is required")
+		}
+		modID, energyID, err := splitRef(r.ID, defaultMod)
+		if err != nil {
+			return nil, fail("%v", err)
+		}
+		name = modID + ":" + energyID
+		if modID != defaultMod {
+			return nil, fail("belongs to another mod than %s", defaultMod)
+		}
+		if seen[name] {
+			return nil, fail("listed twice")
+		}
+		seen[name] = true
+		if r.Symbol == "" {
+			return nil, fail("symbol is required")
+		}
+		if r.FePerUnit.Kind == 0 {
+			return nil, fail("fe_per_unit is required")
+		}
+		var factor exactNumber
+		if err := r.FePerUnit.Decode(&factor); err != nil {
+			return nil, fail("fe_per_unit: %v", err)
+		}
+		if err := checkAmount(int64(factor.num), int64(factor.den)); err != nil {
+			return nil, fail("fe_per_unit: %v", err)
+		}
+		out = append(out, model.EnergyDef{
+			ModID:     modID,
+			EnergyID:  energyID,
+			Symbol:    r.Symbol,
+			LangKey:   strOrSentinel(r.LangKey),
+			FePerUnit: resource.NewRational(int64(factor.num), int64(factor.den)),
+		})
+	}
+	return out, nil
+}
+
 func splitRef(ref, defaultMod string) (modID, id string, err error) {
 	if ref == "" {
 		return "", "", fmt.Errorf("empty reference")

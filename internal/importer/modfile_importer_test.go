@@ -51,6 +51,9 @@ func (fakeImporterDB) UpsertMod(ctx context.Context, m model.ModDef) error { ret
 func (fakeImporterDB) UpsertFluids(ctx context.Context, modID string, fluidIDs []string) error {
 	return nil
 }
+func (fakeImporterDB) ReplaceEnergies(ctx context.Context, modID string, defs []model.EnergyDef) error {
+	return nil
+}
 func (fakeImporterDB) UpsertMachineType(ctx context.Context, m model.MachineTypeDef) error {
 	return nil
 }

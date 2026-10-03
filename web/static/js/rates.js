@@ -13,7 +13,37 @@ defineUom('volume', { base: 'mb', units: [
   { id: 'b',  label: 'B',  factor: { num: 1000,    den: 1 } },
   { id: 'kb', label: 'kB', factor: { num: 1000000, den: 1 } },
 ]});
+const FE_UNIT = { id: 'fe', label: 'FE', factor: { num: 1, den: 1 } };
+defineUom('energy', { base: 'fe', units: [FE_UNIT] });
 initUom();
+
+const _energyUnits = new Map();
+
+export function defineEnergyUom(forms) {
+  const units = new Map([['FE:1/1', FE_UNIT]]);
+  _energyUnits.clear();
+  for (const f of forms ?? []) {
+    const { num, den } = f.fe_per_unit;
+    const id = `${f.symbol}:${num}/${den}`;
+    if (!units.has(id)) units.set(id, { id, label: f.symbol, factor: { num, den } });
+    _energyUnits.set(`${f.mod_id}:${f.energy_id}`, units.get(id).id);
+  }
+  defineUom('energy', { base: 'fe', units: [...units.values()] });
+}
+
+/** energyHTML renders an energy amount ({ num, den } | number) given in the form "mod:energy" per unit 't'|'s'|'min'|'h' as a switchable unit badge; an unknown form counts as FE. */
+export function energyHTML(value, form, unit = 't', { cls = '' } = {}) {
+  const num = value?.num ?? value;
+  const den = value?.den ?? 1;
+  return uomHTML({
+    value: den && den !== 1 ? `${num}/${den}` : String(num ?? 0),
+    uom: 'energy',
+    unit: _energyUnits.get(form) ?? 'fe',
+    per: 'time',
+    perUnit: TIME_UNITS.has(unit) ? unit : 't',
+    cls,
+  });
+}
 
 const TIME_UNITS = new Set(['t', 's', 'min', 'h']);
 

@@ -1,4 +1,4 @@
-// Package resource holds the resource kinds (item, fluid, ...) as loaded from resource_kinds.
+// Package resource holds the resource kinds (item, fluid, energy) as loaded from resource_kinds.
 package resource
 
 import (
@@ -25,8 +25,9 @@ func (k Kind) Or() Kind {
 }
 
 const (
-	KindItem  Kind = "item"
-	KindFluid Kind = "fluid"
+	KindItem   Kind = "item"
+	KindFluid  Kind = "fluid"
+	KindEnergy Kind = "energy"
 )
 
 // ExpandRule says whether the solver resolves a node of a kind through recipes.
@@ -75,7 +76,7 @@ func Load(kinds []KindInfo) error {
 		byKind[k.Kind] = k
 		byPrefix[k.KeyPrefix] = k.Kind
 	}
-	for _, required := range []Kind{KindItem, KindFluid} {
+	for _, required := range []Kind{KindItem, KindFluid, KindEnergy} {
 		if _, ok := byKind[required]; !ok {
 			return fmt.Errorf("resource kinds: %q missing", required)
 		}

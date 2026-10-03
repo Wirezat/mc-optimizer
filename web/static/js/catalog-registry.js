@@ -1,10 +1,12 @@
 /** Resolves catalog references (mod_id + item_id / fluid_id) to a display name and a texture, and is the single place icon markup is built. */
 import { apiFetch } from '/static/ui/js/auth.js';
 import { esc, t }   from '/static/js/i18n.js';
+import { defineEnergyUom } from '/static/js/rates.js';
 
 const _entries  = new Map();  // key → { modID, id, isFluid, name, textureUrl, animation }
 const _machines = new Map();  // "mod:machine" → same entry shape
 const _tags     = new Map();  // tag name → { total, icons: [entry] }
+const _energies = new Map();  // "energy:mod:id" → { modID, id, symbol, name, fePerUnit }
 let   _loaded   = null;       // in-flight or settled load promise
 
 const keyFor = (modID, id, isFluid) => `${isFluid ? 'fluid:' : ''}${modID}:${id}`;
@@ -38,7 +40,7 @@ function sheetAttrs(entry) {
     return { cls: SHEET_PLAY_CLASS, style };
 }
 
-/** Fetches the full item and fluid catalog once per page. Input: { saveIDParam }. Output: a promise; repeated calls return the same one. */
+/** Fetches the full item, fluid and energy catalog once per page. Input: { saveIDParam }. Output: a promise; repeated calls return the same one. */
 export function loadCatalog({ saveIDParam = '' } = {}) {
     if (_loaded) return _loaded;
 
@@ -52,7 +54,18 @@ export function loadCatalog({ saveIDParam = '' } = {}) {
         fetchJSON('/api/fluids?all=true' + saveIDParam, []),
         fetchJSON('/api/tag-members', {}),
         fetchJSON('/api/machines', []),
-    ]).then(([items, fluids, tagMembers, machines]) => {
+        fetchJSON('/api/energies?all=true' + saveIDParam, []),
+    ]).then(([items, fluids, tagMembers, machines, energies]) => {
+        for (const e of energies ?? []) {
+            _energies.set(`energy:${e.mod_id}:${e.energy_id}`, {
+                modID:     e.mod_id,
+                id:        e.energy_id,
+                symbol:    e.symbol,
+                name:      e.name || e.symbol,
+                fePerUnit: e.fe_per_unit,
+            });
+        }
+        defineEnergyUom(energies);
         for (const it of items ?? []) {
             _entries.set(keyFor(it.mod_id, it.item_id, false), {
                 modID:      it.mod_id,
@@ -119,6 +132,11 @@ export function catalogEntries() {
 /* lookupCatalog(modID, id, isFluid) → { name, textureUrl } | null */
 export function lookupCatalog(modID, id, isFluid = false) {
     return _entries.get(keyFor(modID, id, isFluid)) ?? null;
+}
+
+/** Looks up an energy form. Input: mod ID, energy ID. Output: { modID, id, symbol, name, fePerUnit: { num, den } }, or null. */
+export function lookupEnergy(modID, id) {
+    return _energies.get(`energy:${modID}:${id}`) ?? null;
 }
 
 /* lookupMachine(modID, machineID) → { name, textureUrl } | null */

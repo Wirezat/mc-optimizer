@@ -1,6 +1,9 @@
 package model
 
-import "github.com/Wirezat/production-optimizer/internal/plugins"
+import (
+	"github.com/Wirezat/production-optimizer/internal/plugins"
+	"github.com/Wirezat/production-optimizer/internal/resource"
+)
 
 type Mod struct {
 	ModID        string  `json:"mod_id"`
@@ -75,6 +78,15 @@ type Fluid struct {
 	Name       string            `json:"name"` // populated from translations (en_us); empty until JAR import
 	TextureURL *string           `json:"texture_url,omitempty"`
 	Animation  *TextureAnimation `json:"animation,omitempty"`
+}
+
+// Energy is an energy form; Name falls back to Symbol without a translation.
+type Energy struct {
+	ModID     string            `json:"mod_id"`
+	EnergyID  string            `json:"energy_id"`
+	Symbol    string            `json:"symbol"`
+	Name      string            `json:"name"`
+	FePerUnit resource.Rational `json:"fe_per_unit"`
 }
 
 type MachineType struct {

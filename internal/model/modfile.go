@@ -19,6 +19,7 @@ type ModDef struct {
 	Translations   map[string]map[string]string // lang → key → value
 	Items          []ItemDef
 	Fluids         []FluidDef
+	Energies       []EnergyDef
 	Tags           []TagDef
 	Machines       []MachineTypeDef
 	Recipes        []ModRecipeDef
@@ -37,6 +38,14 @@ type FluidDef struct {
 	ModID   string
 	FluidID string
 	LangKey string
+}
+
+type EnergyDef struct {
+	ModID     string
+	EnergyID  string
+	Symbol    string
+	LangKey   string
+	FePerUnit resource.Rational
 }
 
 const (

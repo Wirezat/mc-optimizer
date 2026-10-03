@@ -55,10 +55,10 @@ func TestUpsertDirectTagMembers_SameNameForItemAndFluid(t *testing.T) {
 	if _, err := d.Pool.Exec(ctx, `INSERT INTO items (mod_id, item_id) VALUES ('r1tagmod', 'honey_bottle')`); err != nil {
 		t.Fatalf("insert item: %v", err)
 	}
-	if err := d.UpsertDirectTagMembers(ctx, "r1tagmod", model.TagKindFluid, "r1test:honey", []string{"r1tagmod:honey"}); err != nil {
+	if _, err := d.UpsertDirectTagMembers(ctx, "r1tagmod", model.TagKindFluid, "r1test:honey", []string{"r1tagmod:honey"}); err != nil {
 		t.Fatalf("fluid tag: %v", err)
 	}
-	if err := d.UpsertDirectTagMembers(ctx, "r1tagmod", model.TagKindItem, "r1test:honey", []string{"r1tagmod:honey_bottle"}); err != nil {
+	if _, err := d.UpsertDirectTagMembers(ctx, "r1tagmod", model.TagKindItem, "r1test:honey", []string{"r1tagmod:honey_bottle"}); err != nil {
 		t.Fatalf("item tag: %v", err)
 	}
 	if got := tagMemberIDs(t, d, model.TagKindFluid, "r1test:honey"); len(got) != 1 || got[0] != "r1tagmod:honey" {
@@ -80,13 +80,13 @@ func TestUpsertDirectTagMembers_ReimportKeepsOtherModsMembers(t *testing.T) {
 			t.Fatalf("upsert fluids %s: %v", m, err)
 		}
 	}
-	if err := d.UpsertDirectTagMembers(ctx, "r1moda", model.TagKindFluid, "r1test:honey", []string{"r1moda:honey"}); err != nil {
+	if _, err := d.UpsertDirectTagMembers(ctx, "r1moda", model.TagKindFluid, "r1test:honey", []string{"r1moda:honey"}); err != nil {
 		t.Fatalf("mod a: %v", err)
 	}
-	if err := d.UpsertDirectTagMembers(ctx, "r1modb", model.TagKindFluid, "r1test:honey", []string{"r1modb:honey"}); err != nil {
+	if _, err := d.UpsertDirectTagMembers(ctx, "r1modb", model.TagKindFluid, "r1test:honey", []string{"r1modb:honey"}); err != nil {
 		t.Fatalf("mod b: %v", err)
 	}
-	if err := d.UpsertDirectTagMembers(ctx, "r1moda", model.TagKindFluid, "r1test:honey", []string{"r1moda:nectar"}); err != nil {
+	if _, err := d.UpsertDirectTagMembers(ctx, "r1moda", model.TagKindFluid, "r1test:honey", []string{"r1moda:nectar"}); err != nil {
 		t.Fatalf("mod a again: %v", err)
 	}
 	want := []string{"r1moda:nectar", "r1modb:honey"}
@@ -147,7 +147,7 @@ func TestFluidTag_LoadsAndResolves(t *testing.T) {
 	if _, err := d.Pool.Exec(ctx, `INSERT INTO items (mod_id, item_id) VALUES ('r1loadmod', 'honey_bottle')`); err != nil {
 		t.Fatalf("insert item: %v", err)
 	}
-	if err := d.UpsertDirectTagMembers(ctx, "r1loadmod", model.TagKindFluid, "r1test:honey", []string{"r1loadmod:honey"}); err != nil {
+	if _, err := d.UpsertDirectTagMembers(ctx, "r1loadmod", model.TagKindFluid, "r1test:honey", []string{"r1loadmod:honey"}); err != nil {
 		t.Fatalf("fluid tag: %v", err)
 	}
 	rec := model.NormalizedRecipe{
@@ -189,5 +189,25 @@ func TestFluidTag_LoadsAndResolves(t *testing.T) {
 	}
 	if len(itemMembers) != 0 {
 		t.Errorf("item tag r1test:honey members = %+v, want none", itemMembers)
+	}
+}
+
+func TestUpsertDirectTagMembers_SkipsMembersNotInTheCatalog(t *testing.T) {
+	d := testDB(t)
+	ctx := context.Background()
+	cleanupTestTags(t, d)
+	seedMod(t, d, "r1skipmod")
+	if _, err := d.Pool.Exec(ctx, `INSERT INTO items (mod_id, item_id) VALUES ('r1skipmod', 'known')`); err != nil {
+		t.Fatalf("insert item: %v", err)
+	}
+	skipped, err := d.UpsertDirectTagMembers(ctx, "r1skipmod", model.TagKindItem, "r1test:mixed", []string{"r1skipmod:known", "othermod:ghost", "r1skipmod:missing"})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if skipped != 2 {
+		t.Errorf("skipped = %d, want 2", skipped)
+	}
+	if got := tagMemberIDs(t, d, model.TagKindItem, "r1test:mixed"); len(got) != 1 || got[0] != "r1skipmod:known" {
+		t.Errorf("members = %v, want [r1skipmod:known]", got)
 	}
 }

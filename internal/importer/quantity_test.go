@@ -198,3 +198,20 @@ func TestParseModFile_TagKind(t *testing.T) {
 		t.Errorf("error = %v, want it to name line 3 and tag c:x", err)
 	}
 }
+
+func TestParseModFile_TagWithoutNamespaceIsMinecraft(t *testing.T) {
+	def, err := ParseModFile([]byte(quantityHead + "  - machine: m\n    duration_ticks: 1\n    inputs:\n      items:\n        - tag: logs\n        - tag: c:ingots\n      fluids:\n        - tag: water\n          amount_mb: 1\n    outputs:\n      items:\n        - item: a\ntags:\n  - name: wool\n    members: [minecraft:white_wool]\n"))
+	if err != nil {
+		t.Fatalf("ParseModFile: %v", err)
+	}
+	in := def.Recipes[0].Inputs
+	if in[0].Ref.TagRef != "minecraft:logs" || in[1].Ref.TagRef != "c:ingots" || in[2].Ref.TagRef != "minecraft:water" {
+		t.Errorf("tag refs = %q, %q, %q; want minecraft:logs, c:ingots, minecraft:water", in[0].Ref.TagRef, in[1].Ref.TagRef, in[2].Ref.TagRef)
+	}
+	if got := qualifyShape([]string{"#planks", "#c:rods", "minecraft:stick", ""}); got[0] != "#minecraft:planks" || got[1] != "#c:rods" || got[2] != "minecraft:stick" || got[3] != "" {
+		t.Errorf("shape = %q", got)
+	}
+	if def.Tags[0].Name != "minecraft:wool" {
+		t.Errorf("tag name = %q, want minecraft:wool", def.Tags[0].Name)
+	}
+}

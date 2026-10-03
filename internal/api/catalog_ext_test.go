@@ -26,10 +26,10 @@ func TestListTagMembersHandlerGroupsByKind(t *testing.T) {
 	if _, err := d.Pool.Exec(ctx, `INSERT INTO items (mod_id, item_id) VALUES ('r1apimod', 'honey_bottle')`); err != nil {
 		t.Fatalf("item: %v", err)
 	}
-	if err := d.UpsertDirectTagMembers(ctx, "r1apimod", model.TagKindFluid, "r1apitest:honey", []string{"r1apimod:honey"}); err != nil {
+	if _, err := d.UpsertDirectTagMembers(ctx, "r1apimod", model.TagKindFluid, "r1apitest:honey", []string{"r1apimod:honey"}); err != nil {
 		t.Fatalf("fluid tag: %v", err)
 	}
-	if err := d.UpsertDirectTagMembers(ctx, "r1apimod", model.TagKindItem, "r1apitest:honey", []string{"r1apimod:honey_bottle"}); err != nil {
+	if _, err := d.UpsertDirectTagMembers(ctx, "r1apimod", model.TagKindItem, "r1apitest:honey", []string{"r1apimod:honey_bottle"}); err != nil {
 		t.Fatalf("item tag: %v", err)
 	}
 	rec := httptest.NewRecorder()

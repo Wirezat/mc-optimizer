@@ -247,7 +247,7 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 		if kind != model.TagKindItem && kind != model.TagKindFluid {
 			return nil, fmt.Errorf("modfile: mod.yml line %d: tag %s: kind %q is neither item nor fluid", r.line, r.Name, r.Kind)
 		}
-		td := model.TagDef{Name: r.Name, Kind: kind}
+		td := model.TagDef{Name: qualifyTag(r.Name), Kind: kind}
 		for _, m := range r.Members {
 			if !isSentinel(m) {
 				td.Members = append(td.Members, m)
@@ -299,7 +299,7 @@ func ParseModFile(data []byte) (*model.ModDef, error) {
 			MachineModID:  machineModID,
 			MachineID:     machineID,
 			DurationTicks: r.DurationTicks,
-			Shape:         r.Shape,
+			Shape:         qualifyShape(r.Shape),
 			ModData:       r.ModData,
 		}
 		ioErr := func(line int, side, ref string, err error) error {
@@ -532,9 +532,27 @@ func parseFluidIO(io rawFluidIO, output bool, defaultMod string) (*resource.IO, 
 	return &resource.IO{Ref: ref, Amount: resource.NewRational(*io.AmountMB, 1), Prob: prob, Consumed: consumed}, nil
 }
 
+func qualifyTag(name string) string {
+	if strings.Contains(name, ":") {
+		return name
+	}
+	return "minecraft:" + name
+}
+
+func qualifyShape(cells []string) []string {
+	out := make([]string, len(cells))
+	for i, c := range cells {
+		if tag, ok := strings.CutPrefix(c, "#"); ok {
+			c = "#" + qualifyTag(tag)
+		}
+		out[i] = c
+	}
+	return out
+}
+
 func ioRef(name, tag string, kind resource.Kind, defaultMod string) (resource.Ref, error) {
 	if !isSentinel(tag) {
-		return resource.Ref{TagRef: tag, Kind: kind}, nil
+		return resource.Ref{TagRef: qualifyTag(tag), Kind: kind}, nil
 	}
 	modID, id, err := splitRef(name, defaultMod)
 	if err != nil {

@@ -20,7 +20,7 @@ type ImporterDB interface {
 	UpsertMachineType(ctx context.Context, m model.MachineTypeDef) error
 	UpsertMachineSlots(ctx context.Context, slots []model.MachineSlotDef) error
 	AddMachineInterface(ctx context.Context, modID, machineID, baseModID, baseMachineID string) error
-	UpsertDirectTagMembers(ctx context.Context, sourceModID, kind, tagName string, members []string) error
+	UpsertDirectTagMembers(ctx context.Context, sourceModID, kind, tagName string, members []string) (int, error)
 	UpsertModPlugin(ctx context.Context, p db.ModPlugin) error
 }
 

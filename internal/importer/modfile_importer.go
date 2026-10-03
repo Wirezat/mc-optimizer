@@ -165,9 +165,13 @@ func (imp *Importer) RunModFile(ctx context.Context, zipPath string) (ModFileRes
 
 	// 6. Tags.
 	for _, tag := range def.Tags {
-		if err := imp.db.UpsertDirectTagMembers(ctx, def.ModID, tag.Kind, tag.Name, tag.Members); err != nil {
+		skipped, err := imp.db.UpsertDirectTagMembers(ctx, def.ModID, tag.Kind, tag.Name, tag.Members)
+		if err != nil {
 			warn("tag %q: %v", tag.Name, err)
 			continue
+		}
+		if skipped > 0 {
+			warn("tag %q: %d of %d members are not in the catalog", tag.Name, skipped, len(tag.Members))
 		}
 		res.Tags++
 	}

@@ -46,7 +46,7 @@ func TestSolverAPIIsSnakeCase(t *testing.T) {
 		}
 	}
 
-	sol := postJSON(t, DemoSolveHandler(d, 64, nil), `{"target":`+target+`,"target_rate":{"num":1,"den":20},"time_unit":"t","mode":"TARGET","recipe_overrides":{"minecraft:honey_bottle":"`+id+`"}}`)
+	sol := postJSON(t, DemoSolveHandler(d, 64, nil), `{"target":`+target+`,"target_rate":{"num":1,"den":20},"time_unit":"t","mode":"TARGET","recipe_overrides":{"minecraft:honey_bottle":"`+id+`"},"stop_points":{"minecraft:glass_bottle":true}}`)
 	result, _ := sol["result"].(map[string]any)
 	io, _ := result["io_profile"].(map[string]any)
 	inputs, _ := io["inputs"].([]any)
